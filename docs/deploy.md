@@ -8,12 +8,48 @@ push main → pytest → build Docker → push GHCR → SSH → pull + compose u
 
 ## 1. Preparar el droplet (una sola vez)
 
-```bash
-# Docker + Compose plugin
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-# re-login SSH después
+### Docker Engine (obligatorio)
 
+Este deploy necesita **Docker Engine + Compose v2 plugin**.  
+**No sirve** Podman con el mensaje `Emulate Docker CLI using podman`, ni el binario legacy `docker-compose` 1.29.
+
+En el droplet:
+
+```bash
+# Instalar Docker Engine oficial (incluye compose plugin v2)
+curl -fsSL https://get.docker.com | sh
+sudo systemctl enable --now docker
+
+# Si el usuario de deploy no es root:
+sudo usermod -aG docker $USER
+# cierra sesión SSH y vuelve a entrar
+
+# Verificar (debe existir el socket y responder el daemon)
+ls -l /var/run/docker.sock
+docker info
+docker compose version
+```
+
+Si ves `Emulate Docker CLI using podman` o errores a `/var/run/docker.sock`:
+
+```bash
+# Diagnóstico rápido
+which docker
+docker --version
+systemctl status docker || true
+ls -l /var/run/docker.sock || echo "NO HAY SOCKET — falta Docker Engine"
+```
+
+Quita/desactiva el shim de Podman si compite con Docker, o instala Docker Engine encima con el script de arriba. Luego confirma:
+
+```bash
+docker info   # sin mensaje de podman
+docker compose version   # Compose version v2.x
+```
+
+### Directorio de la app
+
+```bash
 mkdir -p ~/meta-odoo-gateway
 cd ~/meta-odoo-gateway
 ```
@@ -105,3 +141,15 @@ docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d
 ## 6. HTTPS (recomendado)
 
 Pon Caddy o Nginx como reverse proxy a `127.0.0.1:8000` y apunta el dominio del webhook Meta a ese HTTPS. No expongas `:8000` a internet si puedes evitarlo.
+
+## 7. Troubleshooting
+
+### `FileNotFoundError` / `Error while fetching server API version` / `unix_socket`
+
+El CLI `docker` en el droplet es un **shim de Podman** o no hay daemon. Compose v1 (`/usr/bin/docker-compose`) intenta `/var/run/docker.sock` y falla.
+
+**Fix:** instala Docker Engine (sección 1) y verifica `docker info` + `docker compose version` (v2).
+
+### `Login Succeeded` pero falla el `pull`
+
+El login a GHCR funcionó; el fallo es local (daemon/compose), no del registry.

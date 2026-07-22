@@ -130,11 +130,33 @@ jobs:
               exit 1
             fi
 
+            # Preflight: necesitamos Docker Engine real (no Podman shim + docker-compose v1)
+            if [ ! -S /var/run/docker.sock ]; then
+              echo "ERROR: /var/run/docker.sock no existe." >&2
+              echo "Este droplet no tiene Docker Engine corriendo (parece Podman o Docker no instalado)." >&2
+              echo "Instala Docker Engine en el droplet:" >&2
+              echo "  curl -fsSL https://get.docker.com | sh" >&2
+              echo "  sudo systemctl enable --now docker" >&2
+              echo "Ver docs/deploy.md sección 'Docker Engine (obligatorio)'." >&2
+              exit 1
+            fi
+            if ! docker info >/dev/null 2>&1; then
+              echo "ERROR: 'docker info' falló. ¿El usuario SSH está en el grupo docker?" >&2
+              echo "  sudo usermod -aG docker \$USER && re-login" >&2
+              exit 1
+            fi
+            if ! docker compose version >/dev/null 2>&1; then
+              echo "ERROR: falta el plugin 'docker compose' (v2)." >&2
+              echo "No uses el binario legacy /usr/bin/docker-compose (v1)." >&2
+              echo "Reinstala con: curl -fsSL https://get.docker.com | sh" >&2
+              exit 1
+            fi
+
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
             export GATEWAY_IMAGE="$IMAGE_REF"
-            # Persist last deployed image for manual restarts
             echo "GATEWAY_IMAGE=$GATEWAY_IMAGE" > .deploy.env
+
             docker compose -f docker-compose.prod.yml --env-file .deploy.env pull api
             docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d
             docker image prune -f
