@@ -75,4 +75,4 @@ El scoring local sigue calculándose (visible en el detalle) pero **no crea lead
 
 Imagen: `ghcr.io/gia-digital/meta-odoo-gateway:<sha>`
 
-Setup del droplet y secrets: ver [`docs/deploy.md`](docs/deploy.md).
+Producción incluye **Caddy** (HTTPS Let's Encrypt) delante de la API. Setup: [`docs/deploy.md`](docs/deploy.md).

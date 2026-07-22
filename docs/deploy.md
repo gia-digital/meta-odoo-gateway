@@ -64,17 +64,23 @@ DATABASE_URL=postgresql+asyncpg://gateway:gateway@db:5432/gateway
 
 Si cambias `POSTGRES_PASSWORD` en el host, alinea usuario/password en `DATABASE_URL`.
 
-Abre puertos (o pon Caddy/Nginx delante con HTTPS; Meta exige HTTPS en webhooks):
+En el `.env` del droplet agrega también:
+
+```env
+DOMAIN=gia.init.com.mx
+ACME_EMAIL=tu-email@dominio.com
+```
+
+Abre puertos (Caddy usa 80/443 para HTTP→HTTPS y Let's Encrypt):
 
 ```bash
-# mínimo para probar
 sudo ufw allow OpenSSH
 sudo ufw allow 80
 sudo ufw allow 443
-# solo si expones la API sin proxy:
-# sudo ufw allow 8000
 sudo ufw enable
 ```
+
+No abras `:8000` a internet: la API queda en `127.0.0.1:8000` y Caddy hace el proxy público.
 
 ## 2. Secrets en GitHub
 
@@ -123,11 +129,15 @@ cd ~/meta-odoo-gateway
 cat .deploy.env
 docker compose -f docker-compose.prod.yml --env-file .deploy.env ps
 curl -fsS http://127.0.0.1:8000/health
+curl -fsSI https://gia.init.com.mx/health
 ```
 
-Imagen publicada:
+URLs:
 
-`ghcr.io/gia-digital/meta-odoo-gateway:<short-sha>` y `:latest`.
+- Dashboard: `https://gia.init.com.mx/dashboard`
+- Webhook Meta: `https://gia.init.com.mx/webhook/meta`
+
+Imagen publicada: `ghcr.io/gia-digital/meta-odoo-gateway:<short-sha>` y `:latest`.
 
 ## 5. Rollback rápido
 
@@ -138,9 +148,31 @@ docker compose -f docker-compose.prod.yml --env-file .deploy.env pull api
 docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d
 ```
 
-## 6. HTTPS (recomendado)
+## 6. HTTPS (Caddy)
 
-Pon Caddy o Nginx como reverse proxy a `127.0.0.1:8000` y apunta el dominio del webhook Meta a ese HTTPS. No expongas `:8000` a internet si puedes evitarlo.
+Caddy va en `docker-compose.prod.yml` y usa [`Caddyfile`](../Caddyfile):
+
+- Certificado Let's Encrypt automático para `DOMAIN`
+- `reverse_proxy` a `api:8000`
+- Puertos públicos: **80** y **443**
+
+Si instalaste Caddy/nginx en el host (apt), deténlos para no pelear el puerto:
+
+```bash
+sudo systemctl disable --now caddy nginx 2>/dev/null || true
+```
+
+Activación inmediata (sin esperar el próximo push), en el droplet:
+
+```bash
+cd ~/meta-odoo-gateway
+# asegúrate de tener DOMAIN y ACME_EMAIL en .env
+# copia Caddyfile + docker-compose.prod.yml actualizados (o re-lanza Deploy en GitHub)
+
+docker compose -f docker-compose.prod.yml --env-file .deploy.env pull caddy
+docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d
+docker compose -f docker-compose.prod.yml --env-file .deploy.env logs -f caddy
+```
 
 ## 7. Troubleshooting
 
@@ -148,8 +180,15 @@ Pon Caddy o Nginx como reverse proxy a `127.0.0.1:8000` y apunta el dominio del 
 
 El CLI `docker` en el droplet es un **shim de Podman** o no hay daemon. Compose v1 (`/usr/bin/docker-compose`) intenta `/var/run/docker.sock` y falla.
 
-**Fix:** instala Docker Engine (sección 1) y verifica `docker info` + `docker compose version` (v2).
+**Fix:** instala Docker Engine (sección 1) y verifica `docker info` + `docker compose version` (v2). **No instales `podman-docker`.**
 
 ### `Login Succeeded` pero falla el `pull`
 
 El login a GHCR funcionó; el fallo es local (daemon/compose), no del registry.
+
+### HTTPS no arranca / challenge ACME falla
+
+- DNS A de `DOMAIN` debe apuntar a la IP del droplet
+- Puertos 80 y 443 abiertos (ufw + firewall de DigitalOcean)
+- No otro proceso usando 80/443
+- Revisa: `docker compose ... logs caddy`

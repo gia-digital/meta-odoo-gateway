@@ -97,14 +97,14 @@ jobs:
         id: image
         run: echo "name=${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
 
-      - name: Copy compose file to droplet
+      - name: Copy compose + Caddyfile to droplet
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           port: ${{ secrets.DROPLET_SSH_PORT || 22 }}
-          source: docker-compose.prod.yml
+          source: "docker-compose.prod.yml,Caddyfile"
           target: ${{ secrets.DEPLOY_PATH }}
 
       - name: Deploy over SSH
@@ -129,27 +129,26 @@ jobs:
               echo "Missing .env in $DEPLOY_PATH — create it once on the droplet (from .env.example)." >&2
               exit 1
             fi
+            if [ ! -f Caddyfile ]; then
+              echo "Missing Caddyfile in $DEPLOY_PATH" >&2
+              exit 1
+            fi
 
-            # Preflight: necesitamos Docker Engine real (no Podman shim + docker-compose v1)
             if [ ! -S /var/run/docker.sock ]; then
-              echo "ERROR: /var/run/docker.sock no existe." >&2
-              echo "Este droplet no tiene Docker Engine corriendo (parece Podman o Docker no instalado)." >&2
-              echo "Instala Docker Engine en el droplet:" >&2
-              echo "  curl -fsSL https://get.docker.com | sh" >&2
-              echo "  sudo systemctl enable --now docker" >&2
-              echo "Ver docs/deploy.md sección 'Docker Engine (obligatorio)'." >&2
+              echo "ERROR: /var/run/docker.sock no existe. Instala Docker Engine (docs/deploy.md)." >&2
               exit 1
             fi
             if ! docker info >/dev/null 2>&1; then
-              echo "ERROR: 'docker info' falló. ¿El usuario SSH está en el grupo docker?" >&2
-              echo "  sudo usermod -aG docker \$USER && re-login" >&2
+              echo "ERROR: 'docker info' falló. sudo usermod -aG docker \$USER && re-login" >&2
               exit 1
             fi
             if ! docker compose version >/dev/null 2>&1; then
-              echo "ERROR: falta el plugin 'docker compose' (v2)." >&2
-              echo "No uses el binario legacy /usr/bin/docker-compose (v1)." >&2
-              echo "Reinstala con: curl -fsSL https://get.docker.com | sh" >&2
+              echo "ERROR: falta plugin 'docker compose' v2." >&2
               exit 1
+            fi
+
+            if systemctl is-active --quiet caddy 2>/dev/null; then
+              sudo systemctl disable --now caddy || true
             fi
 
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
@@ -157,18 +156,22 @@ jobs:
             export GATEWAY_IMAGE="$IMAGE_REF"
             echo "GATEWAY_IMAGE=$GATEWAY_IMAGE" > .deploy.env
 
-            docker compose -f docker-compose.prod.yml --env-file .deploy.env pull api
+            docker compose -f docker-compose.prod.yml --env-file .deploy.env pull api caddy
             docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d
             docker image prune -f
 
-            echo "Waiting for health..."
+            echo "Waiting for health (API localhost)..."
             for i in $(seq 1 30); do
               if curl -fsS http://127.0.0.1:8000/health >/dev/null; then
+                DOMAIN_VAL=$(grep -E '^DOMAIN=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
                 echo "Deploy OK: $GATEWAY_IMAGE"
+                if [ -n "$DOMAIN_VAL" ]; then
+                  echo "HTTPS: https://${DOMAIN_VAL}/dashboard"
+                fi
                 exit 0
               fi
               sleep 2
             done
             echo "Health check failed" >&2
-            docker compose -f docker-compose.prod.yml --env-file .deploy.env logs --tail=80 api
+            docker compose -f docker-compose.prod.yml --env-file .deploy.env logs --tail=80 api caddy
             exit 1
