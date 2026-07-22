@@ -68,8 +68,9 @@ En el `.env` del droplet agrega también:
 
 ```env
 DOMAIN=gia.init.com.mx
-ACME_EMAIL=tu-email@dominio.com
 ```
+
+(No uses `ACME_EMAIL=admin@localhost`; si pones email, que sea uno real.)
 
 Abre puertos (Caddy usa 80/443 para HTTP→HTTPS y Let's Encrypt):
 

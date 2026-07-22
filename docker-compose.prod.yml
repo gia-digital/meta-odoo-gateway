@@ -41,7 +41,6 @@ services:
       - "443:443/udp"
     environment:
       DOMAIN: ${DOMAIN:-gia.init.com.mx}
-      ACME_EMAIL: ${ACME_EMAIL:-admin@localhost}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
