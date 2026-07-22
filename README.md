@@ -64,3 +64,15 @@ El scoring local sigue calculándose (visible en el detalle) pero **no crea lead
 - Meta: `docs/meta_setup.md`
 - Prompt del agente + payload de lead: `docs/agent_prompt.md`
 - Odoo (fase siguiente): `docs/odoo_setup.md`
+- **Deploy DigitalOcean (CI/CD):** `docs/deploy.md`
+
+## CI/CD
+
+| Workflow | Trigger | Acción |
+|---|---|---|
+| `CI` | push/PR → `main` | pytest |
+| `Deploy` | push → `main` (o manual) | test → imagen GHCR → SSH al droplet |
+
+Imagen: `ghcr.io/gia-digital/meta-odoo-gateway:<sha>`
+
+Setup del droplet y secrets: ver [`docs/deploy.md`](docs/deploy.md).

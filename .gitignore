@@ -1,5 +1,6 @@
 .env
 .env.local
+.deploy.env
 *.pyc
 __pycache__/
 .pytest_cache/
