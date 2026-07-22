@@ -1,8 +1,7 @@
 """Configuración centralizada del gateway."""
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,23 +19,26 @@ class Settings(BaseSettings):
     # Meta
     meta_verify_token: str
     meta_app_secret: str
-    meta_access_token: str
-    whatsapp_phone_number_id: str
-    messenger_page_id: str
+    meta_access_token: str = ""
+    whatsapp_phone_number_id: str = ""
+    messenger_page_id: str = ""
     meta_graph_version: str = "v21.0"
+    # Token para POST /webhook/meta/lead (acciones CRM / handoff sin HMAC Graph)
+    meta_lead_webhook_token: str = ""
 
-    # Odoo
-    odoo_url: str
-    odoo_db: str
-    odoo_username: str
-    odoo_api_key: str
+    # Odoo (fase posterior; desactivado por defecto)
+    odoo_enabled: bool = False
+    odoo_url: str = ""
+    odoo_db: str = ""
+    odoo_username: str = ""
+    odoo_api_key: str = ""
     odoo_default_sales_team_id: int = 1
     odoo_default_salesperson_id: int = 2
 
     # DB
     database_url: str
 
-    # Scoring
+    # Scoring (señal secundaria; no crea leads mientras Odoo esté off)
     lead_creation_threshold: int = 6
     human_handoff_threshold: int = 9
 

@@ -1,85 +1,66 @@
-# Meta → Odoo Lead Gateway
+# Meta → Lead Gateway
 
-Servidor intermedio (FastAPI) que conecta **Meta Business Agent** (WhatsApp / Messenger) con **Odoo Enterprise CRM** para automatizar la calificación y registro de leads.
+Servidor intermedio (FastAPI) que recibe conversaciones y **leads calificados por Meta Business Agent** (WhatsApp / Messenger), los guarda en PostgreSQL y los muestra en un dashboard HTML. La sincronización con **Odoo** queda para una fase posterior (`ODOO_ENABLED=false` por defecto).
 
-## Arquitectura
+## Arquitectura (fase actual)
 
 ```
 WhatsApp / Messenger
         ↓
 Meta Business Agent (IA conversacional)
-        ↓ webhook
-FastAPI Gateway  ← lógica de scoring y orquestación
-        ↓ JSON-RPC
-Odoo Enterprise CRM (crm.lead, res.partner, mail.message)
-        ↓
-Notificación a agente humano (cuando aplica)
+        ↓ mensajes          ↓ lead / handoff
+POST /webhook/meta     POST /webhook/meta/lead
+        ↓                       ↓
+           FastAPI Gateway
+        (score secundario + persistencia)
+                ↓
+         Dashboard HTML (/dashboard)
 ```
 
 ## Stack
 
 - Python 3.11 + FastAPI + Uvicorn
+- Jinja2 (dashboard HTML)
 - httpx (cliente async para Meta y Odoo)
-- SQLAlchemy + PostgreSQL (persistencia de conversaciones)
-- Pydantic v2 (validación)
-- Docker Compose para despliegue
-
-## Estructura
-
-```
-app/
-├── main.py                  # Entry point FastAPI
-├── core/
-│   ├── config.py            # Settings (env vars)
-│   ├── security.py          # Verificación de firma Meta
-│   └── logging.py           # Logging estructurado
-├── routers/
-│   ├── meta_webhook.py      # Endpoints Meta (verify + receive)
-│   ├── health.py            # Health check
-│   └── admin.py             # Admin (reprocessar, estadísticas)
-├── services/
-│   ├── meta_client.py       # Cliente WhatsApp/Messenger Graph API
-│   ├── odoo_client.py       # Cliente JSON-RPC Odoo
-│   ├── lead_scorer.py       # Lógica de scoring
-│   └── conversation.py      # Manejo del estado de conversación
-├── models/
-│   ├── db.py                # SQLAlchemy base
-│   ├── conversation.py      # Modelo Conversation, Message
-│   └── schemas.py           # Pydantic schemas
-└── tests/
-    ├── test_scorer.py
-    └── test_odoo_client.py
-```
+- SQLAlchemy + PostgreSQL
+- Pydantic v2
+- Docker Compose
 
 ## Quick start
 
 ```bash
 cp .env.example .env
-# editar .env con credenciales
+# editar .env (mínimo: META_*, META_LEAD_WEBHOOK_TOKEN, ADMIN_API_TOKEN, DATABASE_URL)
 
 docker compose up -d
-# servidor disponible en http://localhost:8000
-# docs interactivos en http://localhost:8000/docs
+# API:        http://localhost:8000
+# Dashboard:  http://localhost:8000/dashboard
+# Docs:       http://localhost:8000/docs
 ```
 
 ## Endpoints clave
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/webhook/meta` | Verificación inicial del webhook (Meta) |
-| POST | `/webhook/meta` | Recepción de mensajes y eventos de Meta |
-| GET | `/health` | Estado del servicio |
-| GET | `/admin/conversations` | Lista de conversaciones (auth requerida) |
-| POST | `/admin/conversations/{id}/reprocess` | Reprocessar scoring de una conversación |
+| GET | `/webhook/meta` | Verificación del webhook (Meta) |
+| POST | `/webhook/meta` | Mensajes + handovers de Meta |
+| POST | `/webhook/meta/lead` | Lead calificado por Meta Agent |
+| GET | `/dashboard` | Login del dashboard (token admin) |
+| GET | `/dashboard/leads` | Lista de prospectos calificados |
+| GET | `/health` | Health check |
+| GET | `/admin/conversations` | API JSON (cabecera `X-Admin-Token`) |
 
-## Configuración de Meta
+## Flujo de leads
 
-Ver `docs/meta_setup.md` para el paso a paso.
+1. El agente de Meta atiende la conversación.
+2. Cuando sus instrucciones indican un prospecto listo, llama a `POST /webhook/meta/lead` (o dispara handoff).
+3. El gateway marca la conversación como `qualified` / `handed_off` con `qualification_source=meta_agent`.
+4. Revisas el lead en `/dashboard/leads` antes de conectar Odoo.
 
-## Configuración de Odoo
+El scoring local sigue calculándose (visible en el detalle) pero **no crea leads en Odoo** mientras `ODOO_ENABLED=false`.
 
-Ver `docs/odoo_setup.md` — incluye creación de API key y módulo opcional.
+## Configuración
 
-## Flujo del agente
-
-Ver `docs/agent_prompt.md` — instrucciones completas para configurar el Meta Business Agent.
+- Meta: `docs/meta_setup.md`
+- Prompt del agente + payload de lead: `docs/agent_prompt.md`
+- Odoo (fase siguiente): `docs/odoo_setup.md`

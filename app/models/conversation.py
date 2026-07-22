@@ -16,14 +16,20 @@ class Channel(str, enum.Enum):
 
 
 class ConversationStatus(str, enum.Enum):
-    active = "active"          # IA activa
-    qualified = "qualified"    # Lead creado en Odoo
-    handed_off = "handed_off"  # Pasado a humano
-    closed = "closed"          # Cerrado
+    active = "active"  # IA activa
+    qualified = "qualified"  # Lead local listo para revisar
+    handed_off = "handed_off"  # Escalado a humano (Meta handoff)
+    closed = "closed"  # Cerrado
+
+
+class QualificationSource(str, enum.Enum):
+    none = "none"
+    meta_agent = "meta_agent"
+    local_score = "local_score"
 
 
 class Direction(str, enum.Enum):
-    inbound = "inbound"    # Usuario → Agente
+    inbound = "inbound"  # Usuario → Agente
     outbound = "outbound"  # Agente → Usuario
 
 
@@ -43,10 +49,23 @@ class Conversation(Base):
     score: Mapped[int] = mapped_column(Integer, default=0)
     score_breakdown: Mapped[dict] = mapped_column(JSON, default=dict)
 
+    qualification_source: Mapped[QualificationSource] = mapped_column(
+        Enum(QualificationSource),
+        default=QualificationSource.none,
+        index=True,
+        nullable=False,
+    )
+    qualification_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    qualified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     odoo_lead_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     odoo_partner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -66,8 +85,14 @@ class Message(Base):
     direction: Mapped[Direction] = mapped_column(Enum(Direction), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     raw_payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    external_message_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    external_message_id: Mapped[Optional[str]] = mapped_column(
+        String(128), nullable=True, index=True
+    )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
-    conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages")
+    conversation: Mapped["Conversation"] = relationship(
+        "Conversation", back_populates="messages"
+    )

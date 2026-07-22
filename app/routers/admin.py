@@ -1,13 +1,13 @@
 """Endpoints de administración: listar conversaciones, reprocesar scoring."""
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.security import require_admin_token
-from app.models.conversation import Conversation
+from app.models.conversation import Conversation, ConversationStatus, QualificationSource
 from app.models.db import get_db
 from app.models.schemas import ConversationOut, MessageOut
 from app.services.conversation import ConversationService
@@ -24,13 +24,27 @@ async def list_conversations(
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
     offset: int = 0,
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    qualification_source: Optional[str] = Query(default=None),
 ):
-    stmt = (
-        select(Conversation)
-        .order_by(Conversation.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+    stmt = select(Conversation).order_by(Conversation.created_at.desc())
+    if status_filter:
+        try:
+            stmt = stmt.where(Conversation.status == ConversationStatus(status_filter))
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Invalid status: {status_filter}")
+    if qualification_source:
+        try:
+            stmt = stmt.where(
+                Conversation.qualification_source
+                == QualificationSource(qualification_source)
+            )
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid qualification_source: {qualification_source}",
+            )
+    stmt = stmt.limit(limit).offset(offset)
     result = await db.execute(stmt)
     return result.scalars().all()
 
@@ -68,4 +82,5 @@ async def reprocess_conversation(conv_id: int, db: AsyncSession = Depends(get_db
         "score": conv.score,
         "odoo_lead_id": conv.odoo_lead_id,
         "conversation_status": conv.status.value,
+        "qualification_source": conv.qualification_source.value,
     }

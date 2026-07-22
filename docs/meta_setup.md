@@ -29,9 +29,9 @@
    - Callback URL: `https://tu-dominio.com/webhook/meta`
    - Verify Token: lo que definiste en `META_VERIFY_TOKEN` (cualquier string seguro, mín. 32 chars)
 2. Suscríbete al objeto **WhatsApp Business Account**:
-   - Activa los campos: `messages`, `message_status`
+   - Activa los campos: `messages`, `message_status` (y handovers si tu app los lista)
 3. Suscríbete al objeto **Page** (Messenger):
-   - Activa los campos: `messages`, `messaging_postbacks`, `message_deliveries`
+   - Activa los campos: `messages`, `messaging_postbacks`, `message_deliveries`, `messaging_handovers` (si está disponible)
 4. **App Secret**: en **Settings → Basic → App Secret** → cópialo a `META_APP_SECRET`. Esto se usa para verificar la firma `X-Hub-Signature-256` de cada webhook (crítico para seguridad).
 
 ## 5. Configurar Meta Business Agent
@@ -40,7 +40,13 @@
 2. Pega las instrucciones de `docs/agent_prompt.md`.
 3. Sube la base de conocimiento (PDFs, FAQs, catálogo).
 4. **Conecta el agente** al canal de WhatsApp y a la página de Messenger.
-5. Configura el **handoff webhook** apuntando al mismo endpoint del gateway, para que el flujo completo de cada conversación llegue a tu servidor.
+5. Webhooks del gateway:
+   - Mensajes (Graph): `https://tu-dominio.com/webhook/meta`
+   - **Lead calificado** (acción CRM / handoff del agente): `https://tu-dominio.com/webhook/meta/lead`
+6. Define `META_LEAD_WEBHOOK_TOKEN` en `.env` y úsalo en la cabecera `X-Meta-Lead-Token` de la acción CRM.
+7. Opcional: suscríbete a eventos de handover (`messaging_handovers` / thread control) en el webhook de mensajes; el gateway también los marca como lead.
+
+Detalle del payload JSON: ver `docs/agent_prompt.md` (sección “Webhook de lead calificado”).
 
 ## 6. Verificar el flujo end-to-end
 
@@ -56,9 +62,22 @@ curl https://tu-dominio.com/health
 # 3. Revisa que el gateway haya recibido el evento
 docker compose logs -f api | grep webhook_verified
 
-# 4. Verifica que la conversación se haya creado
+# 4. Simula un lead calificado por Meta Agent
+curl -X POST https://tu-dominio.com/webhook/meta/lead \
+  -H "Content-Type: application/json" \
+  -H "X-Meta-Lead-Token: tu_meta_lead_token" \
+  -d '{
+    "channel": "whatsapp",
+    "external_user_id": "5215512345678",
+    "user_name": "Prueba",
+    "reason": "Lead de prueba",
+    "handed_off": true
+  }'
+
+# 5. Revisa en el dashboard o en la API admin
+# https://tu-dominio.com/dashboard/leads
 curl -H "X-Admin-Token: tu_token_admin" \
-     https://tu-dominio.com/admin/conversations
+     "https://tu-dominio.com/admin/conversations?status=qualified"
 ```
 
 ## 7. Limitaciones a tener en cuenta

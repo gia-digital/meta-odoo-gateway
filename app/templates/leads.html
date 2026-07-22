@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Leads — Lead Gateway{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Leads calificados</h1>
+  <p class="muted">Prospectos que Meta AI (o handoff) marcó para seguimiento. Odoo aún no está conectado.</p>
+</div>
+
+<form class="filters" method="get" action="/dashboard/leads">
+  <label>
+    Canal
+    <select name="channel">
+      <option value="" {% if not channel %}selected{% endif %}>Todos</option>
+      <option value="whatsapp" {% if channel == 'whatsapp' %}selected{% endif %}>WhatsApp</option>
+      <option value="messenger" {% if channel == 'messenger' %}selected{% endif %}>Messenger</option>
+      <option value="instagram" {% if channel == 'instagram' %}selected{% endif %}>Instagram</option>
+    </select>
+  </label>
+  <label>
+    Estado
+    <select name="status">
+      <option value="" {% if not status_filter %}selected{% endif %}>qualified + handed_off</option>
+      <option value="qualified" {% if status_filter == 'qualified' %}selected{% endif %}>qualified</option>
+      <option value="handed_off" {% if status_filter == 'handed_off' %}selected{% endif %}>handed_off</option>
+    </select>
+  </label>
+  <button type="submit">Filtrar</button>
+</form>
+
+{% if conversations %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Canal</th>
+      <th>Contacto</th>
+      <th>Estado</th>
+      <th>Fuente</th>
+      <th>Score</th>
+      <th>Calificado</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in conversations %}
+    <tr>
+      <td>{{ c.id }}</td>
+      <td><span class="badge channel-{{ c.channel.value }}">{{ c.channel.value }}</span></td>
+      <td>
+        <strong>{{ c.user_name or c.external_user_id }}</strong>
+        {% if c.user_phone %}<div class="muted small">{{ c.user_phone }}</div>{% endif %}
+      </td>
+      <td><span class="badge status-{{ c.status.value }}">{{ c.status.value }}</span></td>
+      <td>{{ c.qualification_source.value }}</td>
+      <td>{{ c.score }}</td>
+      <td class="muted small">{{ c.qualified_at or "—" }}</td>
+      <td><a href="/dashboard/conversations/{{ c.id }}">Ver</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">No hay leads todavía. Cuando Meta Agent dispare <code>/webhook/meta/lead</code>, aparecerán aquí.</p>
+{% endif %}
+{% endblock %}

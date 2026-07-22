@@ -78,6 +78,8 @@ Cuando esto ocurra:
 - Indica: "Perfecto, un asesor de nuestro equipo te contactará en {{TIEMPO_RESPUESTA}}.
   Mientras tanto, ¿hay algo más en lo que pueda ayudarte?"
 - NO prometas tiempos imposibles. Usa el placeholder real configurado.
+- Dispara el webhook / acción CRM de lead calificado (ver sección siguiente).
+  Tú decides el momento; el servidor gateway solo registra el prospecto.
 
 QUE EVITAR
 
@@ -107,6 +109,50 @@ CIERRE DE CONVERSACIÓN
 ```
 
 ---
+
+## Webhook de lead calificado (gateway)
+
+Cuando el agente califique un prospecto, configura en Meta (acción CRM / webhook de handoff)
+esta URL:
+
+```
+POST https://tu-dominio.com/webhook/meta/lead
+```
+
+Autenticación (una de estas):
+
+- Cabecera `X-Meta-Lead-Token: <META_LEAD_WEBHOOK_TOKEN>`
+- Query `?token=<META_LEAD_WEBHOOK_TOKEN>`
+- O firma Graph `X-Hub-Signature-256` si Meta firma el body
+
+Cuerpo JSON de ejemplo:
+
+```json
+{
+  "channel": "whatsapp",
+  "external_user_id": "5215512345678",
+  "user_name": "Ana Pérez",
+  "user_phone": "5215512345678",
+  "user_email": "ana@empresa.com",
+  "reason": "Pidió cotización del plan premium con presupuesto definido",
+  "summary": "Interesada en plan premium, presupuesto ~5000 USD, contactar en horario laboral",
+  "product_interest": "Plan Premium",
+  "handed_off": true
+}
+```
+
+Campos:
+
+| Campo | Requerido | Notas |
+|---|---|---|
+| `channel` | sí | `whatsapp` \| `messenger` \| `instagram` |
+| `external_user_id` | sí | wa_id o PSID |
+| `user_name`, `user_phone`, `user_email` | no | Completar lo que ya tengas |
+| `reason` / `summary` | no | Motivo visible en el dashboard |
+| `product_interest` | no | Producto/servicio de interés |
+| `handed_off` | no | `true` si además escalaste a humano |
+
+Tras el POST, el prospecto aparece en `https://tu-dominio.com/dashboard/leads`.
 
 ## Base de conocimiento
 
@@ -149,8 +195,8 @@ Desde Meta Business Suite verás:
 - Tasa de escalamiento a humano
 - CSAT post-conversación
 
-Desde tu gateway (endpoints /admin):
+Desde tu gateway (dashboard `/dashboard` o endpoints `/admin`):
 - Conversaciones por canal
-- Distribución de scores
-- Leads creados en Odoo
-- Tiempo desde primer mensaje hasta lead creado
+- Leads calificados por Meta Agent
+- Distribución de scores (señal secundaria)
+- Tiempo desde primer mensaje hasta lead calificado
