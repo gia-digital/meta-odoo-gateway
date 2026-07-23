@@ -1,39 +1,66 @@
 {% extends "base.html" %}
 {% block title %}Conversación #{{ conversation.id }} — Lead Gateway{% endblock %}
 {% block content %}
-<p><a href="/dashboard/leads">&larr; Leads</a> · <a href="/dashboard/conversations">Conversaciones</a></p>
+<nav class="breadcrumb" aria-label="Miga de pan">
+  <a href="/dashboard/conversations">Conversaciones</a>
+  <span class="sep" aria-hidden="true">/</span>
+  <span class="crumb-current">#{{ conversation.id }}</span>
+</nav>
 
-<div class="page-header">
-  <h1>{{ conversation.user_name or conversation.external_user_id }}</h1>
-  <p class="muted">
-    <span class="badge channel-{{ conversation.channel.value }}">{{ conversation.channel.value }}</span>
-    <span class="badge status-{{ conversation.status.value }}">{{ conversation.status.value }}</span>
-    · score {{ conversation.score }}
-    · fuente {{ conversation.qualification_source.value }}
-  </p>
-</div>
+<header class="detail-header">
+  <div class="detail-identity">
+    <span class="avatar avatar-lg" aria-hidden="true">{{ (conversation.user_name or conversation.external_user_id)[0]|upper }}</span>
+    <div>
+      <h1>{{ conversation.user_name or conversation.external_user_id }}</h1>
+      <div class="meta-row">
+        <span class="badge channel-{{ conversation.channel.value }}">{{ conversation.channel.value }}</span>
+        <span class="badge status-{{ conversation.status.value }}">{{ conversation.status.value }}</span>
+        <span class="meta-chip">Score <strong>{{ conversation.score }}</strong></span>
+        <span class="meta-chip">Fuente <strong>{{ conversation.qualification_source.value }}</strong></span>
+      </div>
+    </div>
+  </div>
+</header>
 
 <section class="detail-grid">
   <div class="card">
     <h2>Contacto</h2>
     <dl>
-      <dt>External ID</dt><dd>{{ conversation.external_user_id }}</dd>
-      <dt>Teléfono</dt><dd>{{ conversation.user_phone or "—" }}</dd>
-      <dt>Email</dt><dd>{{ conversation.user_email or "—" }}</dd>
-      <dt>Calificado</dt><dd>{{ conversation.qualified_at or "—" }}</dd>
-      <dt>Odoo lead</dt><dd>{{ conversation.odoo_lead_id or "— (fase posterior)" }}</dd>
+      <div class="dl-row">
+        <dt>External ID</dt>
+        <dd class="mono">{{ conversation.external_user_id }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>Teléfono</dt>
+        <dd>{{ conversation.user_phone or "—" }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>Email</dt>
+        <dd>{{ conversation.user_email or "—" }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>Calificado</dt>
+        <dd>{{ conversation.qualified_at or "—" }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>Odoo lead</dt>
+        <dd>{{ conversation.odoo_lead_id or "— (fase posterior)" }}</dd>
+      </div>
     </dl>
   </div>
   <div class="card">
     <h2>Motivo Meta</h2>
-    <p>{{ conversation.qualification_reason or "Sin motivo registrado." }}</p>
+    <p class="reason-text">{{ conversation.qualification_reason or "Sin motivo registrado." }}</p>
     {% if signals %}
     <h3>Señales de score local</h3>
     <ul class="signals">
       {% for s in signals %}
       <li class="{% if s.matched %}matched{% endif %}">
-        <strong>{{ s.name }}</strong> ({{ s.points }} pts)
-        {% if s.matched and s.evidence %}— {{ s.evidence }}{% endif %}
+        <span class="signal-main">
+          <strong>{{ s.name }}</strong>
+          <span class="pts">{{ s.points }} pts</span>
+        </span>
+        {% if s.matched and s.evidence %}<span class="evidence">{{ s.evidence }}</span>{% endif %}
       </li>
       {% endfor %}
     </ul>
@@ -42,18 +69,26 @@
 </section>
 
 <section class="card transcript">
-  <h2>Conversación</h2>
+  <div class="transcript-header">
+    <h2>Conversación</h2>
+    {% if messages %}
+    <span class="msg-count">{{ messages|length }} mensaje{% if messages|length != 1 %}s{% endif %}</span>
+    {% endif %}
+  </div>
   {% if messages %}
   <div class="messages">
     {% for m in messages %}
     <div class="msg msg-{{ m.direction.value }}">
-      <div class="msg-meta">{{ m.direction.value }} · {{ m.created_at }}</div>
+      <div class="msg-meta">
+        <span>{{ "Cliente" if m.direction.value == "inbound" else "Agente" }}</span>
+        <time>{{ m.created_at }}</time>
+      </div>
       <div class="msg-body">{{ m.body }}</div>
     </div>
     {% endfor %}
   </div>
   {% else %}
-  <p class="muted">Sin mensajes guardados (puede ser un lead enviado solo por webhook).</p>
+  <p class="muted no-margin">Sin mensajes guardados (puede ser un lead enviado solo por webhook).</p>
   {% endif %}
 </section>
 {% endblock %}

@@ -1,67 +1,91 @@
 {% extends "base.html" %}
 {% block title %}Conversaciones — Lead Gateway{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1>Conversaciones</h1>
-  <p class="muted">Todas las conversaciones capturadas (incluye activas). El score es solo informativo.</p>
-</div>
+<header class="page-header">
+  <div>
+    <p class="eyebrow">Inbox</p>
+    <h1>Conversaciones</h1>
+    <p class="muted">Todas las conversaciones capturadas. El score es solo informativo.</p>
+  </div>
+  {% if conversations %}
+  <div class="stat-pill">
+    <span class="stat-value">{{ conversations|length }}</span>
+    <span class="stat-label">resultados</span>
+  </div>
+  {% endif %}
+</header>
 
 <form class="filters" method="get" action="/dashboard/conversations">
-  <label>
-    Canal
-    <select name="channel">
-      <option value="" {% if not channel %}selected{% endif %}>Todos</option>
-      <option value="whatsapp" {% if channel == 'whatsapp' %}selected{% endif %}>WhatsApp</option>
-      <option value="messenger" {% if channel == 'messenger' %}selected{% endif %}>Messenger</option>
-      <option value="instagram" {% if channel == 'instagram' %}selected{% endif %}>Instagram</option>
-    </select>
-  </label>
-  <label>
-    Estado
-    <select name="status">
-      <option value="" {% if not status_filter %}selected{% endif %}>Todos</option>
-      <option value="active" {% if status_filter == 'active' %}selected{% endif %}>active</option>
-      <option value="qualified" {% if status_filter == 'qualified' %}selected{% endif %}>qualified</option>
-      <option value="handed_off" {% if status_filter == 'handed_off' %}selected{% endif %}>handed_off</option>
-      <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>closed</option>
-    </select>
-  </label>
-  <button type="submit">Filtrar</button>
+  <div class="filters-fields">
+    <label>
+      Canal
+      <select name="channel">
+        <option value="" {% if not channel %}selected{% endif %}>Todos</option>
+        <option value="whatsapp" {% if channel == 'whatsapp' %}selected{% endif %}>WhatsApp</option>
+        <option value="messenger" {% if channel == 'messenger' %}selected{% endif %}>Messenger</option>
+        <option value="instagram" {% if channel == 'instagram' %}selected{% endif %}>Instagram</option>
+      </select>
+    </label>
+    <label>
+      Estado
+      <select name="status">
+        <option value="" {% if not status_filter %}selected{% endif %}>Todos</option>
+        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>active</option>
+        <option value="qualified" {% if status_filter == 'qualified' %}selected{% endif %}>qualified</option>
+        <option value="handed_off" {% if status_filter == 'handed_off' %}selected{% endif %}>handed_off</option>
+        <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>closed</option>
+      </select>
+    </label>
+  </div>
+  <button type="submit">Aplicar filtros</button>
 </form>
 
 {% if conversations %}
-<table class="data-table">
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>Canal</th>
-      <th>Contacto</th>
-      <th>Estado</th>
-      <th>Fuente</th>
-      <th>Score</th>
-      <th>Actualizado</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for c in conversations %}
-    <tr>
-      <td>{{ c.id }}</td>
-      <td><span class="badge channel-{{ c.channel.value }}">{{ c.channel.value }}</span></td>
-      <td>
-        <strong>{{ c.user_name or c.external_user_id }}</strong>
-        {% if c.user_phone %}<div class="muted small">{{ c.user_phone }}</div>{% endif %}
-      </td>
-      <td><span class="badge status-{{ c.status.value }}">{{ c.status.value }}</span></td>
-      <td>{{ c.qualification_source.value }}</td>
-      <td>{{ c.score }}</td>
-      <td class="muted small">{{ c.updated_at }}</td>
-      <td><a href="/dashboard/conversations/{{ c.id }}">Ver</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Canal</th>
+        <th>Contacto</th>
+        <th>Estado</th>
+        <th>Fuente</th>
+        <th>Score</th>
+        <th>Actualizado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in conversations %}
+      <tr>
+        <td class="mono">#{{ c.id }}</td>
+        <td><span class="badge channel-{{ c.channel.value }}">{{ c.channel.value }}</span></td>
+        <td>
+          <div class="contact-cell">
+            <span class="avatar" aria-hidden="true">{{ (c.user_name or c.external_user_id)[0]|upper }}</span>
+            <div>
+              <div class="contact-name">{{ c.user_name or c.external_user_id }}</div>
+              {% if c.user_phone %}<div class="muted small">{{ c.user_phone }}</div>{% endif %}
+            </div>
+          </div>
+        </td>
+        <td><span class="badge status-{{ c.status.value }}">{{ c.status.value }}</span></td>
+        <td><span class="source-label">{{ c.qualification_source.value }}</span></td>
+        <td><span class="score-cell">{{ c.score }}</span></td>
+        <td class="muted small nowrap">{{ c.updated_at }}</td>
+        <td class="actions-col"><a class="row-action" href="/dashboard/conversations/{{ c.id }}">Abrir <span aria-hidden="true">→</span></a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
-<p class="empty">No hay conversaciones registradas.</p>
+<div class="empty">
+  <div class="empty-icon" aria-hidden="true">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M5 6.5h14a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H10l-4 3v-3H5a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+  </div>
+  <p class="empty-title">No hay conversaciones registradas</p>
+  <p class="muted">Los mensajes entrantes por webhook aparecerán en esta lista.</p>
+</div>
 {% endif %}
 {% endblock %}
