@@ -11,7 +11,10 @@ from app.models.conversation import (
     QualificationSource,
 )
 from app.models.schemas import MetaLeadPayload
-from app.routers.meta_webhook import _parse_messenger_handovers
+from app.routers.meta_webhook import (
+    _parse_messenger_handovers,
+    _parse_whatsapp_handovers,
+)
 from app.services.conversation import ConversationService
 from app.services.lead_scorer import score_conversation
 
@@ -69,6 +72,36 @@ def test_parse_messenger_pass_thread_control():
     assert len(handovers) == 1
     assert handovers[0].external_user_id == "USER_PSID"
     assert "customer_requested_agent" in (handovers[0].reason or "")
+
+
+def test_parse_whatsapp_messaging_handovers_meta_v26():
+    """Formato oficial Meta Cloud API v25/v26 (Send to My Server)."""
+    entries = [
+        {
+            "changes": [
+                {
+                    "field": "messaging_handovers",
+                    "value": {
+                        "messaging_product": "whatsapp",
+                        "recipient": {
+                            "display_phone_number": "16505553333",
+                            "phone_number_id": "123456789",
+                        },
+                        "sender": {"phone_number": "151005553333"},
+                        "timestamp": "1697041663",
+                        "control_passed": {
+                            "metadata": "Information about the conversation"
+                        },
+                    },
+                }
+            ]
+        }
+    ]
+    handovers = _parse_whatsapp_handovers(entries)
+    assert len(handovers) == 1
+    assert handovers[0].channel == "whatsapp"
+    assert handovers[0].external_user_id == "151005553333"
+    assert handovers[0].reason == "Information about the conversation"
 
 
 def test_scoring_still_works_as_secondary_signal():

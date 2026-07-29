@@ -231,34 +231,79 @@ def _parse_whatsapp_entries(entries: List[Dict[str, Any]]) -> List[NormalizedMes
 
 def _parse_whatsapp_handovers(entries: List[Dict[str, Any]]) -> List[NormalizedHandover]:
     """
-    Detecta cambios de handoff en WhatsApp si Meta los envía como
-    field distinto o dentro de value (p.ej. statuses con conversation).
+    WhatsApp Cloud API `messaging_handovers` (v25+/v26):
+
+        changes[].field == "messaging_handovers"
+        changes[].value.sender.phone_number  -> usuario
+        changes[].value.control_passed.metadata -> motivo
+
+    También acepta formas legacy (from / wa_id / contacts).
     """
     out: List[NormalizedHandover] = []
+    control_keys = (
+        "control_passed",
+        "control_taken",
+        "control_requested",
+        "request_welcome",
+    )
+
     for entry in entries:
         for change in entry.get("changes", []):
             field = change.get("field", "")
             value = change.get("value", {}) or {}
 
-            if field in ("messaging_handovers", "handover", "thread_control"):
-                user_id = (
-                    value.get("recipient_id")
-                    or value.get("from")
-                    or value.get("wa_id")
-                    or (value.get("contacts") or [{}])[0].get("wa_id")
+            if field not in ("messaging_handovers", "handover", "thread_control"):
+                continue
+
+            sender = value.get("sender") or {}
+            user_id = (
+                sender.get("phone_number")
+                or value.get("recipient_id")
+                or value.get("from")
+                or value.get("wa_id")
+                or (value.get("contacts") or [{}])[0].get("wa_id")
+            )
+            if not user_id:
+                logger.warning("whatsapp_handover_missing_user", field=field)
+                continue
+
+            reason = _whatsapp_handover_reason(value, field, control_keys)
+
+            out.append(
+                NormalizedHandover(
+                    channel="whatsapp",
+                    external_user_id=str(user_id),
+                    reason=str(reason) if reason else None,
+                    raw=change,
                 )
-                if user_id:
-                    out.append(
-                        NormalizedHandover(
-                            channel="whatsapp",
-                            external_user_id=str(user_id),
-                            reason=value.get("reason")
-                            or value.get("metadata", {}).get("reason")
-                            or f"WhatsApp {field}",
-                            raw=change,
-                        )
-                    )
+            )
     return out
+
+
+def _whatsapp_handover_reason(
+    value: Dict[str, Any], field: str, control_keys: tuple
+) -> str:
+    for key in control_keys:
+        ctrl = value.get(key)
+        if not isinstance(ctrl, dict):
+            continue
+        meta = ctrl.get("metadata")
+        if isinstance(meta, str) and meta:
+            return meta
+        if isinstance(meta, dict) and meta.get("reason"):
+            return str(meta["reason"])
+        if ctrl.get("reason"):
+            return str(ctrl["reason"])
+        return f"WhatsApp {key}"
+
+    meta = value.get("metadata")
+    if isinstance(meta, str) and meta:
+        return meta
+    if isinstance(meta, dict) and meta.get("reason"):
+        return str(meta["reason"])
+    if value.get("reason"):
+        return str(value["reason"])
+    return f"WhatsApp {field}"
 
 
 # ============================================================
