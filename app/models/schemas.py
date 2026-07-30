@@ -27,8 +27,8 @@ class MetaWebhookPayload(BaseModel):
 
 class MetaLeadPayload(BaseModel):
     """
-    Payload para POST /webhook/meta/lead.
-    Meta Business Agent (acción CRM / handoff) notifica un prospecto calificado.
+    Payload legacy para POST /webhook/meta/lead.
+    Preferir LeadCreate / POST /leads como tool del agente.
     """
 
     channel: str = "whatsapp"  # whatsapp | messenger | instagram
@@ -39,8 +39,89 @@ class MetaLeadPayload(BaseModel):
     reason: Optional[str] = None
     summary: Optional[str] = None
     product_interest: Optional[str] = None
+    budget: Optional[str] = None
+    timeline: Optional[str] = None
+    preferred_contact_time: Optional[str] = None
     handed_off: bool = False
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class LeadCreate(BaseModel):
+    """
+    Tool del agente GIA: registrar un prospecto calificado para el equipo de ventas.
+    """
+
+    channel: str = Field(
+        default="whatsapp",
+        description="Canal de origen: whatsapp | messenger | instagram",
+    )
+    external_user_id: str = Field(
+        ...,
+        description="ID del usuario en el canal (wa_id o PSID)",
+    )
+    user_name: Optional[str] = Field(
+        default=None, description="Nombre completo del contacto o razón social"
+    )
+    user_phone: Optional[str] = Field(
+        default=None, description="Teléfono de contacto"
+    )
+    user_email: Optional[str] = Field(
+        default=None, description="Email de contacto"
+    )
+    reason: Optional[str] = Field(
+        default=None,
+        description="Motivo corto (ej. pidió cotización de lámina galvanizada)",
+    )
+    summary: Optional[str] = Field(
+        default=None,
+        description="Resumen para el asesor de ventas: empresa, uso, ubicación, notas",
+    )
+    product_interest: Optional[str] = Field(
+        default=None,
+        description="Material o línea de interés (aceros planos, tubería, acanalados, etc.)",
+    )
+    budget: Optional[str] = Field(
+        default=None,
+        description="Volumen estimado (toneladas) o presupuesto aproximado",
+    )
+    timeline: Optional[str] = Field(
+        default=None,
+        description="Urgencia o fecha deseada de entrega",
+    )
+    preferred_contact_time: Optional[str] = Field(
+        default=None, description="Mejor horario para que ventas contacte"
+    )
+    handed_off: bool = Field(
+        default=False,
+        description="true si además se escaló la conversación a un asesor humano",
+    )
+
+
+class LeadOut(BaseModel):
+    """Lead calificado expuesto por la API y el dashboard."""
+
+    id: int
+    channel: str
+    external_user_id: str
+    user_name: Optional[str] = None
+    user_phone: Optional[str] = None
+    user_email: Optional[str] = None
+    status: str
+    qualification_source: str = "none"
+    qualification_reason: Optional[str] = None
+    product_interest: Optional[str] = None
+    lead_summary: Optional[str] = None
+    budget: Optional[str] = None
+    timeline: Optional[str] = None
+    preferred_contact_time: Optional[str] = None
+    score: int = 0
+    qualified_at: Optional[datetime] = None
+    odoo_lead_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 # ============================================================
@@ -132,6 +213,11 @@ class ConversationOut(BaseModel):
     score_breakdown: Dict[str, Any]
     qualification_source: str = "none"
     qualification_reason: Optional[str] = None
+    product_interest: Optional[str] = None
+    lead_summary: Optional[str] = None
+    budget: Optional[str] = None
+    timeline: Optional[str] = None
+    preferred_contact_time: Optional[str] = None
     qualified_at: Optional[datetime] = None
     odoo_lead_id: Optional[int]
     created_at: datetime

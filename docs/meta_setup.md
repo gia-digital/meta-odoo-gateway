@@ -40,13 +40,14 @@
 2. Pega las instrucciones de `docs/agent_prompt.md`.
 3. Sube la base de conocimiento (PDFs, FAQs, catálogo).
 4. **Conecta el agente** al canal de WhatsApp y a la página de Messenger.
-5. Webhooks del gateway:
+5. Webhooks / tools del gateway:
    - Mensajes (Graph): `https://tu-dominio.com/webhook/meta`
-   - **Lead calificado** (acción CRM / handoff del agente): `https://tu-dominio.com/webhook/meta/lead`
-6. Define `META_LEAD_WEBHOOK_TOKEN` en `.env` y úsalo en la cabecera `X-Meta-Lead-Token` de la acción CRM.
+   - **Lead calificado (tool del agente):** `https://tu-dominio.com/leads`
+   - Alias legacy: `https://tu-dominio.com/webhook/meta/lead`
+6. Define `META_LEAD_WEBHOOK_TOKEN` en `.env` y úsalo en la cabecera `X-Meta-Lead-Token` del tool.
 7. Opcional: suscríbete a eventos de handover (`messaging_handovers` / thread control) en el webhook de mensajes; el gateway también los marca como lead.
 
-Detalle del payload JSON: ver `docs/agent_prompt.md` (sección “Webhook de lead calificado”).
+Detalle del payload JSON: ver `docs/agent_prompt.md` (sección “Tool de lead calificado”).
 
 ## 6. Verificar el flujo end-to-end
 
@@ -62,22 +63,26 @@ curl https://tu-dominio.com/health
 # 3. Revisa que el gateway haya recibido el evento
 docker compose logs -f api | grep webhook_verified
 
-# 4. Simula un lead calificado por Meta Agent
-curl -X POST https://tu-dominio.com/webhook/meta/lead \
+# 4. Simula un lead calificado (tool del agente)
+curl -X POST https://tu-dominio.com/leads \
   -H "Content-Type: application/json" \
   -H "X-Meta-Lead-Token: tu_meta_lead_token" \
   -d '{
     "channel": "whatsapp",
     "external_user_id": "5215512345678",
     "user_name": "Prueba",
-    "reason": "Lead de prueba",
+    "reason": "Cotización de lámina galvanizada",
+    "product_interest": "Lámina galvanizada",
+    "budget": "10 ton",
+    "timeline": "Este mes",
+    "preferred_contact_time": "Mañanas",
     "handed_off": true
   }'
 
-# 5. Revisa en el dashboard o en la API admin
+# 5. Revisa en el dashboard o en la API
 # https://tu-dominio.com/dashboard/leads
 curl -H "X-Admin-Token: tu_token_admin" \
-     "https://tu-dominio.com/admin/conversations?status=qualified"
+     "https://tu-dominio.com/leads"
 ```
 
 ## 7. Limitaciones a tener en cuenta

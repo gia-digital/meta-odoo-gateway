@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Conversación #{{ conversation.id }} — Lead Gateway{% endblock %}
+{% block title %}Conversación #{{ conversation.id }} — GIA{% endblock %}
 {% block content %}
 <nav class="breadcrumb" aria-label="Miga de pan">
   <a href="/dashboard/conversations">Conversaciones</a>
@@ -13,10 +13,18 @@
     <div>
       <h1>{{ conversation.user_name or conversation.external_user_id }}</h1>
       <div class="meta-row">
-        <span class="badge channel-{{ conversation.channel.value }}">{{ conversation.channel.value }}</span>
-        <span class="badge status-{{ conversation.status.value }}">{{ conversation.status.value }}</span>
+        <span class="badge channel-{{ conversation.channel.value }}">
+          <span class="badge-dot" aria-hidden="true"></span>
+          {{ conversation.channel.value|label_channel }}
+        </span>
+        <span class="badge status-{{ conversation.status.value }}">
+          <span class="badge-dot" aria-hidden="true"></span>
+          {{ conversation.status.value|label_status }}
+        </span>
+        <span class="badge source-{{ conversation.qualification_source.value }}">
+          {{ conversation.qualification_source.value|label_source }}
+        </span>
         <span class="meta-chip">Score <strong>{{ conversation.score }}</strong></span>
-        <span class="meta-chip">Fuente <strong>{{ conversation.qualification_source.value }}</strong></span>
       </div>
     </div>
   </div>
@@ -40,7 +48,7 @@
       </div>
       <div class="dl-row">
         <dt>Calificado</dt>
-        <dd>{{ conversation.qualified_at or "—" }}</dd>
+        <dd>{{ conversation.qualified_at|format_dt }}</dd>
       </div>
       <div class="dl-row">
         <dt>Odoo lead</dt>
@@ -57,7 +65,7 @@
       {% for s in signals %}
       <li class="{% if s.matched %}matched{% endif %}">
         <span class="signal-main">
-          <strong>{{ s.name }}</strong>
+          <strong>{{ s.name|label_signal }}</strong>
           <span class="pts">{{ s.points }} pts</span>
         </span>
         {% if s.matched and s.evidence %}<span class="evidence">{{ s.evidence }}</span>{% endif %}
@@ -81,7 +89,7 @@
     <div class="msg msg-{{ m.direction.value }}">
       <div class="msg-meta">
         <span>{{ "Cliente" if m.direction.value == "inbound" else "Agente" }}</span>
-        <time>{{ m.created_at }}</time>
+        <time>{{ m.created_at|format_dt }}</time>
       </div>
       <div class="msg-body">{{ m.body }}</div>
     </div>

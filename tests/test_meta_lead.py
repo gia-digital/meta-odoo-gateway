@@ -10,7 +10,7 @@ from app.models.conversation import (
     ConversationStatus,
     QualificationSource,
 )
-from app.models.schemas import MetaLeadPayload
+from app.models.schemas import LeadCreate, MetaLeadPayload
 from app.routers.meta_webhook import (
     _parse_messenger_handovers,
     _parse_whatsapp_handovers,
@@ -36,6 +36,28 @@ def test_meta_lead_payload_accepts_minimal():
     assert payload.channel == "whatsapp"
     assert payload.handed_off is False
     assert payload.external_user_id == "5215512345678"
+
+
+def test_lead_create_tool_schema_with_structured_fields():
+    payload = LeadCreate.model_validate(
+        {
+            "channel": "whatsapp",
+            "external_user_id": "5215512345678",
+            "user_name": "Ana",
+            "product_interest": "Plan Premium",
+            "budget": "~5000 USD",
+            "timeline": "Este mes",
+            "preferred_contact_time": "Mañanas",
+            "summary": "Quiere asesor",
+            "reason": "Pidió cotización",
+            "handed_off": True,
+        }
+    )
+    assert payload.product_interest == "Plan Premium"
+    assert payload.budget == "~5000 USD"
+    assert payload.timeline == "Este mes"
+    assert payload.preferred_contact_time == "Mañanas"
+    assert payload.handed_off is True
 
 
 def test_meta_lead_payload_with_handoff_and_interest():
@@ -106,8 +128,8 @@ def test_parse_whatsapp_messaging_handovers_meta_v26():
 
 def test_scoring_still_works_as_secondary_signal():
     msgs = [
-        make_message("Quiero contratar el plan premium"),
-        make_message("Mi presupuesto es $10,000 MXN"),
+        make_message("Quiero cotizar lámina galvanizada"),
+        make_message("Mi presupuesto es $10,000 MXN, unas 8 toneladas"),
         make_message("Quiero hablar con un asesor"),
     ]
     result = score_conversation(msgs)
@@ -160,7 +182,7 @@ async def test_process_after_message_does_not_call_odoo_when_disabled(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_qualify_from_meta_sets_local_lead_fields(monkeypatch):
+async def test_qualify_from_meta_sets_structured_lead_fields(monkeypatch):
     monkeypatch.setenv("ODOO_ENABLED", "false")
     monkeypatch.setenv("META_VERIFY_TOKEN", "v")
     monkeypatch.setenv("META_APP_SECRET", "s")
@@ -179,6 +201,11 @@ async def test_qualify_from_meta_sets_local_lead_fields(monkeypatch):
         qualification_source=QualificationSource.none,
         qualification_reason=None,
         qualified_at=None,
+        product_interest=None,
+        lead_summary=None,
+        budget=None,
+        timeline=None,
+        preferred_contact_time=None,
         user_name=None,
         user_phone=None,
         user_email=None,
@@ -196,13 +223,75 @@ async def test_qualify_from_meta_sets_local_lead_fields(monkeypatch):
         user_name="Ana",
         user_phone="52155",
         handed_off=True,
-        metadata={"product_interest": "Premium"},
+        product_interest="Premium",
+        summary="Quiere plan premium",
+        budget="5000 USD",
+        timeline="Este mes",
+        preferred_contact_time="Mañanas",
     )
 
     assert result.status == ConversationStatus.handed_off
     assert result.qualification_source == QualificationSource.meta_agent
     assert result.user_name == "Ana"
-    assert "Pidió cotización" in (result.qualification_reason or "")
+    assert result.qualification_reason == "Pidió cotización"
+    assert result.product_interest == "Premium"
+    assert result.lead_summary == "Quiere plan premium"
+    assert result.budget == "5000 USD"
+    assert result.timeline == "Este mes"
+    assert result.preferred_contact_time == "Mañanas"
     assert result.qualified_at is not None
     db.commit.assert_awaited()
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_create_lead_from_payload_uses_whatsapp_id_as_phone(monkeypatch):
+    monkeypatch.setenv("ODOO_ENABLED", "false")
+    monkeypatch.setenv("META_VERIFY_TOKEN", "v")
+    monkeypatch.setenv("META_APP_SECRET", "s")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    conv = SimpleNamespace(
+        id=9,
+        messages=[],
+        score=0,
+        score_breakdown={},
+        status=ConversationStatus.active,
+        qualification_source=QualificationSource.none,
+        qualification_reason=None,
+        qualified_at=None,
+        product_interest=None,
+        lead_summary=None,
+        budget=None,
+        timeline=None,
+        preferred_contact_time=None,
+        user_name=None,
+        user_phone=None,
+        user_email=None,
+        channel=Channel.whatsapp,
+        external_user_id="5215512345678",
+    )
+
+    db = AsyncMock()
+    db.refresh = AsyncMock()
+    service = ConversationService(db)
+
+    with patch.object(
+        ConversationService, "get_or_create", new_callable=AsyncMock, return_value=conv
+    ):
+        result = await service.create_lead_from_payload(
+            channel=Channel.whatsapp,
+            external_user_id="5215512345678",
+            user_name="Ana",
+            product_interest="Plan Básico",
+            handed_off=False,
+        )
+
+    assert result.product_interest == "Plan Básico"
+    assert result.user_phone == "5215512345678"
+    assert result.status == ConversationStatus.qualified
     get_settings.cache_clear()

@@ -78,6 +78,14 @@ async def _ensure_qualification_columns(conn) -> None:
             """
         )
     )
+    for col_sql in (
+        "ADD COLUMN IF NOT EXISTS product_interest VARCHAR(255)",
+        "ADD COLUMN IF NOT EXISTS lead_summary TEXT",
+        "ADD COLUMN IF NOT EXISTS budget VARCHAR(255)",
+        "ADD COLUMN IF NOT EXISTS timeline VARCHAR(255)",
+        "ADD COLUMN IF NOT EXISTS preferred_contact_time VARCHAR(255)",
+    ):
+        await conn.execute(text(f"ALTER TABLE conversations {col_sql};"))
 
 
 async def init_db() -> None:

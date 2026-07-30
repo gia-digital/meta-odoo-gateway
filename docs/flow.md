@@ -2,7 +2,7 @@
 
 Este documento describe qué pasa, paso a paso, cuando un usuario envía un mensaje.
 
-**Fase actual:** Meta Agent califica leads vía `POST /webhook/meta/lead` (o handovers). El scoring local es secundario. Odoo está desactivado (`ODOO_ENABLED=false`); los prospectos se revisan en `/dashboard`. El diagrama inferior aún muestra Odoo como destino final de la fase siguiente.
+**Fase actual:** Meta Agent califica leads vía `POST /leads` (tool; alias legacy `POST /webhook/meta/lead`) o handovers. El scoring local es secundario. Odoo está desactivado (`ODOO_ENABLED=false`); los prospectos se revisan en `/dashboard/leads`. El diagrama inferior aún muestra Odoo como destino final de la fase siguiente.
 
 ## Diagrama de secuencia
 

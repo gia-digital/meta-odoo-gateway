@@ -60,6 +60,15 @@ class Conversation(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Datos estructurados del lead (tool POST /leads / Meta Agent)
+    product_interest: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    lead_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    budget: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    timeline: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    preferred_contact_time: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+
     odoo_lead_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     odoo_partner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 

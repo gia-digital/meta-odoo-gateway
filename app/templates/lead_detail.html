@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Prospecto #{{ lead.id }} — GIA{% endblock %}
+{% block content %}
+<nav class="breadcrumb" aria-label="Miga de pan">
+  <a href="/dashboard/leads">Prospectos</a>
+  <span class="sep" aria-hidden="true">/</span>
+  <span class="crumb-current">#{{ lead.id }}</span>
+</nav>
+
+<header class="detail-header">
+  <div class="detail-identity">
+    <span class="avatar avatar-lg" aria-hidden="true">{{ (lead.user_name or lead.external_user_id)[0]|upper }}</span>
+    <div>
+      <h1>{{ lead.user_name or lead.external_user_id }}</h1>
+      <div class="meta-row">
+        <span class="badge channel-{{ lead.channel.value }}">
+          <span class="badge-dot" aria-hidden="true"></span>
+          {{ lead.channel.value|label_channel }}
+        </span>
+        <span class="badge status-{{ lead.status.value }}">
+          <span class="badge-dot" aria-hidden="true"></span>
+          {{ lead.status.value|label_status }}
+        </span>
+        <span class="badge source-{{ lead.qualification_source.value }}">
+          {{ lead.qualification_source.value|label_source }}
+        </span>
+        {% if lead.product_interest %}
+        <span class="meta-chip">Material <strong>{{ lead.product_interest }}</strong></span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="detail-grid">
+  <div class="card">
+    <h2>Contacto comercial</h2>
+    <dl>
+      <div class="dl-row">
+        <dt>Nombre</dt>
+        <dd>{{ lead.user_name or "—" }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>Teléfono</dt>
+        <dd>{{ lead.user_phone or "—" }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>Email</dt>
+        <dd>{{ lead.user_email or "—" }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>ID canal</dt>
+        <dd class="mono">{{ lead.external_user_id }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>Registrado</dt>
+        <dd>{{ lead.qualified_at|format_dt }}</dd>
+      </div>
+    </dl>
+  </div>
+  <div class="card">
+    <h2>Requerimiento de acero</h2>
+    <dl>
+      <div class="dl-row">
+        <dt>Material</dt>
+        <dd>{{ lead.product_interest or "—" }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>Volumen</dt>
+        <dd>{{ lead.budget or "—" }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>Entrega</dt>
+        <dd>{{ lead.timeline or "—" }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>Horario</dt>
+        <dd>{{ lead.preferred_contact_time or "—" }}</dd>
+      </div>
+      <div class="dl-row">
+        <dt>Motivo</dt>
+        <dd>{{ lead.qualification_reason or "—" }}</dd>
+      </div>
+    </dl>
+  </div>
+</section>
+
+{% if lead.lead_summary %}
+<section class="card lead-summary-card">
+  <h2>Resumen para ventas</h2>
+  <p class="reason-text">{{ lead.lead_summary }}</p>
+</section>
+{% endif %}
+
+<details class="card collapsible secondary-panel">
+  <summary>
+    <span>Conversación</span>
+    {% if messages %}
+    <span class="msg-count">{{ messages|length }} mensaje{% if messages|length != 1 %}s{% endif %}</span>
+    {% else %}
+    <span class="msg-count">Sin mensajes</span>
+    {% endif %}
+  </summary>
+  {% if messages %}
+  <div class="messages">
+    {% for m in messages %}
+    <div class="msg msg-{{ m.direction.value }}">
+      <div class="msg-meta">
+        <span>{{ "Cliente" if m.direction.value == "inbound" else "Agente GIA" }}</span>
+        <time>{{ m.created_at|format_dt }}</time>
+      </div>
+      <div class="msg-body">{{ m.body }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted no-margin">Sin mensajes guardados (prospecto creado solo por el agente).</p>
+  {% endif %}
+</details>
+
+{% if signals %}
+<details class="card collapsible secondary-panel">
+  <summary>
+    <span>Señales internas</span>
+    <span class="msg-count">{{ lead.score }} pts</span>
+  </summary>
+  <ul class="signals">
+    {% for s in signals %}
+    <li class="{% if s.matched %}matched{% endif %}">
+      <span class="signal-main">
+        <strong>{{ s.name|label_signal }}</strong>
+        <span class="pts">{{ s.points }} pts</span>
+      </span>
+      {% if s.matched and s.evidence %}<span class="evidence">{{ s.evidence }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
+{% endblock %}

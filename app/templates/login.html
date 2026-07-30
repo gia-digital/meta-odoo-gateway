@@ -1,39 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Login — Lead Gateway{% endblock %}
+{% block title %}Acceso — GIA Prospectos{% endblock %}
 {% block body_class %}is-login{% endblock %}
 {% block main_class %}login-shell{% endblock %}
 {% block content %}
 <aside class="login-aside" aria-hidden="true">
   <div class="login-aside-inner">
     <div class="brand brand-on-dark">
-      <span class="brand-mark">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M3 12.5V3.5L8 8.5L13 3.5V12.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-      <span class="brand-name">Lead Gateway</span>
+      <span class="brand-mark">GIA</span>
+      <span class="brand-name">Grupo Industrial Acerero</span>
     </div>
-    <h2 class="login-aside-title">Califica. Revisa. Escala a Odoo.</h2>
-    <p class="login-aside-copy">Dashboard interno para leads de Meta Business Agent en WhatsApp, Messenger e Instagram.</p>
+    <h2 class="login-aside-title">Expertos en la comercialización y transformación de acero.</h2>
+    <p class="login-aside-copy">Panel interno para revisar cotizaciones y prospectos que llegan por WhatsApp y Messenger desde el agente de Meta.</p>
     <ul class="login-aside-points">
-      <li>Webhook de leads calificados</li>
-      <li>Historial de conversación</li>
-      <li>Score local como respaldo</li>
+      <li>Cotizaciones calificadas por el agente</li>
+      <li>Material, volumen y urgencia de entrega</li>
+      <li>Seguimiento listo para el equipo de ventas</li>
     </ul>
   </div>
 </aside>
 <section class="login-card">
   <div class="login-card-inner">
-    <p class="eyebrow">Acceso seguro</p>
+    <p class="eyebrow">GIA · Ventas</p>
     <h1>Iniciar sesión</h1>
-    <p class="muted">Introduce el token de administración del servidor.</p>
+    <p class="muted">Introduce el token de administración para ver los prospectos.</p>
     {% if error %}
     <p class="error" role="alert">{{ error }}</p>
     {% endif %}
     <form method="post" action="/dashboard/login">
       <label for="token">Token de administración</label>
       <input id="token" name="token" type="password" required autofocus autocomplete="current-password" placeholder="Pega tu token aquí" />
-      <button type="submit">Continuar</button>
+      <button type="submit">Entrar al panel</button>
     </form>
     <p class="login-hint">Configurado como <code>ADMIN_API_TOKEN</code></p>
   </div>

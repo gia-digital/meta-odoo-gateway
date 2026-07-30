@@ -57,7 +57,7 @@ async def require_meta_lead_auth(
     token: Optional[str] = Query(default=None),
 ) -> bytes:
     """
-    Auth para POST /webhook/meta/lead.
+    Auth para POST /leads y POST /webhook/meta/lead.
 
     Acepta:
     1. Firma Graph X-Hub-Signature-256 (si Meta envía el body firmado), o

@@ -2,8 +2,6 @@
 from datetime import datetime
 from types import SimpleNamespace
 
-import pytest
-
 from app.services.lead_scorer import score_conversation
 
 
@@ -32,8 +30,8 @@ def test_single_casual_message_low_score():
 def test_qualified_lead_triggers_creation():
     msgs = [
         make_message("Hola"),
-        make_message("Me interesa el plan premium"),
-        make_message("Mi presupuesto es de $5000 USD mensuales"),
+        make_message("Me interesa lámina galvanizada"),
+        make_message("Mi presupuesto es de $5000 USD, unas 8 toneladas"),
         make_message("Lo necesito para este mes"),
     ]
     result = score_conversation(msgs)
@@ -43,8 +41,8 @@ def test_qualified_lead_triggers_creation():
 
 def test_hot_lead_triggers_handoff():
     msgs = [
-        make_message("Hola, quiero contratar el plan premium"),
-        make_message("Mi presupuesto es $10,000 MXN"),
+        make_message("Hola, quiero cotizar tubería industrial"),
+        make_message("Mi presupuesto es $10,000 MXN, unas 5 toneladas"),
         make_message("Es urgente, lo necesito hoy"),
         make_message("Mi email es juan@empresa.com"),
         make_message("Quiero hablar con un asesor por favor"),
@@ -58,7 +56,7 @@ def test_hot_lead_triggers_handoff():
 def test_outbound_messages_not_counted():
     msgs = [
         make_message("Hola, ¿en qué puedo ayudarte?", direction="outbound"),
-        make_message("Tenemos los siguientes productos...", direction="outbound"),
+        make_message("Tenemos los siguientes materiales...", direction="outbound"),
     ]
     result = score_conversation(msgs)
     assert result.total == 0
@@ -66,12 +64,15 @@ def test_outbound_messages_not_counted():
 
 def test_evidence_is_captured():
     msgs = [
-        make_message("Quiero contratar el plan premium urgente"),
+        make_message("Quiero cotizar lámina galvanizada urgente"),
     ]
     result = score_conversation(msgs)
     matched = [s for s in result.signals if s.matched]
     assert any("urgente" in (s.evidence or "") for s in matched)
-    assert any("contratar" in (s.evidence or "") for s in matched)
+    assert any(
+        "cotizar" in (s.evidence or "") or "lámina" in (s.evidence or "")
+        for s in matched
+    )
 
 
 def test_email_detection_in_shared_contact():

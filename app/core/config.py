@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     )
 
     # App
-    app_name: str = "Meta-Odoo Lead Gateway"
+    app_name: str = "GIA Prospectos"
     app_env: str = "production"
     app_debug: bool = False
     log_level: str = "INFO"

@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Resumen — GIA Prospectos{% endblock %}
+{% block content %}
+<header class="page-header page-header-compact">
+  <div>
+    <h1>Resumen de prospectos</h1>
+  </div>
+  <a class="btn btn-sm" href="/dashboard/leads">Ver lista</a>
+</header>
+
+<section class="metric-grid" aria-label="Indicadores">
+  <article class="metric-card">
+    <p class="metric-label">Total</p>
+    <p class="metric-value">{{ stats.total }}</p>
+    <p class="metric-meta">Prospectos activos</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-label">7 días</p>
+    <p class="metric-value">{{ stats.this_week }}</p>
+    <p class="metric-meta">Nuevos</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-label">Escalados</p>
+    <p class="metric-value">{{ stats.handed_off }}</p>
+    <p class="metric-meta">{{ stats.pct_handed_off }}% del total</p>
+  </article>
+  <article class="metric-card">
+    <p class="metric-label">Calificados</p>
+    <p class="metric-value">{{ stats.qualified }}</p>
+    <p class="metric-meta">Sin escalar aún</p>
+  </article>
+  <article class="metric-card metric-card-pct">
+    <p class="metric-label">Volumen</p>
+    <p class="metric-value">{{ stats.pct_volume }}%</p>
+    <div class="metric-bar" aria-hidden="true"><span style="width: {{ stats.pct_volume }}%"></span></div>
+    <p class="metric-meta">{{ stats.with_volume }}/{{ stats.total }} con dato</p>
+  </article>
+  <article class="metric-card metric-card-pct">
+    <p class="metric-label">Entrega</p>
+    <p class="metric-value">{{ stats.pct_timeline }}%</p>
+    <div class="metric-bar" aria-hidden="true"><span style="width: {{ stats.pct_timeline }}%"></span></div>
+    <p class="metric-meta">{{ stats.with_timeline }}/{{ stats.total }} con dato</p>
+  </article>
+  <article class="metric-card metric-card-pct">
+    <p class="metric-label">Teléfono</p>
+    <p class="metric-value">{{ stats.pct_phone }}%</p>
+    <div class="metric-bar" aria-hidden="true"><span style="width: {{ stats.pct_phone }}%"></span></div>
+    <p class="metric-meta">{{ stats.with_phone }}/{{ stats.total }} con dato</p>
+  </article>
+  <article class="metric-card metric-card-pct">
+    <p class="metric-label">Material</p>
+    <p class="metric-value">{{ stats.pct_material }}%</p>
+    <div class="metric-bar" aria-hidden="true"><span style="width: {{ stats.pct_material }}%"></span></div>
+    <p class="metric-meta">{{ stats.with_material }}/{{ stats.total }} con dato</p>
+  </article>
+</section>
+
+<section class="charts-grid charts-grid-compact">
+  <article class="card chart-card chart-trend">
+    <h2>Últimos {{ stats.chart_days }} días</h2>
+    <div class="chart-wrap chart-wrap-md">
+      <canvas id="chartTrend" aria-label="Tendencia de prospectos"></canvas>
+    </div>
+  </article>
+  <article class="card chart-card">
+    <h2>Canal</h2>
+    <div class="chart-wrap chart-wrap-xs">
+      <canvas id="chartChannel" aria-label="Prospectos por canal"></canvas>
+    </div>
+  </article>
+  <article class="card chart-card">
+    <h2>Estado</h2>
+    <div class="chart-wrap chart-wrap-xs">
+      <canvas id="chartStatus" aria-label="Prospectos por estado"></canvas>
+    </div>
+  </article>
+  <article class="card chart-card chart-materials">
+    <h2>Materiales más pedidos</h2>
+    <div class="chart-wrap chart-wrap-md">
+      <canvas id="chartMaterials" aria-label="Materiales más solicitados"></canvas>
+    </div>
+  </article>
+</section>
+
+<section class="card recent-leads-card">
+  <div class="transcript-header">
+    <h2>Últimos prospectos</h2>
+    <a href="/dashboard/leads" class="row-action">Ver todos →</a>
+  </div>
+  {% if recent_leads %}
+  <div class="table-wrap table-wrap-flat">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Contacto</th>
+          <th>Material</th>
+          <th>Estado</th>
+          <th>Fecha</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in recent_leads %}
+        <tr>
+          <td>
+            <div class="contact-name">{{ c.user_name or c.external_user_id }}</div>
+            {% if c.user_phone %}<div class="muted small">{{ c.user_phone }}</div>{% endif %}
+          </td>
+          <td>{{ c.product_interest or "—" }}</td>
+          <td>
+            <span class="badge status-{{ c.status.value }}">
+              <span class="badge-dot" aria-hidden="true"></span>
+              {{ c.status.value|label_status }}
+            </span>
+          </td>
+          <td class="muted small nowrap">{{ c.qualified_at|format_dt }}</td>
+          <td class="actions-col"><a class="row-action" href="/dashboard/leads/{{ c.id }}">Abrir</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted no-margin">Aún no hay prospectos para graficar. Cuando el agente llame a <code>POST /leads</code>, aparecerán aquí.</p>
+  {% endif %}
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(() => {
+  const accent = "#b45309";
+  const accentSoft = "#fdba74";
+  const steel = "#64748b";
+  const ink = "#1a1d21";
+  const palette = ["#b45309", "#ea580c", "#64748b", "#175cd3", "#15803d", "#c11574", "#92400e", "#334155"];
+
+  const commonOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: { color: steel, font: { family: "Archivo", size: 12 } }
+      }
+    }
+  };
+
+  const dayLabels = {{ stats.day_labels | tojson }};
+  const dayValues = {{ stats.day_values | tojson }};
+  const channelLabels = {{ stats.channel_labels | tojson }};
+  const channelValues = {{ stats.channel_values | tojson }};
+  const statusLabels = {{ stats.status_labels | tojson }};
+  const statusValues = {{ stats.status_values | tojson }};
+  const materialLabels = {{ stats.material_labels | tojson }};
+  const materialValues = {{ stats.material_values | tojson }};
+
+  new Chart(document.getElementById("chartTrend"), {
+    type: "line",
+    data: {
+      labels: dayLabels,
+      datasets: [{
+        label: "Prospectos",
+        data: dayValues,
+        borderColor: accent,
+        backgroundColor: "rgba(180, 83, 9, 0.12)",
+        fill: true,
+        tension: 0.35,
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      ...commonOpts,
+      scales: {
+        x: { ticks: { color: steel, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { color: steel, precision: 0 }, grid: { color: "rgba(100,116,139,0.12)" } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  new Chart(document.getElementById("chartChannel"), {
+    type: "doughnut",
+    data: {
+      labels: channelLabels.length ? channelLabels : ["Sin datos"],
+      datasets: [{
+        data: channelValues.length ? channelValues : [1],
+        backgroundColor: channelValues.length ? palette.slice(0, channelValues.length) : ["#e4e7ec"],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      ...commonOpts,
+      cutout: "62%",
+      plugins: {
+        legend: {
+        position: "bottom",
+        labels: { color: steel, boxWidth: 8, padding: 8, font: { family: "Archivo", size: 10 } }
+      }
+      }
+    }
+  });
+
+  new Chart(document.getElementById("chartStatus"), {
+    type: "doughnut",
+    data: {
+      labels: statusLabels.length ? statusLabels : ["Sin datos"],
+      datasets: [{
+        data: statusValues.length ? statusValues : [1],
+        backgroundColor: statusValues.length ? [accent, accentSoft, steel].slice(0, statusValues.length) : ["#e4e7ec"],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      ...commonOpts,
+      cutout: "62%",
+      plugins: {
+        legend: {
+        position: "bottom",
+        labels: { color: steel, boxWidth: 8, padding: 8, font: { family: "Archivo", size: 10 } }
+      }
+      }
+    }
+  });
+
+  new Chart(document.getElementById("chartMaterials"), {
+    type: "bar",
+    data: {
+      labels: materialLabels,
+      datasets: [{
+        label: "Solicitudes",
+        data: materialValues,
+        backgroundColor: accent,
+        borderRadius: 6,
+        maxBarThickness: 36,
+      }]
+    },
+    options: {
+      ...commonOpts,
+      indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { color: steel, precision: 0 }, grid: { color: "rgba(100,116,139,0.12)" } },
+        y: { ticks: { color: ink }, grid: { display: false } }
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

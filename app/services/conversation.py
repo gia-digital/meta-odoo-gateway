@@ -131,6 +131,11 @@ class ConversationService:
         user_phone: Optional[str] = None,
         user_email: Optional[str] = None,
         handed_off: bool = False,
+        product_interest: Optional[str] = None,
+        summary: Optional[str] = None,
+        budget: Optional[str] = None,
+        timeline: Optional[str] = None,
+        preferred_contact_time: Optional[str] = None,
         metadata: Optional[dict] = None,
     ) -> Conversation:
         """
@@ -144,19 +149,30 @@ class ConversationService:
         if user_email:
             conversation.user_email = user_email
 
-        reason_parts = []
-        if reason:
-            reason_parts.append(reason)
-        if metadata:
-            interest = metadata.get("product_interest")
-            if interest:
-                reason_parts.append(f"Interés: {interest}")
-            extra = metadata.get("summary")
-            if extra and extra != reason:
-                reason_parts.append(str(extra))
+        meta = metadata or {}
+        interest = product_interest or meta.get("product_interest")
+        lead_summary = summary or meta.get("summary")
+        lead_budget = budget or meta.get("budget")
+        lead_timeline = timeline or meta.get("timeline")
+        lead_contact_time = preferred_contact_time or meta.get(
+            "preferred_contact_time"
+        )
+
+        if interest:
+            conversation.product_interest = str(interest)
+        if lead_summary:
+            conversation.lead_summary = str(lead_summary)
+        if lead_budget:
+            conversation.budget = str(lead_budget)
+        if lead_timeline:
+            conversation.timeline = str(lead_timeline)
+        if lead_contact_time:
+            conversation.preferred_contact_time = str(lead_contact_time)
 
         conversation.qualification_source = QualificationSource.meta_agent
-        conversation.qualification_reason = " | ".join(reason_parts) if reason_parts else reason
+        conversation.qualification_reason = (
+            reason or "Qualified by Meta Business Agent"
+        )
         if conversation.qualified_at is None:
             conversation.qualified_at = datetime.now(timezone.utc)
 
@@ -174,15 +190,56 @@ class ConversationService:
             }
 
         await self.db.commit()
-        await self.db.refresh(conversation, ["messages"])
+        await self.db.refresh(conversation)
 
         logger.info(
             "lead_qualified_by_meta",
             conversation_id=conversation.id,
             status=conversation.status.value,
             handed_off=handed_off,
+            product_interest=conversation.product_interest,
         )
         return conversation
+
+    async def create_lead_from_payload(
+        self,
+        *,
+        channel: Channel,
+        external_user_id: str,
+        user_name: Optional[str] = None,
+        user_phone: Optional[str] = None,
+        user_email: Optional[str] = None,
+        reason: Optional[str] = None,
+        summary: Optional[str] = None,
+        product_interest: Optional[str] = None,
+        budget: Optional[str] = None,
+        timeline: Optional[str] = None,
+        preferred_contact_time: Optional[str] = None,
+        handed_off: bool = False,
+    ) -> Conversation:
+        """Alta de lead vía tool POST /leads (o webhook legacy)."""
+        conv = await self.get_or_create(
+            channel=channel,
+            external_user_id=external_user_id,
+            user_name=user_name,
+        )
+        phone = user_phone
+        if not phone and channel == Channel.whatsapp:
+            phone = external_user_id
+
+        return await self.qualify_from_meta(
+            conv,
+            reason=reason or summary or "Qualified by Meta Business Agent",
+            user_name=user_name,
+            user_phone=phone,
+            user_email=user_email,
+            handed_off=handed_off,
+            product_interest=product_interest,
+            summary=summary,
+            budget=budget,
+            timeline=timeline,
+            preferred_contact_time=preferred_contact_time,
+        )
 
     async def _create_lead_in_odoo(self, conversation: Conversation) -> None:
         """Crea o vincula partner y crea crm.lead (solo si Odoo está habilitado)."""

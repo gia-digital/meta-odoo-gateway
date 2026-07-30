@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Leads — Lead Gateway{% endblock %}
+{% block title %}Prospectos — GIA{% endblock %}
 {% block content %}
 <header class="page-header">
   <div>
-    <p class="eyebrow">Pipeline</p>
-    <h1>Leads calificados</h1>
-    <p class="muted">Prospectos marcados por Meta AI o handoff. Odoo aún no está conectado.</p>
+    <p class="eyebrow">Ventas GIA</p>
+    <h1>Prospectos calificados</h1>
+    <p class="muted">Cotizaciones y solicitudes de material capturadas por el agente. Listas para seguimiento comercial.</p>
   </div>
   {% if conversations %}
   <div class="stat-pill">
     <span class="stat-value">{{ conversations|length }}</span>
-    <span class="stat-label">resultados</span>
+    <span class="stat-label">prospectos</span>
   </div>
   {% endif %}
 </header>
@@ -29,9 +29,9 @@
     <label>
       Estado
       <select name="status">
-        <option value="" {% if not status_filter %}selected{% endif %}>qualified + handed_off</option>
-        <option value="qualified" {% if status_filter == 'qualified' %}selected{% endif %}>qualified</option>
-        <option value="handed_off" {% if status_filter == 'handed_off' %}selected{% endif %}>handed_off</option>
+        <option value="" {% if not status_filter %}selected{% endif %}>Calificado + Escalado</option>
+        <option value="qualified" {% if status_filter == 'qualified' %}selected{% endif %}>Calificado</option>
+        <option value="handed_off" {% if status_filter == 'handed_off' %}selected{% endif %}>Escalado a ventas</option>
       </select>
     </label>
   </div>
@@ -43,35 +43,61 @@
   <table class="data-table">
     <thead>
       <tr>
-        <th>ID</th>
-        <th>Canal</th>
         <th>Contacto</th>
+        <th>Material</th>
+        <th>Volumen / entrega</th>
+        <th>Motivo</th>
+        <th>Canal</th>
         <th>Estado</th>
-        <th>Fuente</th>
-        <th>Score</th>
-        <th>Calificado</th>
+        <th>Fecha</th>
         <th></th>
       </tr>
     </thead>
     <tbody>
       {% for c in conversations %}
       <tr>
-        <td class="mono">#{{ c.id }}</td>
-        <td><span class="badge channel-{{ c.channel.value }}">{{ c.channel.value }}</span></td>
         <td>
           <div class="contact-cell">
             <span class="avatar" aria-hidden="true">{{ (c.user_name or c.external_user_id)[0]|upper }}</span>
             <div>
               <div class="contact-name">{{ c.user_name or c.external_user_id }}</div>
-              {% if c.user_phone %}<div class="muted small">{{ c.user_phone }}</div>{% endif %}
+              {% if c.user_phone %}<div class="muted small">{{ c.user_phone }}</div>
+              {% elif c.user_email %}<div class="muted small">{{ c.user_email }}</div>{% endif %}
             </div>
           </div>
         </td>
-        <td><span class="badge status-{{ c.status.value }}">{{ c.status.value }}</span></td>
-        <td><span class="source-label">{{ c.qualification_source.value }}</span></td>
-        <td><span class="score-cell">{{ c.score }}</span></td>
-        <td class="muted small nowrap">{{ c.qualified_at or "—" }}</td>
-        <td class="actions-col"><a class="row-action" href="/dashboard/conversations/{{ c.id }}">Abrir <span aria-hidden="true">→</span></a></td>
+        <td>
+          {% if c.product_interest %}
+          <span class="product-label">{{ c.product_interest }}</span>
+          {% else %}
+          <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td class="volume-cell">
+          {% if c.budget or c.timeline %}
+          {% if c.budget %}<div class="volume-primary">{{ c.budget }}</div>{% endif %}
+          {% if c.timeline %}<div class="muted small">{{ c.timeline }}</div>{% endif %}
+          {% else %}
+          <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td class="reason-cell">
+          <div class="reason-primary">{{ (c.qualification_reason or c.lead_summary)|truncate_text(80) }}</div>
+        </td>
+        <td>
+          <span class="badge channel-{{ c.channel.value }}">
+            <span class="badge-dot" aria-hidden="true"></span>
+            {{ c.channel.value|label_channel }}
+          </span>
+        </td>
+        <td>
+          <span class="badge status-{{ c.status.value }}">
+            <span class="badge-dot" aria-hidden="true"></span>
+            {{ c.status.value|label_status }}
+          </span>
+        </td>
+        <td class="muted small nowrap">{{ c.qualified_at|format_dt }}</td>
+        <td class="actions-col"><a class="row-action" href="/dashboard/leads/{{ c.id }}">Abrir <span aria-hidden="true">→</span></a></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -82,8 +108,8 @@
   <div class="empty-icon" aria-hidden="true">
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
   </div>
-  <p class="empty-title">No hay leads todavía</p>
-  <p class="muted">Cuando Meta Agent dispare <code>/webhook/meta/lead</code>, aparecerán aquí.</p>
+  <p class="empty-title">Aún no hay prospectos</p>
+  <p class="muted">Cuando el agente de Meta registre una cotización vía <code>POST /leads</code>, aparecerá aquí para el equipo de ventas.</p>
 </div>
 {% endif %}
 {% endblock %}

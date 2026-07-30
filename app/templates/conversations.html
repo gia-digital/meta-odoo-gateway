@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Conversaciones — Lead Gateway{% endblock %}
+{% block title %}Conversaciones — GIA{% endblock %}
 {% block content %}
 <header class="page-header">
   <div>
-    <p class="eyebrow">Inbox</p>
+    <p class="eyebrow">Soporte</p>
     <h1>Conversaciones</h1>
-    <p class="muted">Todas las conversaciones capturadas. El score es solo informativo.</p>
+    <p class="muted">Historial capturado del canal. Los prospectos calificados se revisan en la sección principal.</p>
   </div>
   {% if conversations %}
   <div class="stat-pill">
@@ -30,10 +30,10 @@
       Estado
       <select name="status">
         <option value="" {% if not status_filter %}selected{% endif %}>Todos</option>
-        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>active</option>
-        <option value="qualified" {% if status_filter == 'qualified' %}selected{% endif %}>qualified</option>
-        <option value="handed_off" {% if status_filter == 'handed_off' %}selected{% endif %}>handed_off</option>
-        <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>closed</option>
+        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Activa</option>
+        <option value="qualified" {% if status_filter == 'qualified' %}selected{% endif %}>Calificado</option>
+        <option value="handed_off" {% if status_filter == 'handed_off' %}selected{% endif %}>Escalado</option>
+        <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Cerrada</option>
       </select>
     </label>
   </div>
@@ -59,7 +59,12 @@
       {% for c in conversations %}
       <tr>
         <td class="mono">#{{ c.id }}</td>
-        <td><span class="badge channel-{{ c.channel.value }}">{{ c.channel.value }}</span></td>
+        <td>
+          <span class="badge channel-{{ c.channel.value }}">
+            <span class="badge-dot" aria-hidden="true"></span>
+            {{ c.channel.value|label_channel }}
+          </span>
+        </td>
         <td>
           <div class="contact-cell">
             <span class="avatar" aria-hidden="true">{{ (c.user_name or c.external_user_id)[0]|upper }}</span>
@@ -69,10 +74,19 @@
             </div>
           </div>
         </td>
-        <td><span class="badge status-{{ c.status.value }}">{{ c.status.value }}</span></td>
-        <td><span class="source-label">{{ c.qualification_source.value }}</span></td>
-        <td><span class="score-cell">{{ c.score }}</span></td>
-        <td class="muted small nowrap">{{ c.updated_at }}</td>
+        <td>
+          <span class="badge status-{{ c.status.value }}">
+            <span class="badge-dot" aria-hidden="true"></span>
+            {{ c.status.value|label_status }}
+          </span>
+        </td>
+        <td>
+          <span class="badge source-{{ c.qualification_source.value }}">
+            {{ c.qualification_source.value|label_source }}
+          </span>
+        </td>
+        <td><span class="score-cell{% if c.score >= 8 %} score-high{% elif c.score >= 4 %} score-mid{% endif %}">{{ c.score }}</span></td>
+        <td class="muted small nowrap">{{ c.updated_at|format_dt }}</td>
         <td class="actions-col"><a class="row-action" href="/dashboard/conversations/{{ c.id }}">Abrir <span aria-hidden="true">→</span></a></td>
       </tr>
       {% endfor %}

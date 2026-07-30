@@ -26,15 +26,17 @@ logger = get_logger(__name__)
 # ============================================================
 
 PRODUCT_KEYWORDS = [
-    # Ejemplos genéricos — reemplazar con productos reales del cliente
-    "plan", "paquete", "servicio", "producto",
-    "premium", "básico", "pro", "enterprise",
-    "membresía", "suscripción", "demo", "trial",
+    "acero", "lámina", "lamina", "rollo", "hoja", "cinta",
+    "tubería", "tuberia", "tubo", "acanalado", "galvanizad",
+    "pintro", "varilla", "alambre", "deck", "solera",
+    "calibre", "cotización", "cotizacion", "material",
 ]
 
 BUDGET_KEYWORDS = [
     "presupuesto", "precio", "cuánto cuesta", "cuanto cuesta",
     "costo", "tarifa", "cotización", "cotizacion", "cuanto vale",
+    "tonelada", "toneladas", "ton", "tonelaje", "volumen",
+    "camión", "camion", "cantidad",
 ]
 
 # Detecta montos: $1000, 5,000 MXN, USD 200, 1k, etc.
@@ -52,16 +54,17 @@ URGENCY_KEYWORDS = [
 ]
 
 DECISION_KEYWORDS = [
-    "quiero contratar", "quiero comprar", "quiero adquirir",
-    "vamos a contratar", "listo para", "me interesa",
-    "donde firmo", "dónde firmo", "como procedo", "cómo procedo",
+    "quiero cotizar", "necesito cotización", "necesito cotizacion",
+    "quiero comprar", "quiero adquirir", "vamos a comprar",
+    "listo para", "me interesa", "envíen cotización", "envien cotizacion",
     "siguiente paso", "agendar", "agéndame", "agendame",
+    "hablar con ventas", "hablar con un asesor",
 ]
 
 HUMAN_REQUEST_KEYWORDS = [
     "hablar con alguien", "hablar con una persona", "asesor",
     "vendedor", "ejecutivo", "agente humano", "persona real",
-    "llamar", "llámenme", "llamenme", "marcar",
+    "llamar", "llámenme", "llamenme", "marcar", "ventas",
 ]
 
 CONTACT_DATA_PATTERNS = {

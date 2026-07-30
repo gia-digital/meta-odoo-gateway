@@ -17,7 +17,12 @@ from app.core.logging import get_logger
 from app.core.security import require_meta_lead_auth, require_meta_signature
 from app.models.conversation import Channel
 from app.models.db import get_db
-from app.models.schemas import MetaLeadPayload, NormalizedHandover, NormalizedMessage
+from app.models.schemas import (
+    LeadCreate,
+    MetaLeadPayload,
+    NormalizedHandover,
+    NormalizedMessage,
+)
 from app.services.conversation import ConversationService
 
 logger = get_logger(__name__)
@@ -127,10 +132,11 @@ async def receive_meta_lead(
     db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """
-    Endpoint dedicado para cuando Meta Business Agent decide que el
-    prospecto merece seguimiento. Configura esta URL como acción CRM / webhook
-    de handoff del agente.
+    Alias legacy de POST /leads.
+    Preferir POST /leads como tool del Meta Business Agent.
     """
+    from app.routers.leads import create_lead_from_create, lead_to_out
+
     try:
         raw = json.loads(body) if body else {}
     except json.JSONDecodeError:
@@ -141,50 +147,35 @@ async def receive_meta_lead(
         raw = raw["lead"]
 
     try:
+        # MetaLeadPayload acepta metadata extra; LeadCreate es el contrato tool
         payload = MetaLeadPayload.model_validate(raw)
+        lead = LeadCreate(
+            channel=payload.channel,
+            external_user_id=payload.external_user_id,
+            user_name=payload.user_name,
+            user_phone=payload.user_phone,
+            user_email=payload.user_email,
+            reason=payload.reason,
+            summary=payload.summary or (payload.metadata or {}).get("summary"),
+            product_interest=payload.product_interest
+            or (payload.metadata or {}).get("product_interest"),
+            budget=payload.budget or (payload.metadata or {}).get("budget"),
+            timeline=payload.timeline or (payload.metadata or {}).get("timeline"),
+            preferred_contact_time=payload.preferred_contact_time
+            or (payload.metadata or {}).get("preferred_contact_time"),
+            handed_off=payload.handed_off,
+        )
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Invalid lead payload: {exc}") from exc
 
-    try:
-        channel_enum = Channel(payload.channel.lower())
-    except ValueError:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid channel: {payload.channel}. Use whatsapp|messenger|instagram",
-        )
-
-    service = ConversationService(db)
-    conv = await service.get_or_create(
-        channel=channel_enum,
-        external_user_id=payload.external_user_id,
-        user_name=payload.user_name,
-    )
-
-    meta: Dict[str, Any] = dict(payload.metadata or {})
-    if payload.product_interest:
-        meta["product_interest"] = payload.product_interest
-    if payload.summary:
-        meta["summary"] = payload.summary
-
-    reason = payload.reason or payload.summary or "Qualified by Meta Business Agent"
-
-    await service.qualify_from_meta(
-        conv,
-        reason=reason,
-        user_name=payload.user_name,
-        user_phone=payload.user_phone or (
-            payload.external_user_id if channel_enum == Channel.whatsapp else None
-        ),
-        user_email=payload.user_email,
-        handed_off=payload.handed_off,
-        metadata=meta,
-    )
-
+    conv = await create_lead_from_create(db, lead)
+    out = lead_to_out(conv)
     return {
         "status": "ok",
-        "conversation_id": conv.id,
-        "conversation_status": conv.status.value,
-        "qualification_source": conv.qualification_source.value,
+        "conversation_id": out.id,
+        "conversation_status": out.status,
+        "qualification_source": out.qualification_source,
+        "lead": out.model_dump(mode="json"),
     }
 
 
