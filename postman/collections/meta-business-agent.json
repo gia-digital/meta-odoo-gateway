@@ -1,0 +1,1066 @@
+{
+  "info": {
+    "name": "Meta Business Agent",
+    "description": "GIA Meta Business Agent config. Canonical entity_id={{entity_id}}. Source of truth for payloads: agent_info/*.json + scripts/upload_meta_*.sh. Workspace: Grupo Industrial Acerero.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "entity_id",
+      "value": "1247354378459524"
+    },
+    {
+      "key": "bearer_token_1db5",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "meta_lead_webhook_token",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "connector_id",
+      "value": "pfbid0Z8ZS1jWkQMPXtbJL8j6s1nALxS693Ai5nz2ZZC55JfdLwwDQ738QfjN4fnCczZtWnBRkV5ubondskFdSEbEWch8wDi65gXWRcKl"
+    },
+    {
+      "key": "tool_id",
+      "value": "pfbid02WTE5fxeCTAmRLLEuU22mTyPxmwuwbM6rHRsYNX6XrtsECCHQ8QxnXdyd2mDoSP8LwXL5GbM16sHS9UrSkcPRN1onxufrYPQDGrl"
+    },
+    {
+      "key": "faq_id",
+      "value": ""
+    },
+    {
+      "key": "knowledge_file_id",
+      "value": ""
+    },
+    {
+      "key": "skill_id",
+      "value": ""
+    },
+    {
+      "key": "website_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Knowledge Files",
+      "description": "Docs: agent-knowledge-files. Prefer ./scripts/upload_meta_knowledge.sh (forces PDF MIME).",
+      "item": [
+        {
+          "name": "List knowledge files",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/files/",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Get knowledge file",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/files/{{knowledge_file_id}}",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Upload knowledge file (form-data)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "Prefer script: empty MIME breaks upload"
+                },
+                {
+                  "key": "name",
+                  "type": "text",
+                  "value": "Presentacion GIA.pdf"
+                }
+              ]
+            },
+            "url": "https://api.facebook.com/1247354378459524/agent_config/files/",
+            "description": "Multipart often fails without MIME. Use scripts/upload_meta_knowledge.sh"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Knowledge FAQs",
+      "description": "Source: agent_info/faqs.json — ./scripts/upload_meta_faqs.sh",
+      "item": [
+        {
+          "name": "List FAQs",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/faq/",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create FAQ",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/faq/",
+            "description": "Prefer batch script",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questions\": [\n    \"¿Ejemplo?\"\n  ],\n  \"answer\": \"Respuesta ejemplo.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get FAQ",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/faq/{{faq_id}}",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update FAQ",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/faq/{{faq_id}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questions\": [\n    \"¿Ejemplo?\"\n  ],\n  \"answer\": \"Actualizada.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Knowledge Business Info",
+      "description": "Source: agent_info/business_info.json — ./scripts/upload_meta_business_info.sh",
+      "item": [
+        {
+          "name": "Get Business Info",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/business_info",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Put Business Info",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/business_info",
+            "description": "Full replace from business_info.json",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_description\": \"Grupo Industrial Acerero, S.A. de C.V. (GIA), RFC GIA971119FV5, empresa 100% mexicana (antes UNIACERO) con más de 30 años en comercialización y transformación de acero. Centro de servicio en Francisco Villa No. 27, Col. Jardines de Xalostoc, C.P. 55330, Ecatepec de Morelos, Estado de México: 40,000 m², almacenamiento de 35,000 ton y capacidad de transformación de hasta 5,000 toneladas mensuales. Más de 200 colaboradores, transporte propio y maquinaria (niveladoras, cizallas, slitters, molinos de tubería, cortadoras y acanaladoras). Fabricamos lámina acanalada KR-18, R-101, R-72 y Steel Deck; comercializamos aceros planos (HR, HRPO, CR, galvanizada G60/G90, Galvanneal, electrogalvanizada, Ecogal/zintroalum, Pintro), tubería industrial de acero negro comercial, varilla y alambre. Certificación NMX-CC/ISO 9001 (en proceso IATF 16949), trazabilidad por número de lote y certificados de calidad vía vendedor. Operamos ventas spot/piso, desarrollo de producto y back-to-back; entregas DDP o FOB. Sitio: https://giacerero.com — Términos: https://giacerero.com/terminos-y-condiciones. Negocio de mayoreo industrial (no menudeo ni mostrador).\",\n  \"purchase_info\": \"Solo mayoreo. Pedido mínimo oficial: 1 tonelada por partida y 3 toneladas en total (varilla 25 ton / 1 camión máx. 2 calibres; ángulo camero 15 ton bajo fabricación; alambre 3 ton). Cotizamos por kilo + IVA en MXN o USD; la lista de precios de referencia se actualiza mes a mes y sí se puede compartir; el precio final y mejoras por volumen los confirma el asesor humano en cotización formal (vigencia típica 1 día). Antes de cotizar se captura RFQ: material, calibre, acabado, medidas, tonelaje/piezas, ficha técnica si aplica, y si ya es cliente GIA (para canalizar con su vendedor). Medidas especiales sí se fabrican; el peso teórico es orientativo y rige la báscula de GIA. Cuando el prospecto pide cotización con volumen/urgencia/contacto, el agente debe usar el tool `create_lead` para registrar el lead calificado.\",\n  \"payment_method\": \"Solo transferencia o depósito a cuentas BBVA a nombre de GRUPO INDUSTRIAL ACERERO, S.A. DE C.V. (RFC GIA971119FV5). No manejamos efectivo ni venta de mostrador. Contado — medidas estándar: mínimo 80% con la orden de compra para iniciar producción y 20% contra factura; medidas especiales: 100% por adelantado. No sale camión sin el 100% cubierto (bloqueo por sistema). Los datos bancarios los envía ÚNICAMENTE el vendedor humano con el documento oficial actualizado; el agente NUNCA dicta CLABE ni cuentas por chat. Referencia de pago: solo los 7 últimos dígitos del folio de factura, sin diagonal ni espacios. Facturamos siempre (PDF/XML). Crédito: se inicia de contado; con 3 meses de compras continuas se arma historial para evaluación del Gerente de Crédito (ext. 158).\",\n  \"delivery_and_shipping\": \"Material en piso/spot: 3 a 4 días hábiles con anticipo. Fabricación/desarrollo especial: aprox. 25 a 30 días hábiles. Tolerancia de entrega ±10%; facturación sobre peso neto. Flete sin costo en zona metropolitana; envíos a toda la República (foráneo se cotiza); DDP o FOB. Entregas libres de maniobras (descarga con personal/montacargas del cliente). Antes de programar entrega se captura horario de recibo, si el punto está techado y ubicación exacta. Recolección en planta (preferida): carta membretada a C.P. Juan Manuel Toledo con datos de unidad, OC y operador (INE, licencia, seguro, EPP); horario L-V 9:00–16:00, Ecatepec.\",\n  \"return_policy\": \"GIA no otorga garantía ilimitada por la naturaleza del acero; toda reclamación la autoriza GIA tras inspección (el agente nunca acepta ni rechaza). Para reclamar se requieren 4 datos: lote del rollo, número de parte/código, cantidad sospechosa y defecto (muestra si no es visible). Rechazo aceptado: recolección en máximo 10 días y nota de crédito (no hay cambio físico de material). Garantía por óxido: con aceite 45 días desde embarque; pasivado sin aceite 30 días; seco / HRPO-CR secos sin garantía. Golpes, mojado o embalaje: notificar en máximo 48 horas con fotos y en presencia del operador. Diferencias de báscula < ±1.0% son normales (ASTM A700); mayores requieren certificado de calibración EMA. Términos: https://giacerero.com/terminos-y-condiciones.\",\n  \"contact_info\": {\n    \"email\": \"contacto@unigiasa.com.mx\",\n    \"hours_of_operation\": \"Atención comercial en horario laboral. Recolección en planta: lunes a viernes de 9:00 a 16:00. Conmutador: 55 5755 7009 / 55 5791 6725 (y extensiones publicadas). Fuera de horario puede enviarse mensaje; un asesor da seguimiento al retomar actividades.\",\n    \"address\": \"Francisco Villa No. 27, Col. Jardines de Xalostoc, C.P. 55330, Ecatepec de Morelos, Estado de México, México\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Knowledge Skills",
+      "description": "Source: agent_info/skills.json — ./scripts/upload_meta_skills.sh (9 skills; create-qualified-lead owns create_lead)",
+      "item": [
+        {
+          "name": "List Skills",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/skills/",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create Skill (create-qualified-lead)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/skills/",
+            "description": "Example only; prefer upload_meta_skills.sh for all 9",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"create-qualified-lead\",\n  \"description\": \"Apply when the prospect is qualified: requested a quote with concrete material/volume, shared urgency or delivery needs, asked to speak with sales, or expressed clear purchase intent. This skill governs the create_lead tool.\",\n  \"skill\": \"Debes usar el tool `create_lead` (id pfbid02WTE5fxeCTAmRLLEuU22mTyPxmwuwbM6rHRsYNX6XrtsECCHQ8QxnXdyd2mDoSP8LwXL5GbM16sHS9UrSkcPRN1onxufrYPQDGrl, POST /webhook/meta/lead) para registrar el prospecto calificado en el servidor de GIA.\\n\\nCuándo llamar al tool (cualquiera aplica):\\n- Pidió cotización de un material/línea concreta\\n- Indicó volumen (toneladas/piezas) y/o urgencia de entrega\\n- Pidió hablar con asesor/ventas/gerente\\n- Compartió teléfono/email adicionales con intención de compra\\n- Expresó intención clara de compra o reposición\\n\\nAntes de llamar al tool:\\n1) Confirma los datos de contacto con el cliente\\n2) Indica que un asesor de GIA le contactará en el horario acordado\\n3) Llama al tool UNA vez con el mejor resumen disponible (no esperes datos perfectos si ya hay intención clara)\\n\\nPayload del tool (campos):\\n- channel: whatsapp | messenger | instagram\\n- external_user_id: wa_id o PSID del usuario (obligatorio)\\n- user_name, user_phone, user_email\\n- reason: motivo corto\\n- summary: empresa, uso, ubicación, notas para ventas\\n- product_interest: material/línea\\n- budget: volumen estimado (ton) o presupuesto\\n- timeline: urgencia/entrega deseada\\n- preferred_contact_time: mejor horario de contacto\\n- handed_off: true si escalaste a humano\\n\\nDespués del tool: no digas IDs internos; confirma que ventas dará seguimiento.\\nSi el cliente ya tiene vendedor GIA asignado: canaliza con él y aún así registra el lead si hay requerimiento nuevo, con handed_off=true cuando corresponda.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Skill",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/skills/{{skill_id}}",
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Knowledge Websites",
+      "description": "Source: agent_info/websites.json — ./scripts/upload_meta_websites.sh\nDocs: https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-knowledge-websites",
+      "item": [
+        {
+          "name": "List Websites",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/websites/",
+            "description": "List crawl entries + status"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Website",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/websites/",
+            "description": "Add crawl URL. Prefer script for both URLs.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://giacerero.com/\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Website",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/websites/{{website_id}}",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update Website",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1247354378459524/agent_config/websites/{{website_id}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://giacerero.com/terminos-y-condiciones\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Connectors",
+      "description": "Source: agent_info/connectors.json — ./scripts/upload_meta_connectors.sh\nDocs: https://developers.facebook.com/documentation/meta-business-agent/reference/configure/connectors\nLive connector_id defaulted in collection var.",
+      "item": [
+        {
+          "name": "List Connectors",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_connectors/",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create Connector",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_connectors/",
+            "description": "Only if connector missing. Save returned id → {{connector_id}} and connectors.json live.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"gia_lead_gateway\",\n  \"description\": \"Conector hacia el gateway FastAPI de GIA (gia.init.com.mx) para registrar leads calificados del Meta Business Agent. Expone tools CRM hacia /webhook/meta/lead (alias de /leads).\",\n  \"base_url\": \"https://gia.init.com.mx\",\n  \"auth_type\": \"API_KEY\",\n  \"auth_config\": {\n    \"api_key\": {\n      \"headers\": [\n        {\n          \"field_name\": \"X-Meta-Lead-Token\",\n          \"value\": \"{{meta_lead_webhook_token}}\"\n        }\n      ]\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Connector",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_connectors/{{connector_id}}",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update Connector",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_connectors/{{connector_id}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"gia_lead_gateway\",\n  \"description\": \"Conector hacia el gateway FastAPI de GIA (gia.init.com.mx) para registrar leads calificados del Meta Business Agent. Expone tools CRM hacia /webhook/meta/lead (alias de /leads).\",\n  \"base_url\": \"https://gia.init.com.mx\",\n  \"auth_type\": \"API_KEY\",\n  \"auth_config\": {\n    \"api_key\": {\n      \"headers\": [\n        {\n          \"field_name\": \"X-Meta-Lead-Token\",\n          \"value\": \"{{meta_lead_webhook_token}}\"\n        }\n      ]\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert ApiKey",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_connectors/{{connector_id}}/upsertApiKey",
+            "description": "Rotate X-Meta-Lead-Token without recreating connector",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"api_key_config\": {\n    \"headers\": [\n      {\n        \"field_name\": \"X-Meta-Lead-Token\",\n        \"value\": \"{{meta_lead_webhook_token}}\"\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Connector Logs",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_connectors/{{connector_id}}/logs?include_stats=true&summary_only=true",
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Connector Tools",
+      "description": "Source: agent_info/connector_tools.json — ./scripts/upload_meta_connector_tools.sh\nDocs: https://developers.facebook.com/documentation/meta-business-agent/reference/configure/connector-tools\nLive create_lead tool_id in {{tool_id}}.",
+      "item": [
+        {
+          "name": "List Tools",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_connectors/{{connector_id}}/tools/",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create Tool (create_lead)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_connectors/{{connector_id}}/tools/",
+            "description": "Only if tool missing. Prefer --update on existing tool_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"create_lead\",\n  \"description\": \"Registra un prospecto calificado en el gateway de GIA para que el equipo de ventas lo contacte. Úsalo cuando el cliente pidió cotización con material/volumen, compartió urgencia o contacto, pidió hablar con un asesor, o expresó intención clara de compra. Requiere channel y external_user_id (wa_id o PSID). Devuelve confirmación del lead registrado; no inventes IDs internos al cliente.\",\n  \"user_auth_required\": false,\n  \"request_definition\": {\n    \"method\": \"POST\",\n    \"path\": \"/webhook/meta/lead\",\n    \"body\": {\n      \"content_type\": \"application/json\",\n      \"required\": [\n        \"channel\",\n        \"external_user_id\"\n      ],\n      \"params\": {\n        \"channel\": {\n          \"type\": \"string\",\n          \"description\": \"Canal de origen: whatsapp | messenger | instagram\",\n          \"required\": true\n        },\n        \"external_user_id\": {\n          \"type\": \"string\",\n          \"description\": \"ID del usuario en el canal (wa_id de WhatsApp o PSID de Messenger/Instagram)\",\n          \"required\": true\n        },\n        \"user_name\": {\n          \"type\": \"string\",\n          \"description\": \"Nombre completo del contacto o razón social\",\n          \"required\": false\n        },\n        \"user_phone\": {\n          \"type\": \"string\",\n          \"description\": \"Teléfono de contacto\",\n          \"required\": false\n        },\n        \"user_email\": {\n          \"type\": \"string\",\n          \"description\": \"Email de contacto\",\n          \"required\": false\n        },\n        \"reason\": {\n          \"type\": \"string\",\n          \"description\": \"Motivo corto (ej. pidió cotización de lámina galvanizada)\",\n          \"required\": false\n        },\n        \"summary\": {\n          \"type\": \"string\",\n          \"description\": \"Resumen para el asesor: empresa, uso, ubicación, notas\",\n          \"required\": false\n        },\n        \"product_interest\": {\n          \"type\": \"string\",\n          \"description\": \"Material o línea de interés (aceros planos, tubería, acanalados, etc.)\",\n          \"required\": false\n        },\n        \"budget\": {\n          \"type\": \"string\",\n          \"description\": \"Volumen estimado (toneladas) o presupuesto aproximado\",\n          \"required\": false\n        },\n        \"timeline\": {\n          \"type\": \"string\",\n          \"description\": \"Urgencia o fecha deseada de entrega\",\n          \"required\": false\n        },\n        \"preferred_contact_time\": {\n          \"type\": \"string\",\n          \"description\": \"Mejor horario para que ventas contacte\",\n          \"required\": false\n        },\n        \"handed_off\": {\n          \"type\": \"boolean\",\n          \"description\": \"true si además se escaló la conversación a un asesor humano\",\n          \"required\": false\n        }\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tool",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_connectors/{{connector_id}}/tools/{{tool_id}}",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update Tool (create_lead)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_connectors/{{connector_id}}/tools/{{tool_id}}",
+            "description": "Enrich description + body schema without changing tool id",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"create_lead\",\n  \"description\": \"Registra un prospecto calificado en el gateway de GIA para que el equipo de ventas lo contacte. Úsalo cuando el cliente pidió cotización con material/volumen, compartió urgencia o contacto, pidió hablar con un asesor, o expresó intención clara de compra. Requiere channel y external_user_id (wa_id o PSID). Devuelve confirmación del lead registrado; no inventes IDs internos al cliente.\",\n  \"user_auth_required\": false,\n  \"request_definition\": {\n    \"method\": \"POST\",\n    \"path\": \"/webhook/meta/lead\",\n    \"body\": {\n      \"content_type\": \"application/json\",\n      \"required\": [\n        \"channel\",\n        \"external_user_id\"\n      ],\n      \"params\": {\n        \"channel\": {\n          \"type\": \"string\",\n          \"description\": \"Canal de origen: whatsapp | messenger | instagram\",\n          \"required\": true\n        },\n        \"external_user_id\": {\n          \"type\": \"string\",\n          \"description\": \"ID del usuario en el canal (wa_id de WhatsApp o PSID de Messenger/Instagram)\",\n          \"required\": true\n        },\n        \"user_name\": {\n          \"type\": \"string\",\n          \"description\": \"Nombre completo del contacto o razón social\",\n          \"required\": false\n        },\n        \"user_phone\": {\n          \"type\": \"string\",\n          \"description\": \"Teléfono de contacto\",\n          \"required\": false\n        },\n        \"user_email\": {\n          \"type\": \"string\",\n          \"description\": \"Email de contacto\",\n          \"required\": false\n        },\n        \"reason\": {\n          \"type\": \"string\",\n          \"description\": \"Motivo corto (ej. pidió cotización de lámina galvanizada)\",\n          \"required\": false\n        },\n        \"summary\": {\n          \"type\": \"string\",\n          \"description\": \"Resumen para el asesor: empresa, uso, ubicación, notas\",\n          \"required\": false\n        },\n        \"product_interest\": {\n          \"type\": \"string\",\n          \"description\": \"Material o línea de interés (aceros planos, tubería, acanalados, etc.)\",\n          \"required\": false\n        },\n        \"budget\": {\n          \"type\": \"string\",\n          \"description\": \"Volumen estimado (toneladas) o presupuesto aproximado\",\n          \"required\": false\n        },\n        \"timeline\": {\n          \"type\": \"string\",\n          \"description\": \"Urgencia o fecha deseada de entrega\",\n          \"required\": false\n        },\n        \"preferred_contact_time\": {\n          \"type\": \"string\",\n          \"description\": \"Mejor horario para que ventas contacte\",\n          \"required\": false\n        },\n        \"handed_off\": {\n          \"type\": \"boolean\",\n          \"description\": \"true si además se escaló la conversación a un asesor humano\",\n          \"required\": false\n        }\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Run Tool",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_connectors/{{connector_id}}/tools/{{tool_id}}/run",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"{\\\"channel\\\":\\\"whatsapp\\\",\\\"external_user_id\\\":\\\"5215512345678\\\",\\\"user_name\\\":\\\"Prueba\\\",\\\"reason\\\":\\\"Cotización de lámina galvanizada\\\",\\\"product_interest\\\":\\\"Lámina galvanizada\\\",\\\"budget\\\":\\\"10 ton\\\",\\\"timeline\\\":\\\"Este mes\\\",\\\"preferred_contact_time\\\":\\\"Mañanas\\\",\\\"handed_off\\\":false}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Agent Ops",
+      "description": "Eligibility / smoke test helpers (not knowledge).",
+      "item": [
+        {
+          "name": "Agent Eligibility",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/{{entity_id}}/agent_eligibility",
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Agent Test",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{bearer_token_1db5}}",
+                "type": "text"
+              },
+              {
+                "key": "X-API-Version",
+                "value": "2.0.0",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "https://api.facebook.com/1248327045031039/agent_test",
+            "description": "entity may differ from WA phone id — verify before use",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_msg\": \"Hola, ¿cuáles son sus horarios de atención?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

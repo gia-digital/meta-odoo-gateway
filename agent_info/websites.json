@@ -1,0 +1,16 @@
+{
+  "entity_id": "1247354378459524",
+  "api": "https://api.facebook.com/{entity_id}/agent_config/websites",
+  "docs": "https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-knowledge-websites",
+  "notes": "POST body is only {\"url\"}. Meta crawls each URL into agent knowledge. Re-add or PUT by website_id after content changes on the site. Prefer script for batch; Postman for one-off checks.",
+  "websites": [
+    {
+      "url": "https://giacerero.com/",
+      "purpose": "Sitio corporativo GIA — catálogo, empresa, contacto"
+    },
+    {
+      "url": "https://giacerero.com/terminos-y-condiciones",
+      "purpose": "Términos y condiciones / políticas referenciadas en business_info y reclamaciones"
+    }
+  ]
+}

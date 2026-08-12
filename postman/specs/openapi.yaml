@@ -1,0 +1,640 @@
+openapi: 3.0.3
+info:
+  title: GIA Prospectos — Meta → Gateway
+  version: 0.2.0
+  description: |
+    Intermediate FastAPI gateway for Grupo Industrial Acerero (GIA).
+    Receives WhatsApp/Messenger traffic and qualified leads from the Meta Business Agent,
+    persists them in PostgreSQL, and exposes admin/dashboard APIs.
+
+    Primary agent tool: `POST /leads` (create/update a qualified prospect for sales).
+  contact:
+    name: GIA Digital
+servers:
+  - url: http://localhost:8000
+    description: Local Docker Compose
+  - url: "{baseUrl}"
+    description: Deployed gateway
+    variables:
+      baseUrl:
+        default: https://example.com
+tags:
+  - name: health
+    description: Liveness
+  - name: leads
+    description: Meta Business Agent lead tool + admin lead listing
+  - name: meta
+    description: Meta webhook verification and inbound events
+  - name: admin
+    description: Internal admin JSON APIs (X-Admin-Token)
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [health]
+      summary: Health check
+      description: Returns service liveness. No authentication required.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+              example:
+                status: ok
+
+  /leads:
+    post:
+      operationId: createLead
+      tags: [leads]
+      summary: Crear o actualizar prospecto calificado
+      description: |
+        Tool for the GIA Meta Business Agent. Registers a steel prospect with
+        material, volume, delivery timing, and contact data for the sales team.
+      security:
+        - MetaLeadToken: []
+        - MetaHubSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadCreate"
+            examples:
+              qualifiedProspect:
+                summary: Typical WhatsApp qualified lead
+                value:
+                  channel: whatsapp
+                  external_user_id: "5215512345678"
+                  user_name: "María López"
+                  user_phone: "+525512345678"
+                  user_email: "maria@acme.mx"
+                  reason: "Pidió cotización de lámina galvanizada"
+                  summary: "Empresa constructora en CDMX; techos industriales; contactar en la mañana"
+                  product_interest: "Lámina galvanizada / acanalados"
+                  budget: "8–12 toneladas"
+                  timeline: "Entrega en 2 semanas"
+                  preferred_contact_time: "09:00–12:00"
+                  handed_off: false
+      responses:
+        "200":
+          description: Lead created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    get:
+      operationId: listLeads
+      tags: [leads]
+      summary: Listar leads calificados
+      description: Lists qualified/handed-off leads. Requires admin token.
+      security:
+        - AdminToken: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: channel
+          in: query
+          schema:
+            type: string
+            enum: [whatsapp, messenger, instagram]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [qualified, handed_off]
+      responses:
+        "200":
+          description: Lead list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeadOut"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /leads/{lead_id}:
+    get:
+      operationId: getLead
+      tags: [leads]
+      summary: Detalle de un lead
+      security:
+        - AdminToken: []
+      parameters:
+        - name: lead_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 42
+      responses:
+        "200":
+          description: Lead detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadOut"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /webhook/meta:
+    get:
+      operationId: verifyMetaWebhook
+      tags: [meta]
+      summary: Verificación del webhook Meta
+      description: Meta hub challenge verification for WhatsApp / Messenger webhooks.
+      parameters:
+        - name: hub.mode
+          in: query
+          required: true
+          schema:
+            type: string
+            example: subscribe
+        - name: hub.verify_token
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: hub.challenge
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "1234567890"
+      responses:
+        "200":
+          description: Challenge echoed as plain text
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "1234567890"
+        "403":
+          description: Verification failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: receiveMetaWebhook
+      tags: [meta]
+      summary: Mensajes y handovers de Meta
+      description: Inbound WhatsApp/Messenger webhook events. Requires Meta HMAC signature.
+      security:
+        - MetaHubSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MetaWebhookPayload"
+            example:
+              object: whatsapp_business_account
+              entry:
+                - id: "PHONE_NUMBER_ID"
+                  time: 1710000000
+                  changes: []
+      responses:
+        "200":
+          description: Event accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /webhook/meta/lead:
+    post:
+      operationId: createLeadLegacy
+      tags: [meta]
+      summary: Alias legacy de POST /leads
+      description: Legacy CRM/handoff endpoint. Prefer `POST /leads`.
+      deprecated: true
+      security:
+        - MetaLeadToken: []
+        - MetaHubSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadCreate"
+      responses:
+        "200":
+          description: Lead created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /admin/conversations:
+    get:
+      operationId: listConversations
+      tags: [admin]
+      summary: Listar conversaciones
+      security:
+        - AdminToken: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: qualification_source
+          in: query
+          schema:
+            type: string
+            enum: [none, meta_agent, local_scorer]
+      responses:
+        "200":
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationOut"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /admin/conversations/{conv_id}/messages:
+    get:
+      operationId: getConversationMessages
+      tags: [admin]
+      summary: Mensajes de una conversación
+      security:
+        - AdminToken: []
+      parameters:
+        - name: conv_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Message list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MessageOut"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /admin/conversations/{conv_id}/reprocess:
+    post:
+      operationId: reprocessConversation
+      tags: [admin]
+      summary: Reprocesar scoring de una conversación
+      security:
+        - AdminToken: []
+      parameters:
+        - name: conv_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reprocess result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    AdminToken:
+      type: apiKey
+      in: header
+      name: X-Admin-Token
+      description: Shared admin API token (`ADMIN_API_TOKEN`).
+    MetaLeadToken:
+      type: apiKey
+      in: header
+      name: X-Meta-Lead-Token
+      description: |
+        Shared token for the Meta agent lead tool (`META_LEAD_WEBHOOK_TOKEN`).
+        Alternatively pass `?token=` or Meta HMAC `X-Hub-Signature-256`.
+    MetaHubSignature:
+      type: apiKey
+      in: header
+      name: X-Hub-Signature-256
+      description: Meta Graph HMAC signature header (`sha256=<hex>`).
+
+  responses:
+    BadRequest:
+      description: Invalid JSON or malformed body
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            detail: Invalid JSON
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            detail: Unauthorized
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            detail: Lead not found
+    ValidationError:
+      description: Payload or query validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            detail: "Invalid channel: sms. Use whatsapp|messenger|instagram"
+
+  schemas:
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message agents can surface or retry on
+
+    LeadCreate:
+      type: object
+      required: [external_user_id]
+      properties:
+        channel:
+          type: string
+          enum: [whatsapp, messenger, instagram]
+          default: whatsapp
+          description: Canal de origen
+          example: whatsapp
+        external_user_id:
+          type: string
+          description: ID del usuario en el canal (wa_id o PSID)
+          example: "5215512345678"
+        user_name:
+          type: string
+          nullable: true
+          description: Nombre completo del contacto o razón social
+        user_phone:
+          type: string
+          nullable: true
+          description: Teléfono de contacto
+        user_email:
+          type: string
+          format: email
+          nullable: true
+          description: Email de contacto
+        reason:
+          type: string
+          nullable: true
+          description: Motivo corto (ej. pidió cotización de lámina galvanizada)
+        summary:
+          type: string
+          nullable: true
+          description: Resumen para el asesor de ventas
+        product_interest:
+          type: string
+          nullable: true
+          description: Material o línea de interés
+        budget:
+          type: string
+          nullable: true
+          description: Volumen estimado (toneladas) o presupuesto aproximado
+        timeline:
+          type: string
+          nullable: true
+          description: Urgencia o fecha deseada de entrega
+        preferred_contact_time:
+          type: string
+          nullable: true
+          description: Mejor horario para que ventas contacte
+        handed_off:
+          type: boolean
+          default: false
+          description: true si además se escaló la conversación a un asesor humano
+
+    LeadOut:
+      type: object
+      required:
+        - id
+        - channel
+        - external_user_id
+        - status
+        - qualification_source
+        - score
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          example: 42
+        channel:
+          type: string
+          example: whatsapp
+        external_user_id:
+          type: string
+        user_name:
+          type: string
+          nullable: true
+        user_phone:
+          type: string
+          nullable: true
+        user_email:
+          type: string
+          nullable: true
+        status:
+          type: string
+          example: qualified
+        qualification_source:
+          type: string
+          example: meta_agent
+        qualification_reason:
+          type: string
+          nullable: true
+        product_interest:
+          type: string
+          nullable: true
+        lead_summary:
+          type: string
+          nullable: true
+        budget:
+          type: string
+          nullable: true
+        timeline:
+          type: string
+          nullable: true
+        preferred_contact_time:
+          type: string
+          nullable: true
+        score:
+          type: integer
+          example: 0
+        qualified_at:
+          type: string
+          format: date-time
+          nullable: true
+        odoo_lead_id:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    MetaWebhookPayload:
+      type: object
+      required: [object, entry]
+      properties:
+        object:
+          type: string
+          description: whatsapp_business_account or page
+          example: whatsapp_business_account
+        entry:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    ConversationOut:
+      type: object
+      properties:
+        id:
+          type: integer
+        channel:
+          type: string
+        external_user_id:
+          type: string
+        user_name:
+          type: string
+          nullable: true
+        user_phone:
+          type: string
+          nullable: true
+        user_email:
+          type: string
+          nullable: true
+        status:
+          type: string
+        score:
+          type: integer
+        score_breakdown:
+          type: object
+          additionalProperties: true
+        qualification_source:
+          type: string
+        qualification_reason:
+          type: string
+          nullable: true
+        product_interest:
+          type: string
+          nullable: true
+        lead_summary:
+          type: string
+          nullable: true
+        budget:
+          type: string
+          nullable: true
+        timeline:
+          type: string
+          nullable: true
+        preferred_contact_time:
+          type: string
+          nullable: true
+        qualified_at:
+          type: string
+          format: date-time
+          nullable: true
+        odoo_lead_id:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    MessageOut:
+      type: object
+      properties:
+        id:
+          type: integer
+        direction:
+          type: string
+          example: inbound
+        body:
+          type: string
+        created_at:
+          type: string
+          format: date-time
