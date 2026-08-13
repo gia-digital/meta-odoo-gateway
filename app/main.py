@@ -1,4 +1,5 @@
 """Entry point de la aplicación FastAPI."""
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -6,21 +7,35 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import get_settings
-from app.core.logging import setup_logging
+from app.core.logging import get_logger, setup_logging
 from app.models.db import SessionLocal, init_db
 from app.routers import admin, chatwoot_webhook, dashboard, health, knowledge as knowledge_router, leads, meta_webhook
 from app.services.knowledge.seed import seed_from_agent_info
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     await init_db()
-    async with SessionLocal() as db:
-        await seed_from_agent_info(db)
+
+    async def _seed() -> None:
+        try:
+            async with SessionLocal() as db:
+                await seed_from_agent_info(db)
+        except Exception as exc:
+            logger.exception("knowledge_seed_failed", error=str(exc))
+
+    # No bloquear /health: el seed (embeddings + PDFs) puede tardar minutos.
+    seed_task = asyncio.create_task(_seed())
     yield
+    seed_task.cancel()
+    try:
+        await seed_task
+    except asyncio.CancelledError:
+        pass
 
 
 settings = get_settings()

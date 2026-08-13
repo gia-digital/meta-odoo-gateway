@@ -129,7 +129,15 @@ async def seed_from_agent_info(db: AsyncSession, *, agent_info: Path | None = No
                 if dest_name in seen_names:
                     continue
                 seen_names.add(dest_name)
-                dest = copy_into_uploads(src, dest_name)
+                try:
+                    dest = copy_into_uploads(src, dest_name)
+                except OSError as exc:
+                    logger.error(
+                        "knowledge_seed_pdf_copy_failed",
+                        filename=dest_name,
+                        error=str(exc),
+                    )
+                    continue
                 file_row = KnowledgeFile(
                     filename=dest_name,
                     stored_path=str(dest),

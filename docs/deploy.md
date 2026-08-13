@@ -156,9 +156,13 @@ El servicio `db` usa `pgvector/pgvector:pg16`. **El volumen anterior de `postgre
 ```bash
 cd ~/meta-odoo-gateway
 docker compose -f docker-compose.prod.yml --env-file .deploy.env down
-docker volume rm meta-odoo-gateway_gateway-pgdata 2>/dev/null || docker volume rm gateway-pgdata || true
+docker volume rm meta-odoo-gateway_gateway-pgdata
+mkdir -p knowledge_uploads
+chmod 777 knowledge_uploads
 docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d
 ```
+
+Usa el nombre literal `meta-odoo-gateway_gateway-pgdata` (no un placeholder). Si `volume rm` dice que está en uso, el `down` no terminó: `docker ps -a` y vuelve a `down`.
 
 Confirma el nombre del volumen con `docker volume ls | grep gateway`. Al primer boot el API hace `CREATE EXTENSION vector`, crea tablas y **seed** de `agent_info` (FAQs, skills, negocio, PDFs).
 
@@ -201,6 +205,18 @@ El CLI `docker` en el droplet es un **shim de Podman** o no hay daemon. Compose 
 ### `Login Succeeded` pero falla el `pull`
 
 El login a GHCR funcionó; el fallo es local (daemon/compose), no del registry.
+
+### API `unhealthy` / Caddy no arranca
+
+1. El seed de knowledge **no debe** bloquear `/health`. Si ves el API unhealthy ~90s, mira logs:
+
+```bash
+docker logs meta-odoo-gateway --tail 150
+```
+
+- `extension "vector" is not available` → el volumen es del Postgres viejo (sin pgvector). Borra `meta-odoo-gateway_gateway-pgdata` (sección 7) y vuelve a `up`.
+- `Permission denied` en `knowledge_uploads` → `chmod 777 knowledge_uploads` y reinicia el API.
+- El seed tarda (`knowledge_embed_*`) → espera `knowledge_seed_done` y `curl -fsS http://127.0.0.1:8000/health`.
 
 ### HTTPS no arranca / challenge ACME falla
 
