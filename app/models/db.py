@@ -38,9 +38,29 @@ async def _ensure_qualification_columns(conn) -> None:
         text(
             """
             DO $$ BEGIN
-                CREATE TYPE qualificationsource AS ENUM ('none', 'meta_agent', 'local_score');
+                CREATE TYPE qualificationsource AS ENUM (
+                    'none', 'meta_agent', 'local_score', 'chatwoot_agent'
+                );
             EXCEPTION
                 WHEN duplicate_object THEN null;
+            END $$;
+            """
+        )
+    )
+    # DBs creadas antes de chatwoot_agent
+    await conn.execute(
+        text(
+            """
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_enum e
+                    JOIN pg_type t ON e.enumtypid = t.oid
+                    WHERE t.typname = 'qualificationsource'
+                      AND e.enumlabel = 'chatwoot_agent'
+                ) THEN
+                    ALTER TYPE qualificationsource ADD VALUE 'chatwoot_agent';
+                END IF;
             END $$;
             """
         )

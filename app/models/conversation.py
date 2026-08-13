@@ -26,6 +26,7 @@ class QualificationSource(str, enum.Enum):
     none = "none"
     meta_agent = "meta_agent"
     local_score = "local_score"
+    chatwoot_agent = "chatwoot_agent"
 
 
 class Direction(str, enum.Enum):

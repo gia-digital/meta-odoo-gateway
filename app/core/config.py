@@ -46,6 +46,21 @@ class Settings(BaseSettings):
     admin_api_token: str
     admin_allowed_ips: str = ""
 
+    # Chatwoot Agent Bot
+    chatwoot_enabled: bool = False
+    chatwoot_base_url: str = ""
+    chatwoot_account_id: int = 0
+    chatwoot_bot_token: str = ""
+    chatwoot_webhook_secret: str = ""
+
+    # LLM (OpenAI Agents SDK + LiteLLM)
+    # Examples: anthropic/claude-sonnet-4-20250514 | openai/gpt-4.1-mini
+    agent_model: str = "anthropic/claude-sonnet-4-20250514"
+    anthropic_api_key: str = ""
+    openai_api_key: str = ""
+    agent_max_history_messages: int = 20
+    agent_faq_char_limit: int = 12000
+
     @property
     def admin_ips_list(self) -> List[str]:
         return [ip.strip() for ip in self.admin_allowed_ips.split(",") if ip.strip()]

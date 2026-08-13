@@ -47,6 +47,7 @@ docker compose up -d
 | GET | `/leads/{id}` | Detalle JSON de un lead |
 | GET | `/webhook/meta` | Verificación del webhook (Meta) |
 | POST | `/webhook/meta` | Mensajes + handovers de Meta |
+| POST | `/webhook/chatwoot` | Agent Bot de Chatwoot (LLM + leads) |
 | POST | `/webhook/meta/lead` | Alias legacy de `POST /leads` |
 | GET | `/dashboard/overview` | Resumen con KPIs y gráficos de prospectos |
 | GET | `/dashboard` | Login del dashboard (token admin) |
@@ -67,6 +68,7 @@ El scoring local sigue calculándose (sección secundaria en el detalle) pero **
 
 - Meta: `docs/meta_setup.md`
 - Prompt del agente + payload de lead: `docs/agent_prompt.md`
+- **Chatwoot Agent Bot:** `docs/chatwoot_agent_bot.md`
 - Odoo (fase siguiente): `docs/odoo_setup.md`
 - **Deploy DigitalOcean (CI/CD):** `docs/deploy.md`
 

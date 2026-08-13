@@ -137,9 +137,10 @@ class ConversationService:
         timeline: Optional[str] = None,
         preferred_contact_time: Optional[str] = None,
         metadata: Optional[dict] = None,
+        qualification_source: QualificationSource = QualificationSource.meta_agent,
     ) -> Conversation:
         """
-        Califica un prospecto porque Meta Business Agent lo decidió.
+        Califica un prospecto (Meta Agent, Chatwoot Agent Bot, etc.).
         No llama a Odoo (fase posterior).
         """
         if user_name:
@@ -169,10 +170,13 @@ class ConversationService:
         if lead_contact_time:
             conversation.preferred_contact_time = str(lead_contact_time)
 
-        conversation.qualification_source = QualificationSource.meta_agent
-        conversation.qualification_reason = (
-            reason or "Qualified by Meta Business Agent"
+        conversation.qualification_source = qualification_source
+        default_reason = (
+            "Qualified by Chatwoot Agent Bot"
+            if qualification_source == QualificationSource.chatwoot_agent
+            else "Qualified by Meta Business Agent"
         )
+        conversation.qualification_reason = reason or default_reason
         if conversation.qualified_at is None:
             conversation.qualified_at = datetime.now(timezone.utc)
 
@@ -193,10 +197,11 @@ class ConversationService:
         await self.db.refresh(conversation)
 
         logger.info(
-            "lead_qualified_by_meta",
+            "lead_qualified",
             conversation_id=conversation.id,
             status=conversation.status.value,
             handed_off=handed_off,
+            source=qualification_source.value,
             product_interest=conversation.product_interest,
         )
         return conversation
@@ -216,8 +221,9 @@ class ConversationService:
         timeline: Optional[str] = None,
         preferred_contact_time: Optional[str] = None,
         handed_off: bool = False,
+        qualification_source: QualificationSource = QualificationSource.meta_agent,
     ) -> Conversation:
-        """Alta de lead vía tool POST /leads (o webhook legacy)."""
+        """Alta de lead vía tool POST /leads, Meta webhook o Chatwoot Agent Bot."""
         conv = await self.get_or_create(
             channel=channel,
             external_user_id=external_user_id,
@@ -227,9 +233,14 @@ class ConversationService:
         if not phone and channel == Channel.whatsapp:
             phone = external_user_id
 
+        default_reason = (
+            "Qualified by Chatwoot Agent Bot"
+            if qualification_source == QualificationSource.chatwoot_agent
+            else "Qualified by Meta Business Agent"
+        )
         return await self.qualify_from_meta(
             conv,
-            reason=reason or summary or "Qualified by Meta Business Agent",
+            reason=reason or summary or default_reason,
             user_name=user_name,
             user_phone=phone,
             user_email=user_email,
@@ -239,7 +250,43 @@ class ConversationService:
             budget=budget,
             timeline=timeline,
             preferred_contact_time=preferred_contact_time,
+            qualification_source=qualification_source,
         )
+
+    async def add_outbound_message(
+        self,
+        conversation: Conversation,
+        body: str,
+        *,
+        external_message_id: Optional[str] = None,
+        raw: Optional[dict] = None,
+    ) -> Message:
+        msg = Message(
+            conversation_id=conversation.id,
+            direction=Direction.outbound,
+            body=body,
+            external_message_id=external_message_id,
+            raw_payload=raw or {},
+        )
+        self.db.add(msg)
+        await self.db.commit()
+        await self.db.refresh(conversation, ["messages"])
+        return msg
+
+    async def mark_handed_off(
+        self, conversation: Conversation, *, reason: Optional[str] = None
+    ) -> Conversation:
+        conversation.status = ConversationStatus.handed_off
+        if reason:
+            conversation.qualification_reason = reason
+        await self.db.commit()
+        await self.db.refresh(conversation)
+        logger.info(
+            "conversation_handed_off",
+            conversation_id=conversation.id,
+            reason=reason,
+        )
+        return conversation
 
     async def _create_lead_in_odoo(self, conversation: Conversation) -> None:
         """Crea o vincula partner y crea crm.lead (solo si Odoo está habilitado)."""

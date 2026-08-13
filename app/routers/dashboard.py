@@ -34,6 +34,7 @@ SOURCE_LABELS = {
     "none": "Sin fuente",
     "meta_agent": "Meta AI",
     "local_score": "Score local",
+    "chatwoot_agent": "Chatwoot Agent Bot",
 }
 SIGNAL_LABELS = {
     "product_mentioned": "Material o línea de acero",

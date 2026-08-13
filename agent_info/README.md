@@ -13,6 +13,8 @@ Payloads versionados para knowledge, connectors y tools.
 | `connector_tools.json` | `agent_connectors/{id}/tools` | `../scripts/upload_meta_connector_tools.sh` |
 | `*.pdf` | `agent_config/files` | `../scripts/upload_meta_knowledge.sh` |
 
+**Chatwoot Agent Bot** (sin Captain / sin Meta BA): el gateway carga `docs/agent_prompt.md` + skills/business_info/faqs vía OpenAI Agents SDK. Ver `../docs/chatwoot_agent_bot.md`.
+
 Guía operativa / tono: `Guia_Respuesta_GIA.docx`  
 Índice Postman: `../postman/README.md`
 

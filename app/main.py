@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.models.db import init_db
-from app.routers import admin, dashboard, health, leads, meta_webhook
+from app.routers import admin, chatwoot_webhook, dashboard, health, leads, meta_webhook
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -32,6 +32,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(health.router)
 app.include_router(meta_webhook.router)
+app.include_router(chatwoot_webhook.router)
 app.include_router(leads.router)
 app.include_router(admin.router)
 app.include_router(dashboard.router)
@@ -45,4 +46,5 @@ async def root():
         "docs": "/docs",
         "dashboard": "/dashboard",
         "odoo_enabled": settings.odoo_enabled,
+        "chatwoot_enabled": settings.chatwoot_enabled,
     }
