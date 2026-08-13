@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     agent_max_history_messages: int = 20
     agent_faq_char_limit: int = 12000
+    openai_embedding_model: str = "text-embedding-3-small"
+    knowledge_retrieve_k: int = 8
+    knowledge_uploads_dir: str = "knowledge_uploads"
 
     @property
     def admin_ips_list(self) -> List[str]:

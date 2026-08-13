@@ -149,7 +149,22 @@ docker compose -f docker-compose.prod.yml --env-file .deploy.env pull api
 docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d
 ```
 
-## 6. HTTPS (Caddy)
+## 7. pgvector (recrear volumen)
+
+El servicio `db` usa `pgvector/pgvector:pg16`. **El volumen anterior de `postgres:16-alpine` no sirve** (falta la extensión). Si no hay datos que conservar:
+
+```bash
+cd ~/meta-odoo-gateway
+docker compose -f docker-compose.prod.yml --env-file .deploy.env down
+docker volume rm meta-odoo-gateway_gateway-pgdata 2>/dev/null || docker volume rm gateway-pgdata || true
+docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d
+```
+
+Confirma el nombre del volumen con `docker volume ls | grep gateway`. Al primer boot el API hace `CREATE EXTENSION vector`, crea tablas y **seed** de `agent_info` (FAQs, skills, negocio, PDFs).
+
+Dashboard: `https://gia.init.com.mx/dashboard/knowledge`
+
+## 8. HTTPS (Caddy)
 
 Caddy va en `docker-compose.prod.yml` y usa [`Caddyfile`](../Caddyfile):
 
@@ -175,7 +190,7 @@ docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d
 docker compose -f docker-compose.prod.yml --env-file .deploy.env logs -f caddy
 ```
 
-## 7. Troubleshooting
+## 9. Troubleshooting
 
 ### `FileNotFoundError` / `Error while fetching server API version` / `unix_socket`
 

@@ -11,7 +11,6 @@ __pycache__
 .mypy_cache
 .idea
 .vscode
-*.md
-docs
 tests
+agent_info/conversaciones_whatsapp.txt
 docker-compose*.yml

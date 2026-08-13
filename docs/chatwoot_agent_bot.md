@@ -10,8 +10,8 @@ y registra leads con la misma lógica que `POST /leads`.
 WhatsApp → Chatwoot inbox (Agent Bot)
               ↓ POST /webhook/chatwoot
          FastAPI gateway
-              ├─ agent_info + docs/agent_prompt.md
-              ├─ tools: create_lead, escalate_to_human
+              ├─ Postgres knowledge (FAQs, negocio, skills, files + pgvector)
+              ├─ tools: create_lead, escalate_to_human, search_knowledge
               └─ Chatwoot API (mensaje outgoing / status open)
 ```
 
@@ -49,6 +49,8 @@ CHATWOOT_WEBHOOK_SECRET=   # opcional
 # OpenAI usa Responses API (no chat/completions). Anthropic vía LiteLLM.
 AGENT_MODEL=openai/gpt-5.6-luna
 OPENAI_API_KEY=sk-...
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+KNOWLEDGE_RETRIEVE_K=8
 # AGENT_MODEL=openai/gpt-4.1-mini
 # AGENT_MODEL=anthropic/claude-sonnet-4-20250514
 # ANTHROPIC_API_KEY=sk-ant-...
@@ -56,21 +58,27 @@ OPENAI_API_KEY=sk-...
 
 Reinicia el API tras cambiar env.
 
-## 4. Knowledge reutilizada
+## 4. Knowledge (RAG editable)
 
-| Fuente | Uso |
-|--------|-----|
-| `docs/agent_prompt.md` | Instrucciones base |
-| `agent_info/skills.json` | Skills operativos |
-| `agent_info/business_info.json` | Datos de negocio |
-| `agent_info/faqs.json` | FAQs (truncadas por `AGENT_FAQ_CHAR_LIMIT`) |
+El bot **no** mete todas las FAQs en el system prompt. El conocimiento vive en Postgres + **pgvector** y se edita en:
 
-Cambios en esos archivos requieren **reinicio** del proceso (instructions cacheadas).
+`https://gia.init.com.mx/dashboard/knowledge`
+
+| Tipo | Dónde |
+|------|--------|
+| Negocio | pestaña Negocio |
+| FAQs / Skills / Archivos | CRUD + indexado (embeddings) |
+| Tools | solo lectura (`create_lead`, `escalate_to_human`, `search_knowledge`) |
+
+Seed inicial al primer boot desde `agent_info/*.json` y PDFs de presentación (no se ingiere `conversaciones_whatsapp.txt`). Cambios en el dashboard aplican **sin redeploy**.
+
+Por cada mensaje: retrieval híbrido (cosine `<=>` + keywords) e inyección de top-k. `search_knowledge` pide más contexto si hace falta.
 
 ## 5. Tools del agente
 
 - **create_lead** — same fields as Meta tool; `qualification_source=chatwoot_agent`; visible en `/dashboard/leads`.
 - **escalate_to_human** — marca handoff en DB + `toggle_status` → `open` en Chatwoot.
+- **search_knowledge** — RAG sobre FAQs/skills/files en pgvector.
 
 ## 6. Prueba rápida
 
@@ -86,6 +94,7 @@ Cambios en esos archivos requieren **reinicio** del proceso (instructions cachea
 | Chatwoot: *error with the agent bot* + logs `401` en `/webhook/chatwoot` | Firma HMAC inválida. Chatwoot firma `HMAC(secret, "{timestamp}.{body}")` con `X-Chatwoot-Signature` + `X-Chatwoot-Timestamp`. Confirma que `CHATWOOT_WEBHOOK_SECRET` sea el **secret del bot** (no el access token). |
 | Desbloqueo rápido | Vacía `CHATWOOT_WEBHOOK_SECRET=` en `.env`, recrea el contenedor `api`, vuelve a probar. Luego restaura el secret con un deploy que tenga la verificación correcta. |
 | Bot no responde pero HTTP 200 | Conversación no está en status `pending`, o falta `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`. |
+| RAG vacío / no respeta catálogo | Ver `/dashboard/knowledge` (FAQs activas, chunks > 0). Seed corre al arrancar si las tablas están vacías. Sin `OPENAI_API_KEY` no hay embeddings (solo keyword). |
 
 ## 8. Dependencias
 

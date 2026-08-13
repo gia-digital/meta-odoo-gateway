@@ -108,6 +108,19 @@ async def _ensure_qualification_columns(conn) -> None:
         await conn.execute(text(f"ALTER TABLE conversations {col_sql};"))
 
 
+async def _ensure_pgvector(conn) -> None:
+    await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    await conn.execute(
+        text(
+            """
+            CREATE INDEX IF NOT EXISTS ix_knowledge_chunks_embedding
+            ON knowledge_chunks
+            USING hnsw (embedding vector_cosine_ops)
+            """
+        )
+    )
+
+
 async def init_db() -> None:
     """Crea las tablas. Para producción usar Alembic.
 
@@ -115,11 +128,26 @@ async def init_db() -> None:
     reintentamos / ignoramos races de objetos ya existentes.
     """
     from app.models.conversation import Conversation, Message  # noqa: F401
+    from app.models.knowledge import (  # noqa: F401
+        KnowledgeBusiness,
+        KnowledgeChunk,
+        KnowledgeFaq,
+        KnowledgeFile,
+        KnowledgeSkill,
+    )
 
     try:
         async with engine.begin() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(Base.metadata.create_all)
             await _ensure_qualification_columns(conn)
+            try:
+                await _ensure_pgvector(conn)
+            except Exception as vec_exc:
+                msg = str(vec_exc).lower()
+                if "does not exist" not in msg and "already exists" not in msg:
+                    raise
+                logger.warning("pgvector_index_skipped", error=str(vec_exc))
     except Exception as exc:
         # Race típica con --workers > 1: el otro proceso ya creó el tipo/tabla
         msg = str(exc).lower()
@@ -128,6 +156,13 @@ async def init_db() -> None:
             async with engine.begin() as conn:
                 try:
                     await _ensure_qualification_columns(conn)
+                    try:
+                        await _ensure_pgvector(conn)
+                    except Exception as vec_exc:
+                        vmsg = str(vec_exc).lower()
+                        if "does not exist" not in vmsg and "already exists" not in vmsg:
+                            raise
+                        logger.warning("pgvector_index_skipped", error=str(vec_exc))
                 except Exception as ensure_exc:
                     ensure_msg = str(ensure_exc).lower()
                     if "already exists" not in ensure_msg and "duplicate" not in ensure_msg:

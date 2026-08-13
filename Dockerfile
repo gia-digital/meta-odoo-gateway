@@ -12,11 +12,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Código de la aplicación
+# Código de la aplicación + knowledge seed
 COPY ./app ./app
+COPY ./agent_info ./agent_info
+COPY ./docs ./docs
 
 # Usuario no-root
-RUN useradd --create-home --shell /bin/bash gateway && chown -R gateway:gateway /app
+RUN useradd --create-home --shell /bin/bash gateway \
+    && mkdir -p /app/knowledge_uploads \
+    && chown -R gateway:gateway /app
 USER gateway
 
 EXPOSE 8000

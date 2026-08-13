@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Knowledge — GIA{% endblock %}
+{% block content %}
+<header class="page-header">
+  <div>
+    <p class="eyebrow">Agente GIA</p>
+    <h1>Knowledge</h1>
+    <p class="muted">FAQs, negocio, skills y archivos del bot. Los cambios aplican en vivo, sin redeploy. Tools siguen en código.</p>
+  </div>
+</header>
+
+{% if notice %}
+<p class="notice-banner" role="status">{{ notice }}</p>
+{% endif %}
+
+<nav class="subnav" aria-label="Knowledge">
+  <a href="/dashboard/knowledge" class="{% if tab == 'overview' %}active{% endif %}">Resumen</a>
+  <a href="/dashboard/knowledge/business" class="{% if tab == 'business' %}active{% endif %}">Negocio</a>
+  <a href="/dashboard/knowledge/faqs" class="{% if tab == 'faqs' %}active{% endif %}">FAQs</a>
+  <a href="/dashboard/knowledge/skills" class="{% if tab == 'skills' %}active{% endif %}">Skills</a>
+  <a href="/dashboard/knowledge/files" class="{% if tab == 'files' %}active{% endif %}">Archivos</a>
+  <a href="/dashboard/knowledge/tools" class="{% if tab == 'tools' %}active{% endif %}">Tools</a>
+</nav>
+
+{% if tab == 'overview' %}
+<section class="metric-grid" aria-label="Knowledge">
+  <article class="metric-card"><p class="metric-label">FAQs activas</p><p class="metric-value">{{ stats.faqs_active }}</p><p class="metric-meta">de {{ stats.faqs_total }}</p></article>
+  <article class="metric-card"><p class="metric-label">Skills activos</p><p class="metric-value">{{ stats.skills_active }}</p><p class="metric-meta">de {{ stats.skills_total }}</p></article>
+  <article class="metric-card"><p class="metric-label">Archivos</p><p class="metric-value">{{ stats.files_active }}</p><p class="metric-meta">de {{ stats.files_total }}</p></article>
+  <article class="metric-card"><p class="metric-label">Chunks RAG</p><p class="metric-value">{{ stats.chunks }}</p><p class="metric-meta">pgvector · {{ settings.openai_embedding_model }}</p></article>
+</section>
+<section class="card">
+  <h2>Indexación</h2>
+  <p class="muted">Última actualización: {{ stats.last_updated|format_dt }}</p>
+  <p class="muted">Retrieval top-k: {{ settings.knowledge_retrieve_k }} · modelo agente: {{ settings.agent_model }}</p>
+</section>
+{% endif %}
+
+{% if tab == 'business' %}
+<form class="card stack-form" method="post" action="/dashboard/knowledge/business">
+  <label>Descripción
+    <textarea name="business_description" rows="6">{{ business.business_description if business else '' }}</textarea>
+  </label>
+  <label>Compra / mínimos
+    <textarea name="purchase_info" rows="5">{{ business.purchase_info if business else '' }}</textarea>
+  </label>
+  <label>Pagos
+    <textarea name="payment_method" rows="5">{{ business.payment_method if business else '' }}</textarea>
+  </label>
+  <label>Entrega
+    <textarea name="delivery_and_shipping" rows="5">{{ business.delivery_and_shipping if business else '' }}</textarea>
+  </label>
+  <label>Devoluciones
+    <textarea name="return_policy" rows="5">{{ business.return_policy if business else '' }}</textarea>
+  </label>
+  <label>Email
+    <input type="text" name="email" value="{{ business.email if business else '' }}" />
+  </label>
+  <label>Horario
+    <textarea name="hours_of_operation" rows="3">{{ business.hours_of_operation if business else '' }}</textarea>
+  </label>
+  <label>Dirección
+    <textarea name="address" rows="2">{{ business.address if business else '' }}</textarea>
+  </label>
+  <button class="btn" type="submit">Guardar negocio</button>
+</form>
+{% endif %}
+
+{% if tab == 'faqs' %}
+<form class="filters" method="get" action="/dashboard/knowledge/faqs">
+  <div class="filters-fields">
+    <label>Buscar
+      <input type="search" name="q" value="{{ q or '' }}" placeholder="pregunta o respuesta" />
+    </label>
+  </div>
+  <button type="submit">Filtrar</button>
+</form>
+
+<form class="card stack-form" method="post" action="/dashboard/knowledge/faqs">
+  <h2>{% if editing %}Editar FAQ #{{ editing.id }}{% else %}Nueva FAQ{% endif %}</h2>
+  {% if editing %}<input type="hidden" name="faq_id" value="{{ editing.id }}" />{% endif %}
+  <label>Pregunta
+    <input type="text" name="question" required value="{{ editing.question if editing else '' }}" />
+  </label>
+  <label>Respuesta
+    <textarea name="answer" rows="5" required>{{ editing.answer if editing else '' }}</textarea>
+  </label>
+  <label>Categoría
+    <input type="text" name="category" value="{{ editing.category if editing else '' }}" />
+  </label>
+  <label class="check-row">
+    <input type="checkbox" name="active" {% if not editing or editing.active %}checked{% endif %} /> Activa (entra al RAG)
+  </label>
+  <div class="form-actions">
+    <button class="btn" type="submit">Guardar FAQ</button>
+    {% if editing %}<a class="btn btn-sm" href="/dashboard/knowledge/faqs">Cancelar</a>{% endif %}
+  </div>
+</form>
+
+{% if faqs %}
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Pregunta</th>
+        <th>Categoría</th>
+        <th>Estado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in faqs %}
+      <tr>
+        <td>
+          <div class="contact-name">{{ f.question }}</div>
+          <div class="muted small">{{ f.answer|truncate_text(90) }}</div>
+        </td>
+        <td>{{ f.category or '—' }}</td>
+        <td>{% if f.active %}<span class="product-label">Activa</span>{% else %}<span class="muted">Inactiva</span>{% endif %}</td>
+        <td class="actions-col">
+          <a class="row-action" href="/dashboard/knowledge/faqs?edit={{ f.id }}">Editar</a>
+          <form method="post" action="/dashboard/knowledge/faqs/{{ f.id }}/toggle" class="inline-form">
+            <button type="submit" class="row-action">{{ 'Desactivar' if f.active else 'Activar' }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted">No hay FAQs todavía. El seed las carga al arrancar si la tabla está vacía.</p>
+{% endif %}
+{% endif %}
+
+{% if tab == 'skills' %}
+<form class="card stack-form" method="post" action="/dashboard/knowledge/skills">
+  <h2>{% if editing %}Editar skill{% else %}Nuevo skill{% endif %}</h2>
+  {% if editing %}<input type="hidden" name="skill_id" value="{{ editing.id }}" />{% endif %}
+  <label>Título
+    <input type="text" name="title" required value="{{ editing.title if editing else '' }}" />
+  </label>
+  <label>Cuándo aplicar
+    <textarea name="when_to_apply" rows="3">{{ editing.when_to_apply if editing else '' }}</textarea>
+  </label>
+  <label>Cuerpo
+    <textarea name="body" rows="8">{{ editing.body if editing else '' }}</textarea>
+  </label>
+  <label class="check-row">
+    <input type="checkbox" name="active" {% if not editing or editing.active %}checked{% endif %} /> Activo
+  </label>
+  <div class="form-actions">
+    <button class="btn" type="submit">Guardar skill</button>
+    {% if editing %}<a class="btn btn-sm" href="/dashboard/knowledge/skills">Cancelar</a>{% endif %}
+  </div>
+</form>
+
+{% if skills %}
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Skill</th>
+        <th>Cuándo</th>
+        <th>Estado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in skills %}
+      <tr>
+        <td class="contact-name">{{ s.title }}</td>
+        <td class="muted">{{ s.when_to_apply|truncate_text(80) }}</td>
+        <td>{% if s.active %}<span class="product-label">Activo</span>{% else %}<span class="muted">Inactivo</span>{% endif %}</td>
+        <td class="actions-col">
+          <a class="row-action" href="/dashboard/knowledge/skills?edit={{ s.id }}">Editar</a>
+          <form method="post" action="/dashboard/knowledge/skills/{{ s.id }}/toggle" class="inline-form">
+            <button type="submit" class="row-action">{{ 'Desactivar' if s.active else 'Activar' }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+
+{% if tab == 'files' %}
+<form class="card stack-form" method="post" action="/dashboard/knowledge/files" enctype="multipart/form-data">
+  <h2>Subir archivo</h2>
+  <p class="muted">PDF, TXT o Markdown. Se trocea y embebe con pgvector.</p>
+  <input type="file" name="upload" accept=".pdf,.txt,.md,.markdown" required />
+  <button class="btn" type="submit">Indexar</button>
+</form>
+
+{% if files %}
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Archivo</th>
+        <th>Estado</th>
+        <th>Tamaño</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in files %}
+      <tr>
+        <td>
+          <div class="contact-name">{{ f.filename }}</div>
+          {% if f.error_message %}<div class="muted small">{{ f.error_message }}</div>{% endif %}
+        </td>
+        <td>{{ f.status }}{% if not f.active %} · inactivo{% endif %}</td>
+        <td class="muted">{{ f.byte_size }} B</td>
+        <td class="actions-col">
+          <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/reindex" class="inline-form">
+            <button type="submit" class="row-action">Reindexar</button>
+          </form>
+          <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/toggle" class="inline-form">
+            <button type="submit" class="row-action">{{ 'Desactivar' if f.active else 'Activar' }}</button>
+          </form>
+          <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/delete" class="inline-form" onsubmit="return confirm('¿Eliminar este archivo?');">
+            <button type="submit" class="row-action">Borrar</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted">No hay archivos indexados.</p>
+{% endif %}
+{% endif %}
+
+{% if tab == 'tools' %}
+<p class="muted">Los tools se programan en el gateway; aquí solo se listan.</p>
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Tool</th>
+        <th>Cuándo usarla</th>
+        <th>Origen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tools %}
+      <tr>
+        <td><code>{{ t.name }}</code></td>
+        <td>{{ t.when }}</td>
+        <td class="muted">{{ t.source }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

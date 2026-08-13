@@ -19,6 +19,8 @@ services:
     # Solo localhost: healthchecks / debug. Público vía Caddy :443
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      - ./knowledge_uploads:/app/knowledge_uploads
     depends_on:
       db:
         condition: service_healthy
@@ -52,7 +54,7 @@ services:
       - gateway-net
 
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: gateway-db
     restart: unless-stopped
     environment:

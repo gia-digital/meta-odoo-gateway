@@ -153,6 +153,8 @@ jobs:
 
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
+            mkdir -p knowledge_uploads
+
             export GATEWAY_IMAGE="$IMAGE_REF"
             echo "GATEWAY_IMAGE=$GATEWAY_IMAGE" > .deploy.env
 

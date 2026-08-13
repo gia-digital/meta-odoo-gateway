@@ -22,7 +22,7 @@ POST /webhook/meta         POST /leads
 - Python 3.11 + FastAPI + Uvicorn
 - Jinja2 (dashboard HTML)
 - httpx (cliente async para Meta y Odoo)
-- SQLAlchemy + PostgreSQL
+- SQLAlchemy + PostgreSQL + pgvector
 - Pydantic v2
 - Docker Compose
 
@@ -52,6 +52,7 @@ docker compose up -d
 | GET | `/dashboard/overview` | Resumen con KPIs y gráficos de prospectos |
 | GET | `/dashboard` | Login del dashboard (token admin) |
 | GET | `/dashboard/leads` | Lista de prospectos calificados |
+| GET | `/dashboard/knowledge` | Knowledge RAG (FAQs, negocio, skills, files) |
 | GET | `/health` | Health check |
 | GET | `/admin/conversations` | API JSON (cabecera `X-Admin-Token`) |
 
@@ -69,6 +70,7 @@ El scoring local sigue calculándose (sección secundaria en el detalle) pero **
 - Meta: `docs/meta_setup.md`
 - Prompt del agente + payload de lead: `docs/agent_prompt.md`
 - **Chatwoot Agent Bot:** `docs/chatwoot_agent_bot.md`
+- Knowledge / RAG: `/dashboard/knowledge`
 - Odoo (fase siguiente): `docs/odoo_setup.md`
 - **Deploy DigitalOcean (CI/CD):** `docs/deploy.md`
 

@@ -13,3 +13,5 @@ venv/
 *.egg-info/
 dist/
 build/
+knowledge_uploads/*
+!knowledge_uploads/.gitkeep

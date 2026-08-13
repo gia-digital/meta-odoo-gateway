@@ -17,6 +17,7 @@ from app.models.conversation import Channel, Conversation, QualificationSource
 from app.services.agent_knowledge import build_agent_instructions
 from app.services.chatwoot_client import ChatwootClient
 from app.services.conversation import ConversationService
+from app.services.knowledge.retriever import format_hits, retrieve_knowledge
 
 logger = get_logger(__name__)
 
@@ -192,7 +193,25 @@ def _build_tools():
             "Di al cliente que en breve le atenderá un asesor de GIA."
         )
 
-    return [create_lead, escalate_to_human]
+    @function_tool
+    async def search_knowledge(
+        ctx: RunContextWrapper[BotContext],
+        query: str,
+    ) -> str:
+        """
+        Busca en el knowledge store (FAQs, skills, archivos) con RAG/pgvector.
+        Usa si el cliente pregunta algo de catálogo, mínimos, pagos, entrega o
+        políticas y el contexto del turno no basta. No inventes si no hay hits.
+        """
+        hits = await retrieve_knowledge(ctx.context.db, query)
+        if not hits:
+            return (
+                "Sin resultados en knowledge. Aplica políticas duras y, si hace "
+                "falta un dato de precio/inventario, escala a humano."
+            )
+        return format_hits(hits)
+
+    return [create_lead, escalate_to_human, search_knowledge]
 
 
 def _model_settings_for_openai(model_id: str):
@@ -208,7 +227,7 @@ def _model_settings_for_openai(model_id: str):
     return None
 
 
-def build_gia_agent():
+def build_gia_agent(instructions: str):
     from agents import Agent
 
     settings = get_settings()
@@ -241,7 +260,7 @@ def build_gia_agent():
 
     return Agent[BotContext](
         name="GIA Sales Assistant",
-        instructions=build_agent_instructions(),
+        instructions=instructions,
         model=model,
         model_settings=model_settings,
         tools=_build_tools(),
@@ -257,18 +276,25 @@ async def run_gia_agent(
     """Ejecuta el agente y devuelve el texto de respuesta al cliente."""
     from agents import Runner
 
-    agent = build_gia_agent()
+    instructions = await build_agent_instructions(ctx.db)
+    hits = await retrieve_knowledge(ctx.db, user_message)
+    retrieved = format_hits(hits)
+    agent = build_gia_agent(instructions)
     settings = get_settings()
     hist = list(history_messages or [])[-(settings.agent_max_history_messages) :]
     transcript = history_to_input(hist)
+    parts: List[str] = []
+    if retrieved:
+        parts.append(retrieved)
     if transcript:
-        prompt = (
+        parts.append(
             f"Historial reciente:\n{transcript}\n\n"
             f"Nuevo mensaje del cliente:\n{user_message}\n\n"
             "Responde solo el mensaje para el cliente (sin prefijos)."
         )
     else:
-        prompt = user_message
+        parts.append(user_message)
+    prompt = "\n\n".join(parts)
 
     result = await Runner.run(agent, prompt, context=ctx)
     text = (result.final_output or "").strip()

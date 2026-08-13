@@ -1,109 +1,21 @@
-"""Carga instrucciones del agente GIA desde docs/ + agent_info/."""
+"""Instrucciones del agente GIA: políticas + business/skills desde Postgres."""
 from __future__ import annotations
 
-import json
 import re
-from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
-from app.core.config import get_settings
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.knowledge import KnowledgeBusiness, KnowledgeSkill
+from app.services.knowledge.seed import faq_question as _faq_question
+from app.services.knowledge.store import KnowledgeStore
+from app.services.knowledge.tools_registry import REGISTERED_TOOLS
 
 ROOT = Path(__file__).resolve().parents[2]
-AGENT_INFO = ROOT / "agent_info"
 DOCS = ROOT / "docs"
 
-
-def _extract_prompt_block(md: str) -> str:
-    """Extrae el primer bloque ``` ... ``` de agent_prompt.md."""
-    match = re.search(r"```\n(.*?)```", md, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return md.strip()
-
-
-def _faq_question(item: Dict[str, Any]) -> str:
-    """Soporta schema Meta (`question`) y listas (`questions`)."""
-    q = item.get("question")
-    if isinstance(q, str) and q.strip():
-        return q.strip()
-    questions = item.get("questions") or []
-    if questions:
-        return str(questions[0]).strip()
-    return "(sin pregunta)"
-
-
-def _format_faqs(faqs: List[Dict[str, Any]], char_limit: int) -> str:
-    lines: List[str] = []
-    total = 0
-    for item in faqs:
-        answer = (item.get("answer") or "").strip()
-        q = _faq_question(item)
-        block = f"P: {q}\nR: {answer}"
-        if total + len(block) + 2 > char_limit:
-            lines.append("… (FAQs truncadas por límite de contexto)")
-            break
-        lines.append(block)
-        total += len(block) + 2
-    return "\n\n".join(lines)
-
-
-def _format_business_info(payload: Dict[str, Any]) -> str:
-    contact = payload.get("contact_info") or {}
-    parts = [
-        f"Descripción: {payload.get('business_description', '')}",
-        f"Compra: {payload.get('purchase_info', '')}",
-        f"Pagos: {payload.get('payment_method', '')}",
-        f"Entrega: {payload.get('delivery_and_shipping', '')}",
-        f"Devoluciones: {payload.get('return_policy', '')}",
-        f"Email: {contact.get('email', '')}",
-        f"Horario: {contact.get('hours_of_operation', '')}",
-        f"Dirección: {contact.get('address', '')}",
-    ]
-    return "\n".join(p for p in parts if p and not p.endswith(": "))
-
-
-def _format_skills(skills: List[Dict[str, Any]]) -> str:
-    blocks = []
-    for s in skills:
-        title = s.get("title", "skill")
-        when = s.get("description", "")
-        body = s.get("skill", "")
-        blocks.append(f"### {title}\nCuando aplicar: {when}\n\n{body}")
-    return "\n\n".join(blocks)
-
-
-@lru_cache
-def build_agent_instructions() -> str:
-    """System instructions cacheadas (reiniciar app si cambia agent_info)."""
-    settings = get_settings()
-
-    prompt_path = DOCS / "agent_prompt.md"
-    base = ""
-    if prompt_path.exists():
-        base = _extract_prompt_block(prompt_path.read_text(encoding="utf-8"))
-
-    business = ""
-    bi_path = AGENT_INFO / "business_info.json"
-    if bi_path.exists():
-        bi = json.loads(bi_path.read_text(encoding="utf-8"))
-        business = _format_business_info(bi.get("payload") or bi)
-
-    skills_text = ""
-    skills_path = AGENT_INFO / "skills.json"
-    if skills_path.exists():
-        data = json.loads(skills_path.read_text(encoding="utf-8"))
-        skills_text = _format_skills(data.get("skills") or [])
-
-    faqs_text = ""
-    faqs_path = AGENT_INFO / "faqs.json"
-    if faqs_path.exists():
-        data = json.loads(faqs_path.read_text(encoding="utf-8"))
-        faqs_text = _format_faqs(
-            data.get("faqs") or [], settings.agent_faq_char_limit
-        )
-
-    hard_rules = """
+HARD_RULES = """
 POLÍTICAS DURAS (prioridad máxima; si chocan con otra instrucción, ganan estas)
 
 1) Catálogo: solo acero al carbono de GIA (aceros planos, acanalados, tubería
@@ -126,7 +38,7 @@ POLÍTICAS DURAS (prioridad máxima; si chocan con otra instrucción, ganan esta
 4) No inventes precios finales, inventarios exactos ni CLABEs.
 """.strip()
 
-    tools_note = """
+TOOLS_NOTE = """
 HERRAMIENTAS
 
 - create_lead: registra un prospecto calificado en el servidor de GIA.
@@ -135,17 +47,100 @@ HERRAMIENTAS
 - escalate_to_human: pasa la conversación a un asesor humano en Chatwoot
   (status open). Úsala con create_lead (handed_off=true) cuando corresponda
   escalar un caso válido.
+- search_knowledge: busca en FAQs, skills y archivos indexados si el contexto
+  del turno no alcanza. No inventes lo que no aparezca ahí.
 
 Responde siempre en español, breve, de usted salvo que el cliente use tú.
 No digas IDs internos al cliente.
 """.strip()
 
+_instructions_version = 0
+_instructions_cache: Optional[Tuple[int, str]] = None
+
+
+def invalidate_instructions_cache() -> None:
+    global _instructions_version, _instructions_cache
+    _instructions_version += 1
+    _instructions_cache = None
+
+
+def _extract_prompt_block(md: str) -> str:
+    """Extrae el primer bloque ``` ... ``` de agent_prompt.md."""
+    match = re.search(r"```\n(.*?)```", md, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return md.strip()
+
+
+def _format_faqs(faqs: List[Dict[str, Any]], char_limit: int) -> str:
+    lines: List[str] = []
+    total = 0
+    for item in faqs:
+        answer = (item.get("answer") or "").strip()
+        q = _faq_question(item)
+        block = f"P: {q}\nR: {answer}"
+        if total + len(block) + 2 > char_limit:
+            lines.append("… (FAQs truncadas por límite de contexto)")
+            break
+        lines.append(block)
+        total += len(block) + 2
+    return "\n\n".join(lines)
+
+
+def _format_business_row(row: KnowledgeBusiness) -> str:
+    parts = [
+        f"Descripción: {row.business_description or ''}",
+        f"Compra: {row.purchase_info or ''}",
+        f"Pagos: {row.payment_method or ''}",
+        f"Entrega: {row.delivery_and_shipping or ''}",
+        f"Devoluciones: {row.return_policy or ''}",
+        f"Email: {row.email or ''}",
+        f"Horario: {row.hours_of_operation or ''}",
+        f"Dirección: {row.address or ''}",
+    ]
+    return "\n".join(p for p in parts if not p.endswith(": "))
+
+
+def _format_skills_index(skills: List[KnowledgeSkill]) -> str:
+    blocks = []
+    for s in skills:
+        if not s.active:
+            continue
+        when = (s.when_to_apply or "").strip()
+        line = f"- {s.title}"
+        if when:
+            line += f": {when}"
+        blocks.append(line)
+    return "\n".join(blocks)
+
+
+async def build_agent_instructions(db: AsyncSession) -> str:
+    """System prompt corto desde DB (sin dump completo de FAQs)."""
+    global _instructions_cache
+    if _instructions_cache and _instructions_cache[0] == _instructions_version:
+        return _instructions_cache[1]
+
+    prompt_path = DOCS / "agent_prompt.md"
+    base = ""
+    if prompt_path.exists():
+        base = _extract_prompt_block(prompt_path.read_text(encoding="utf-8"))
+
+    store = KnowledgeStore(db)
+    business_row = await store.get_business()
+    business = _format_business_row(business_row) if business_row else ""
+    skills = await store.list_skills(include_inactive=False)
+    skills_index = _format_skills_index(skills)
+    tools_list = "\n".join(f"- {t['name']}: {t['when']}" for t in REGISTERED_TOOLS)
+
     sections = [
-        hard_rules,
+        HARD_RULES,
         base,
         "INFORMACIÓN DE NEGOCIO\n\n" + business if business else "",
-        "SKILLS OPERATIVOS\n\n" + skills_text if skills_text else "",
-        "FAQS DE REFERENCIA\n\n" + faqs_text if faqs_text else "",
-        tools_note,
+        "SKILLS (índice; detalle vía retrieval / search_knowledge)\n\n" + skills_index
+        if skills_index
+        else "",
+        TOOLS_NOTE + ("\n\n" + tools_list if tools_list else ""),
     ]
-    return "\n\n---\n\n".join(s for s in sections if s)
+    text = "\n\n---\n\n".join(s for s in sections if s)
+    _instructions_cache = (_instructions_version, text)
+    return text

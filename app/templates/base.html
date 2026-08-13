@@ -33,6 +33,10 @@
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 3.5h10a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H7l-3 2.5V4.5a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
           Conversaciones
         </a>
+        <a href="/dashboard/knowledge" class="{% if active_nav == 'knowledge' %}active{% endif %}">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 2.5h8.5v11H4A1.5 1.5 0 0 1 2.5 12V4A1.5 1.5 0 0 1 4 2.5zM6 5.5h5M6 8h5M6 10.5h3" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          Knowledge
+        </a>
       </nav>
       <form method="post" action="/dashboard/logout" class="logout-form">
         <button type="submit">
