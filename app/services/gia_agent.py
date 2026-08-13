@@ -1,12 +1,13 @@
 """
-Agente conversacional GIA vía OpenAI Agents SDK + LiteLLM.
+Agente conversacional GIA vía OpenAI Agents SDK.
 
-Soporta Anthropic y OpenAI según AGENT_MODEL (ej. anthropic/claude-... o openai/gpt-...).
+- OpenAI → Responses API nativa (OpenAIResponsesModel). Preferido para gpt-5.*.
+- Anthropic u otros → LiteLLM (chat completions del proveedor).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +45,30 @@ def _resolve_api_key(model: str) -> Optional[str]:
     if m.startswith("openai/") or m.startswith("gpt-"):
         return settings.openai_api_key or None
     return settings.anthropic_api_key or settings.openai_api_key or None
+
+
+def _parse_model(model_name: str) -> Tuple[str, str]:
+    """
+    Returns (transport, model_id).
+
+    transport:
+      - openai_responses → OpenAI Responses API
+      - litellm → LiteLLM (Anthropic y otros)
+    """
+    raw = (model_name or "").strip()
+    lower = raw.lower()
+    if lower.startswith("openai/"):
+        return "openai_responses", raw.split("/", 1)[1]
+    if lower.startswith("anthropic/"):
+        return "litellm", raw
+    if lower.startswith("gpt-") or "luna" in lower or "sol" in lower:
+        return "openai_responses", raw
+    if "claude" in lower:
+        return "litellm", raw if "/" in raw else f"anthropic/{raw}"
+    if "/" in raw:
+        return "litellm", raw
+    # Nombre bare sin prefijo: asumir OpenAI Responses
+    return "openai_responses", raw
 
 
 def history_to_input(messages: List[Any]) -> str:
@@ -168,32 +193,55 @@ def _build_tools():
     return [create_lead, escalate_to_human]
 
 
-def _model_settings_for(model_name: str):
-    """
-    gpt-5.* (p. ej. gpt-5.6-luna) no admite function tools en chat/completions
-    salvo con reasoning_effort=none.
-    """
+def _model_settings_for_openai(model_id: str):
+    """Settings recomendados por el SDK para gpt-5.* en Responses (tools + baja latencia)."""
     from agents import ModelSettings
+    from openai.types.shared import Reasoning
 
-    m = model_name.lower()
-    if m.startswith("openai/") or "gpt-5" in m:
-        return ModelSettings(extra_args={"reasoning_effort": "none"})
+    if "gpt-5" in model_id.lower() or "luna" in model_id.lower() or "sol" in model_id.lower():
+        return ModelSettings(
+            reasoning=Reasoning(effort="none"),
+            verbosity="low",
+        )
     return None
 
 
 def build_gia_agent():
     from agents import Agent
-    from agents.extensions.models.litellm_model import LitellmModel
 
     settings = get_settings()
     model_name = settings.agent_model
+    transport, model_id = _parse_model(model_name)
     api_key = _resolve_api_key(model_name)
-    model = LitellmModel(model=model_name, api_key=api_key)
+
+    if transport == "openai_responses":
+        from agents.models.openai_responses import OpenAIResponsesModel
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=api_key)
+        model = OpenAIResponsesModel(model=model_id, openai_client=client)
+        model_settings = _model_settings_for_openai(model_id)
+        logger.info(
+            "gia_agent_model",
+            transport="openai_responses",
+            model=model_id,
+        )
+    else:
+        from agents.extensions.models.litellm_model import LitellmModel
+
+        model = LitellmModel(model=model_id, api_key=api_key)
+        model_settings = None
+        logger.info(
+            "gia_agent_model",
+            transport="litellm",
+            model=model_id,
+        )
+
     return Agent[BotContext](
         name="GIA Sales Assistant",
         instructions=build_agent_instructions(),
         model=model,
-        model_settings=_model_settings_for(model_name),
+        model_settings=model_settings,
         tools=_build_tools(),
     )
 

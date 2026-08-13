@@ -53,9 +53,9 @@ class Settings(BaseSettings):
     chatwoot_bot_token: str = ""
     chatwoot_webhook_secret: str = ""
 
-    # LLM (OpenAI Agents SDK + LiteLLM)
-    # Examples: anthropic/claude-sonnet-4-20250514 | openai/gpt-4.1-mini
-    agent_model: str = "anthropic/claude-sonnet-4-20250514"
+    # LLM (OpenAI Agents SDK): openai/* → Responses API; anthropic/* → LiteLLM
+    # Examples: openai/gpt-5.6-luna | openai/gpt-4.1-mini | anthropic/claude-sonnet-4-20250514
+    agent_model: str = "openai/gpt-5.6-luna"
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     agent_max_history_messages: int = 20

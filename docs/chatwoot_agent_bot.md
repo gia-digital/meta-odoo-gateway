@@ -1,8 +1,8 @@
 # Chatwoot Agent Bot — GIA
 
 El gateway actúa como **Agent Bot** de Chatwoot: recibe mensajes del inbox WhatsApp,
-responde con OpenAI Agents SDK + LiteLLM (Anthropic u OpenAI) y registra leads
-con la misma lógica que `POST /leads`.
+responde con OpenAI Agents SDK (OpenAI → **Responses API**; Anthropic → LiteLLM)
+y registra leads con la misma lógica que `POST /leads`.
 
 ## Arquitectura
 
@@ -46,12 +46,12 @@ CHATWOOT_ACCOUNT_ID=1
 CHATWOOT_BOT_TOKEN=...
 CHATWOOT_WEBHOOK_SECRET=   # opcional
 
-# Preferencia cliente: Anthropic. Cambiar a OpenAI para costo.
-AGENT_MODEL=anthropic/claude-sonnet-4-20250514
-ANTHROPIC_API_KEY=sk-ant-...
+# OpenAI usa Responses API (no chat/completions). Anthropic vía LiteLLM.
+AGENT_MODEL=openai/gpt-5.6-luna
+OPENAI_API_KEY=sk-...
 # AGENT_MODEL=openai/gpt-4.1-mini
-# AGENT_MODEL=openai/gpt-5.6-luna   # tools: el gateway fuerza reasoning_effort=none
-# OPENAI_API_KEY=sk-...
+# AGENT_MODEL=anthropic/claude-sonnet-4-20250514
+# ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 Reinicia el API tras cambiar env.

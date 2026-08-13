@@ -12,7 +12,7 @@ from app.routers.chatwoot_webhook import (
     _message_type_is_incoming,
     _verify_chatwoot_signature,
 )
-from app.services.gia_agent import history_to_input
+from app.services.gia_agent import _parse_model, history_to_input
 
 
 def test_message_type_incoming_variants():
@@ -85,6 +85,18 @@ def test_history_to_input_dicts():
     )
     assert "Cliente: Hola" in text
     assert "Asistente: Buen día" in text
+
+
+def test_parse_model_routes_openai_to_responses():
+    assert _parse_model("openai/gpt-5.6-luna") == (
+        "openai_responses",
+        "gpt-5.6-luna",
+    )
+    assert _parse_model("gpt-5.6-luna") == ("openai_responses", "gpt-5.6-luna")
+    assert _parse_model("anthropic/claude-sonnet-4-20250514") == (
+        "litellm",
+        "anthropic/claude-sonnet-4-20250514",
+    )
 
 
 @pytest.mark.asyncio
