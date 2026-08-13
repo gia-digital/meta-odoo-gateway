@@ -66,6 +66,10 @@ def history_to_input(messages: List[Any]) -> str:
 def _build_tools():
     from agents import RunContextWrapper, function_tool
 
+    # Con `from __future__ import annotations`, get_type_hints resuelve contra
+    # globals del módulo (no el import local de esta función).
+    globals()["RunContextWrapper"] = RunContextWrapper
+
     @function_tool
     async def create_lead(
         ctx: RunContextWrapper[BotContext],
