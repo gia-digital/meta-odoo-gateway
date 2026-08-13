@@ -298,7 +298,7 @@ async def chatwoot_agent_webhook(
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
     event, payload = _extract_event(payload)
-    logger.info("chatwoot_webhook_event", event=event)
+    logger.info("chatwoot_webhook_event", chatwoot_event=event)
 
     if event in ("message_created", "message_updated", ""):
         # "" por si el payload viene sin event pero con content (tests)
