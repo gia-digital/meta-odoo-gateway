@@ -206,8 +206,11 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
         await service.add_inbound_message(conv, nm)
         await service.process_after_message(conv)
 
-        # Si ya estaba escalada, no responder como bot
-        if conv.status.value == "handed_off":
+        # Chatwoot pending = el bot vuelve a tener el hilo. Si el gateway la había
+        # marcado handed_off (p. ej. error del agente), reactivar.
+        if status_conv == "pending" and conv.status.value == "handed_off":
+            await service.resume_bot(conv)
+        elif conv.status.value == "handed_off":
             logger.info("chatwoot_skip_already_handed_off", conversation_id=conv.id)
             return
 

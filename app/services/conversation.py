@@ -288,6 +288,21 @@ class ConversationService:
         )
         return conversation
 
+    async def resume_bot(self, conversation: Conversation) -> Conversation:
+        """Vuelve a status active para que el Agent Bot pueda atender de nuevo."""
+        if conversation.status == ConversationStatus.active:
+            return conversation
+        previous = conversation.status.value
+        conversation.status = ConversationStatus.active
+        await self.db.commit()
+        await self.db.refresh(conversation)
+        logger.info(
+            "conversation_bot_resumed",
+            conversation_id=conversation.id,
+            previous_status=previous,
+        )
+        return conversation
+
     async def _create_lead_in_odoo(self, conversation: Conversation) -> None:
         """Crea o vincula partner y crea crm.lead (solo si Odoo está habilitado)."""
         settings = get_settings()
