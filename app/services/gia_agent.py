@@ -111,7 +111,9 @@ def _build_tools():
     ) -> str:
         """
         Registra un prospecto calificado en el servidor de GIA para que ventas dé seguimiento.
-        Usa cuando el cliente pidió cotización, compartió volumen/urgencia, o pidió hablar con un asesor.
+        Usa SOLO si el material es del catálogo GIA (acero al carbono) y hay mayoreo
+        (mín. ~1 ton/partida y 3 ton total) o el cliente pidió hablar con un asesor.
+        NO uses para inoxidable, aluminio, ni pedidos de menudeo/pocas láminas bajo mínimo.
         """
         bot = ctx.context
         service = ConversationService(bot.db)

@@ -12,6 +12,7 @@ from app.routers.chatwoot_webhook import (
     _message_type_is_incoming,
     _verify_chatwoot_signature,
 )
+from app.services.agent_knowledge import _faq_question, _format_faqs
 from app.services.gia_agent import _parse_model, history_to_input
 
 
@@ -97,6 +98,19 @@ def test_parse_model_routes_openai_to_responses():
         "litellm",
         "anthropic/claude-sonnet-4-20250514",
     )
+
+
+def test_faq_formatter_uses_singular_question():
+    faqs = [
+        {
+            "question": "¿Manejan inoxidable o aluminio?",
+            "answer": "No, únicamente acero al carbono.",
+        }
+    ]
+    assert _faq_question(faqs[0]).startswith("¿Manejan inoxidable")
+    text = _format_faqs(faqs, char_limit=5000)
+    assert "P: ¿Manejan inoxidable o aluminio?" in text
+    assert "(sin pregunta)" not in text
 
 
 @pytest.mark.asyncio

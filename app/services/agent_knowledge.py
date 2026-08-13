@@ -22,13 +22,23 @@ def _extract_prompt_block(md: str) -> str:
     return md.strip()
 
 
+def _faq_question(item: Dict[str, Any]) -> str:
+    """Soporta schema Meta (`question`) y listas (`questions`)."""
+    q = item.get("question")
+    if isinstance(q, str) and q.strip():
+        return q.strip()
+    questions = item.get("questions") or []
+    if questions:
+        return str(questions[0]).strip()
+    return "(sin pregunta)"
+
+
 def _format_faqs(faqs: List[Dict[str, Any]], char_limit: int) -> str:
     lines: List[str] = []
     total = 0
     for item in faqs:
-        questions = item.get("questions") or []
         answer = (item.get("answer") or "").strip()
-        q = questions[0] if questions else "(sin pregunta)"
+        q = _faq_question(item)
         block = f"P: {q}\nR: {answer}"
         if total + len(block) + 2 > char_limit:
             lines.append("… (FAQs truncadas por límite de contexto)")
@@ -93,21 +103,45 @@ def build_agent_instructions() -> str:
             data.get("faqs") or [], settings.agent_faq_char_limit
         )
 
+    hard_rules = """
+POLÍTICAS DURAS (prioridad máxima; si chocan con otra instrucción, ganan estas)
+
+1) Catálogo: solo acero al carbono de GIA (aceros planos, acanalados, tubería
+   industrial negra comercial, varilla, alambre). NO vendemos acero inoxidable
+   ni aluminio. Si lo piden: dilo de inmediato, NO digas que sí se puede,
+   ofrece alternativa del catálogo (p. ej. galvanizada / CR / HR) y pregunta
+   si les sirve. NO llames create_lead por inoxidable/aluminio.
+
+2) Mayoreo: pedido mínimo 1 tonelada por partida y 3 toneladas en total.
+   Pedidos de menudeo (piezas sueltas, “5 láminas”, “unas cuantas”, etc.)
+   SIN llegar a ese mínimo: explica el mínimo, ofrece consolidar partidas o
+   canalizar a distribuidor de menudeo. NO digas que “sí se puede sin problema”.
+   NO llames create_lead solo por menudeo bajo mínimo.
+
+3) create_lead solo si hay intención real SOBRE producto del catálogo Y
+   volumen mayoreo (o pide explícitamente hablar con ventas/asesor humano).
+   Si el caso es fuera de catálogo o bajo mínimo, responde la política y
+   pregunta si quieren otra línea / consolidar; no registres lead.
+
+4) No inventes precios finales, inventarios exactos ni CLABEs.
+""".strip()
+
     tools_note = """
 HERRAMIENTAS
 
 - create_lead: registra un prospecto calificado en el servidor de GIA.
-  Úsala cuando el cliente pida cotización con material/volumen, pida hablar
-  con ventas, o muestre intención clara de compra.
+  Úsala solo si el material es de catálogo y hay mayoreo (o pidió hablar
+  con ventas). NUNCA por inoxidable/aluminio ni por menudeo bajo mínimo.
 - escalate_to_human: pasa la conversación a un asesor humano en Chatwoot
-  (status open). Úsala junto con create_lead (handed_off=true) cuando
-  corresponda escalar.
+  (status open). Úsala con create_lead (handed_off=true) cuando corresponda
+  escalar un caso válido.
 
-No inventes precios finales ni CLABEs. No digas IDs internos al cliente.
 Responde siempre en español, breve, de usted salvo que el cliente use tú.
+No digas IDs internos al cliente.
 """.strip()
 
     sections = [
+        hard_rules,
         base,
         "INFORMACIÓN DE NEGOCIO\n\n" + business if business else "",
         "SKILLS OPERATIVOS\n\n" + skills_text if skills_text else "",
