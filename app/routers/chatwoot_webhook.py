@@ -20,17 +20,27 @@ router = APIRouter(prefix="/webhook", tags=["chatwoot"])
 logger = get_logger(__name__)
 
 
-def _verify_chatwoot_signature(body: bytes, signature: Optional[str], secret: str) -> bool:
+def _verify_chatwoot_signature(
+    body: bytes,
+    signature: Optional[str],
+    secret: str,
+    timestamp: Optional[str] = None,
+) -> bool:
+    """
+    Chatwoot firma con HMAC-SHA256 sobre ``{timestamp}.{raw_body}``
+    (cabeceras X-Chatwoot-Signature + X-Chatwoot-Timestamp).
+    También aceptamos firma solo del body (versiones / setups legacy).
+    """
     if not signature or not secret:
         return False
-    digest = hmac.new(
-        secret.encode("utf-8"),
-        body,
-        hashlib.sha256,
-    ).hexdigest()
-    # Chatwoot may send raw hex or sha256=<hex>
     received = signature.removeprefix("sha256=")
-    return hmac.compare_digest(digest, received)
+    secret_b = secret.encode("utf-8")
+    candidates: list[str] = []
+    if timestamp:
+        signed = f"{timestamp}.".encode("utf-8") + body
+        candidates.append(hmac.new(secret_b, signed, hashlib.sha256).hexdigest())
+    candidates.append(hmac.new(secret_b, body, hashlib.sha256).hexdigest())
+    return any(hmac.compare_digest(digest, received) for digest in candidates)
 
 
 def _message_type_is_incoming(raw: Any) -> bool:
@@ -253,6 +263,9 @@ async def chatwoot_agent_webhook(
     x_chatwoot_signature: Optional[str] = Header(
         default=None, alias="X-Chatwoot-Signature"
     ),
+    x_chatwoot_timestamp: Optional[str] = Header(
+        default=None, alias="X-Chatwoot-Timestamp"
+    ),
 ) -> Dict[str, str]:
     """
     Endpoint `outgoing_url` del Agent Bot de Chatwoot.
@@ -266,7 +279,14 @@ async def chatwoot_agent_webhook(
 
     secret = settings.chatwoot_webhook_secret
     if secret:
-        if not _verify_chatwoot_signature(body, x_chatwoot_signature, secret):
+        if not _verify_chatwoot_signature(
+            body, x_chatwoot_signature, secret, x_chatwoot_timestamp
+        ):
+            logger.warning(
+                "chatwoot_invalid_signature",
+                has_signature=bool(x_chatwoot_signature),
+                has_timestamp=bool(x_chatwoot_timestamp),
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid Chatwoot webhook signature",

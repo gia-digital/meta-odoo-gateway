@@ -78,7 +78,15 @@ Cambios en esos archivos requieren **reinicio** del proceso (instructions cachea
 3. Pide cotización con toneladas → debe crear lead.
 4. Pide “hablar con un asesor” → conversación pasa a **open**.
 
-## 7. Dependencias
+## 7. Troubleshooting
+
+| Síntoma | Causa típica |
+|---------|----------------|
+| Chatwoot: *error with the agent bot* + logs `401` en `/webhook/chatwoot` | Firma HMAC inválida. Chatwoot firma `HMAC(secret, "{timestamp}.{body}")` con `X-Chatwoot-Signature` + `X-Chatwoot-Timestamp`. Confirma que `CHATWOOT_WEBHOOK_SECRET` sea el **secret del bot** (no el access token). |
+| Desbloqueo rápido | Vacía `CHATWOOT_WEBHOOK_SECRET=` en `.env`, recrea el contenedor `api`, vuelve a probar. Luego restaura el secret con un deploy que tenga la verificación correcta. |
+| Bot no responde pero HTTP 200 | Conversación no está en status `pending`, o falta `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`. |
+
+## 8. Dependencias
 
 ```bash
 pip install -r requirements.txt

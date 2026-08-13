@@ -66,6 +66,15 @@ def test_chatwoot_signature():
     assert _verify_chatwoot_signature(body, f"sha256={digest}", secret) is True
     assert _verify_chatwoot_signature(body, "deadbeef", secret) is False
 
+    # Formato actual Chatwoot: HMAC(timestamp + "." + body)
+    ts = "1710000000"
+    signed = f"{ts}.".encode() + body
+    digest_ts = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+    assert (
+        _verify_chatwoot_signature(body, f"sha256={digest_ts}", secret, ts) is True
+    )
+    assert _verify_chatwoot_signature(body, f"sha256={digest_ts}", secret, None) is False
+
 
 def test_history_to_input_dicts():
     text = history_to_input(
