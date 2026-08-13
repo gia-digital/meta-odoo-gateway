@@ -50,6 +50,7 @@ CHATWOOT_WEBHOOK_SECRET=   # opcional
 AGENT_MODEL=anthropic/claude-sonnet-4-20250514
 ANTHROPIC_API_KEY=sk-ant-...
 # AGENT_MODEL=openai/gpt-4.1-mini
+# AGENT_MODEL=openai/gpt-5.6-luna   # tools: el gateway fuerza reasoning_effort=none
 # OPENAI_API_KEY=sk-...
 ```
 

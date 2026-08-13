@@ -168,6 +168,19 @@ def _build_tools():
     return [create_lead, escalate_to_human]
 
 
+def _model_settings_for(model_name: str):
+    """
+    gpt-5.* (p. ej. gpt-5.6-luna) no admite function tools en chat/completions
+    salvo con reasoning_effort=none.
+    """
+    from agents import ModelSettings
+
+    m = model_name.lower()
+    if m.startswith("openai/") or "gpt-5" in m:
+        return ModelSettings(extra_args={"reasoning_effort": "none"})
+    return None
+
+
 def build_gia_agent():
     from agents import Agent
     from agents.extensions.models.litellm_model import LitellmModel
@@ -180,6 +193,7 @@ def build_gia_agent():
         name="GIA Sales Assistant",
         instructions=build_agent_instructions(),
         model=model,
+        model_settings=_model_settings_for(model_name),
         tools=_build_tools(),
     )
 
