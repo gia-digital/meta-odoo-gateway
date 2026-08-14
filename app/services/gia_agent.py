@@ -12,6 +12,7 @@ from typing import Any, List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.llm_runtime import LlmRuntime, get_llm_runtime
 from app.core.logging import get_logger
 from app.models.conversation import Channel, Conversation, QualificationSource
 from app.services.agent_knowledge import build_agent_instructions
@@ -38,14 +39,17 @@ class BotContext:
     extra: dict = field(default_factory=dict)
 
 
-def _resolve_api_key(model: str) -> Optional[str]:
-    settings = get_settings()
+def _resolve_api_key(model: str, runtime: Optional[LlmRuntime] = None) -> Optional[str]:
+    openai_key = (runtime.openai_api_key if runtime else get_settings().openai_api_key) or ""
+    anthropic_key = (
+        runtime.anthropic_api_key if runtime else get_settings().anthropic_api_key
+    ) or ""
     m = model.lower()
     if m.startswith("anthropic/") or "claude" in m:
-        return settings.anthropic_api_key or None
+        return anthropic_key.strip() or None
     if m.startswith("openai/") or m.startswith("gpt-"):
-        return settings.openai_api_key or None
-    return settings.anthropic_api_key or settings.openai_api_key or None
+        return openai_key.strip() or None
+    return anthropic_key.strip() or openai_key.strip() or None
 
 
 def _parse_model(model_name: str) -> Tuple[str, str]:
@@ -229,13 +233,12 @@ def _model_settings_for_openai(model_id: str):
     return None
 
 
-def build_gia_agent(instructions: str):
+def build_gia_agent(instructions: str, runtime: Optional[LlmRuntime] = None):
     from agents import Agent
 
-    settings = get_settings()
-    model_name = settings.agent_model
+    model_name = (runtime.agent_model if runtime else get_settings().agent_model) or ""
     transport, model_id = _parse_model(model_name)
-    api_key = _resolve_api_key(model_name)
+    api_key = _resolve_api_key(model_name, runtime)
 
     if transport == "openai_responses":
         from agents.models.openai_responses import OpenAIResponsesModel
@@ -283,7 +286,8 @@ async def run_gia_agent(
     instructions = await build_agent_instructions(ctx.db)
     hits = await retrieve_knowledge(ctx.db, user_message)
     retrieved = format_hits(hits)
-    agent = build_gia_agent(instructions)
+    runtime = await get_llm_runtime(ctx.db)
+    agent = build_gia_agent(instructions, runtime)
     settings = get_settings()
     hist = list(history_messages or [])[-(settings.agent_max_history_messages) :]
     transcript = history_to_input(hist)

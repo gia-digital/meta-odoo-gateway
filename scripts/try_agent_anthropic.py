@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from app.core.config import get_settings
+from app.core.llm_runtime import get_llm_runtime
 from app.models.conversation import Channel
 from app.models.db import SessionLocal, init_db
 from app.models.schemas import NormalizedMessage
@@ -23,13 +23,13 @@ MESSAGES = [
 
 
 async def main() -> int:
-    settings = get_settings()
-    print(f"Modelo: {settings.agent_model}")
-    print(f"Anthropic key: {'sí' if settings.anthropic_api_key else 'NO'}")
-    print()
-
     await init_db()
     async with SessionLocal() as db:
+        runtime = await get_llm_runtime(db)
+        print(f"Modelo: {runtime.agent_model}")
+        print(f"Anthropic key: {'sí' if runtime.anthropic_api_key else 'NO'}")
+        print(f"OpenAI key: {'sí' if runtime.openai_api_key else 'NO'}")
+        print()
         service = ConversationService(db)
         conv = await service.get_or_create(
             channel=Channel.whatsapp,

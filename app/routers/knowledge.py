@@ -10,6 +10,15 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.llm_runtime import (
+    compose_agent_model,
+    fetch_runtime_row,
+    get_llm_runtime,
+    next_secret,
+    normalize_provider,
+    public_llm_view,
+    upsert_runtime_settings,
+)
 from app.models.db import get_db
 from app.models.knowledge import KnowledgeFaq, KnowledgeFile, KnowledgeProduct, KnowledgeSkill
 from app.routers.dashboard import require_dashboard_auth, templates
@@ -21,6 +30,7 @@ from app.services.agent_knowledge import (
 from app.services.knowledge.ingest import ingest_file, uploads_dir
 from app.services.knowledge.store import KnowledgeStore
 from app.services.knowledge.tools_registry import REGISTERED_TOOLS
+from app.services.llm_catalog import load_model_catalogs
 
 router = APIRouter(prefix="/dashboard/knowledge", tags=["knowledge"], include_in_schema=False)
 
@@ -459,6 +469,62 @@ async def knowledge_file_delete(
         pass
     invalidate_instructions_cache()
     return _redirect("files", "Archivo eliminado")
+
+
+@router.get("/model", response_class=HTMLResponse, name="dashboard_knowledge_model")
+async def knowledge_model(
+    request: Request,
+    notice: str = "",
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+):
+    row = await fetch_runtime_row(db)
+    runtime = await get_llm_runtime(db)
+    view = public_llm_view(runtime, row)
+    view.update(await load_model_catalogs(runtime))
+    return templates.TemplateResponse(
+        "knowledge.html",
+        {
+            "request": request,
+            "tab": "model",
+            "active_nav": "knowledge",
+            "notice": notice,
+            "llm": view,
+        },
+    )
+
+
+@router.post("/model", name="dashboard_knowledge_model_save")
+async def knowledge_model_save(
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+    agent_model: str = Form(""),
+    llm_provider: str = Form("openai"),
+    openai_api_key: str = Form(""),
+    anthropic_api_key: str = Form(""),
+    clear_openai_key: Optional[str] = Form(default=None),
+    clear_anthropic_key: Optional[str] = Form(default=None),
+):
+    row = await fetch_runtime_row(db)
+    openai_stored = next_secret(
+        openai_api_key,
+        (getattr(row, "openai_api_key", "") if row else "") or "",
+        clear=clear_openai_key == "on",
+    )
+    anthropic_stored = next_secret(
+        anthropic_api_key,
+        (getattr(row, "anthropic_api_key", "") if row else "") or "",
+        clear=clear_anthropic_key == "on",
+    )
+    provider = normalize_provider(llm_provider, agent_model)
+    await upsert_runtime_settings(
+        db,
+        llm_provider=provider,
+        agent_model=compose_agent_model(provider, agent_model),
+        openai_api_key=openai_stored,
+        anthropic_api_key=anthropic_stored,
+    )
+    return _redirect("model", "Modelo y llaves actualizados")
 
 
 @router.get("/tools", response_class=HTMLResponse, name="dashboard_knowledge_tools")

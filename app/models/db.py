@@ -118,6 +118,14 @@ async def _ensure_knowledge_columns(conn) -> None:
             """
         )
     )
+    await conn.execute(
+        text(
+            """
+            ALTER TABLE runtime_settings
+            ADD COLUMN IF NOT EXISTS llm_provider VARCHAR(32) NOT NULL DEFAULT '';
+            """
+        )
+    )
 
 
 async def _ensure_pgvector(conn) -> None:
@@ -148,6 +156,7 @@ async def init_db() -> None:
         KnowledgeProduct,
         KnowledgeSkill,
     )
+    from app.models.runtime import RuntimeSettings  # noqa: F401
 
     try:
         async with engine.begin() as conn:

@@ -1358,6 +1358,7 @@ dd.mono {
 
 .stack-form input[type="text"],
 .stack-form input[type="search"],
+.stack-form input[type="password"],
 .stack-form select,
 .stack-form textarea,
 .filters input[type="search"] {
@@ -1372,10 +1373,30 @@ dd.mono {
 
 .stack-form textarea { resize: vertical; min-height: 4.5rem; }
 
-.check-row {
+.provider-pills {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.2rem;
+  align-items: center;
+}
+
+.provider-pills legend {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 0.25rem;
+}
+
+.provider-pills label {
   flex-direction: row !important;
   align-items: center;
-  gap: 0.5rem !important;
+  gap: 0.4rem !important;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
 }
 
 .form-actions {

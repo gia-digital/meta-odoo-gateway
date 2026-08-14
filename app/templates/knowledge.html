@@ -5,7 +5,7 @@
   <div>
     <p class="eyebrow">Agente GIA</p>
     <h1>Knowledge</h1>
-    <p class="muted">Aquí se define cómo habla el agente, el catálogo de productos y servicios, los datos del negocio, preguntas frecuentes, skills y archivos. Los cambios se aplican de inmediato.</p>
+    <p class="muted">Aquí se define cómo habla el agente, el modelo y las llaves, el catálogo, el negocio, preguntas frecuentes, skills y archivos. Los cambios se aplican de inmediato.</p>
   </div>
 </header>
 
@@ -16,6 +16,7 @@
 <nav class="subnav" aria-label="Knowledge">
   <a href="/dashboard/knowledge" class="{% if tab == 'overview' %}active{% endif %}">Resumen</a>
   <a href="/dashboard/knowledge/instructions" class="{% if tab == 'instructions' %}active{% endif %}">Instrucciones</a>
+  <a href="/dashboard/knowledge/model" class="{% if tab == 'model' %}active{% endif %}">Modelo y llaves</a>
   <a href="/dashboard/knowledge/products" class="{% if tab == 'products' %}active{% endif %}">Productos</a>
   <a href="/dashboard/knowledge/business" class="{% if tab == 'business' %}active{% endif %}">Negocio</a>
   <a href="/dashboard/knowledge/faqs" class="{% if tab == 'faqs' %}active{% endif %}">FAQs</a>
@@ -50,6 +51,101 @@
   </label>
   <button class="btn" type="submit">Guardar instrucciones</button>
 </form>
+{% endif %}
+
+{% if tab == 'model' %}
+<form class="card stack-form" method="post" action="/dashboard/knowledge/model" autocomplete="off" id="llm-form">
+  <h2>Modelo y llaves</h2>
+  <p class="muted">Elige el proveedor y, con la llave guardada, aparecen los modelos disponibles de esa cuenta. Si acabas de pegar una llave, guarda primero para refrescar la lista.</p>
+  <fieldset class="provider-pills">
+    <legend>Proveedor</legend>
+    <label>
+      <input type="radio" name="llm_provider" value="openai" {% if llm.provider != 'anthropic' %}checked{% endif %} />
+      OpenAI
+    </label>
+    <label>
+      <input type="radio" name="llm_provider" value="anthropic" {% if llm.provider == 'anthropic' %}checked{% endif %} />
+      Anthropic
+    </label>
+  </fieldset>
+  <label>Modelo
+    <select name="agent_model" id="agent-model-select" required></select>
+  </label>
+  <p class="muted small" id="catalog-status"></p>
+  <div id="openai-key-block">
+    <label>Llave OpenAI
+      <input type="password" name="openai_api_key" value="" placeholder="Pegar nueva llave para reemplazar" autocomplete="new-password" />
+    </label>
+    <p class="muted small">{{ llm.openai_status }}</p>
+    {% if llm.has_openai_dashboard %}
+    <label class="check-row">
+      <input type="checkbox" name="clear_openai_key" /> Quitar llave de OpenAI (volver a la del servidor)
+    </label>
+    {% endif %}
+  </div>
+  <div id="anthropic-key-block">
+    <label>Llave Anthropic
+      <input type="password" name="anthropic_api_key" value="" placeholder="Pegar nueva llave para reemplazar" autocomplete="new-password" />
+    </label>
+    <p class="muted small">{{ llm.anthropic_status }}</p>
+    {% if llm.has_anthropic_dashboard %}
+    <label class="check-row">
+      <input type="checkbox" name="clear_anthropic_key" /> Quitar llave de Anthropic (volver a la del servidor)
+    </label>
+    {% endif %}
+  </div>
+  <p class="muted small">Las embeddings de Knowledge son fijas en el servidor (<code>OPENAI_EMBEDDING_MODEL=text-embedding-3-small</code>) y usan la llave de OpenAI.</p>
+  <button class="btn" type="submit">Guardar</button>
+</form>
+<script>
+(function () {
+  var catalogs = {
+    openai: {{ llm.openai_catalog|default([])|tojson }},
+    anthropic: {{ llm.anthropic_catalog|default([])|tojson }}
+  };
+  var errors = {
+    openai: {{ llm.openai_catalog_error|default('')|tojson }},
+    anthropic: {{ llm.anthropic_catalog_error|default('')|tojson }}
+  };
+  var current = {{ llm.agent_model|tojson }};
+  var form = document.getElementById("llm-form");
+  if (!form) return;
+  var select = document.getElementById("agent-model-select");
+  var status = document.getElementById("catalog-status");
+  var openaiBlock = document.getElementById("openai-key-block");
+  var anthropicBlock = document.getElementById("anthropic-key-block");
+  function selectedProvider() {
+    var el = form.querySelector("input[name=llm_provider]:checked");
+    return el ? el.value : "openai";
+  }
+  function fillSelect(provider) {
+    var opts = catalogs[provider] || [];
+    var wanted = current;
+    if (wanted && wanted.indexOf(provider + "/") !== 0) {
+      wanted = opts.length ? opts[0].id : "";
+    }
+    select.innerHTML = "";
+    opts.forEach(function (m) {
+      var opt = document.createElement("option");
+      opt.value = m.id;
+      opt.textContent = m.label;
+      if (m.id === wanted) opt.selected = true;
+      select.appendChild(opt);
+    });
+    status.textContent = errors[provider] || "";
+  }
+  function sync() {
+    var p = selectedProvider();
+    openaiBlock.hidden = p !== "openai";
+    anthropicBlock.hidden = p !== "anthropic";
+    fillSelect(p);
+  }
+  form.querySelectorAll("input[name=llm_provider]").forEach(function (el) {
+    el.addEventListener("change", sync);
+  });
+  sync();
+})();
+</script>
 {% endif %}
 
 {% if tab == 'business' %}

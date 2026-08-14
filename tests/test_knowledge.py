@@ -200,6 +200,8 @@ async def test_knowledge_dashboard_requires_auth(monkeypatch):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get("/dashboard/knowledge", follow_redirects=False)
         p = await client.get("/dashboard/knowledge/products", follow_redirects=False)
+        m = await client.get("/dashboard/knowledge/model", follow_redirects=False)
     assert r.status_code == 303
     assert p.status_code == 303
+    assert m.status_code == 303
     get_settings.cache_clear()
