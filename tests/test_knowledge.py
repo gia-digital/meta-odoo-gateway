@@ -77,7 +77,7 @@ def test_seed_source_has_catalog_limits():
     assert any("inoxidable" in q for q in questions)
     skills = json.loads((root / "agent_info" / "skills.json").read_text(encoding="utf-8"))
     titles = [s.get("title") for s in skills.get("skills") or []]
-    assert "catalog-limits-and-transparency" in titles
+    assert "Límites de catálogo y transparencia" in titles
 
 
 @pytest.mark.asyncio

@@ -107,11 +107,12 @@ async def seed_from_agent_info(db: AsyncSession, *, agent_info: Path | None = No
         skill_count = (
             await db.execute(select(func.count()).select_from(KnowledgeSkill))
         ).scalar() or 0
-        if skill_count == 0:
-            skills_path = base / "skills.json"
-            if skills_path.exists():
-                data = json.loads(skills_path.read_text(encoding="utf-8"))
-                for item in data.get("skills") or []:
+        skills_path = base / "skills.json"
+        if skills_path.exists():
+            data = json.loads(skills_path.read_text(encoding="utf-8"))
+            items = data.get("skills") or []
+            if skill_count == 0:
+                for item in items:
                     title = (item.get("title") or "").strip()
                     if not title:
                         continue
@@ -126,6 +127,29 @@ async def seed_from_agent_info(db: AsyncSession, *, agent_info: Path | None = No
                     await db.flush()
                     await store.index_skill(skill)
                     result["skills"] += 1
+            else:
+                existing = await store.list_skills()
+                by_title = {s.title: s for s in existing}
+                for item in items:
+                    title = (item.get("title") or "").strip()
+                    legacy = (item.get("legacy_title") or "").strip()
+                    row = by_title.get(legacy) or by_title.get(title)
+                    if row is None or not title:
+                        continue
+                    if (
+                        row.title == legacy
+                        or row.when_to_apply.startswith("Apply ")
+                    ):
+                        row.title = title
+                        row.when_to_apply = (item.get("description") or "").strip()
+                        row.body = (item.get("skill") or "").strip()
+                        await store.save_skill(row)
+                        result["skills"] += 1
+                        logger.info("knowledge_seed_skill_translated", title=title)
+                if result["skills"]:
+                    from app.services.agent_knowledge import invalidate_instructions_cache
+
+                    invalidate_instructions_cache()
 
         file_count = (
             await db.execute(select(func.count()).select_from(KnowledgeFile))
