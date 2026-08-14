@@ -66,6 +66,7 @@ El bot **no** mete todas las FAQs en el system prompt. El conocimiento vive en P
 
 | Tipo | Dónde |
 |------|--------|
+| Instrucciones / políticas | pestaña Instrucciones (tono, catálogo, mínimos; van al system prompt) |
 | Negocio | pestaña Negocio |
 | FAQs / Skills / Archivos | CRUD + indexado (embeddings) |
 | Tools | solo lectura (`create_lead`, `escalate_to_human`, `search_knowledge`) |

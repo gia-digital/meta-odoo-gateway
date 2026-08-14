@@ -5,7 +5,7 @@
   <div>
     <p class="eyebrow">Agente GIA</p>
     <h1>Knowledge</h1>
-    <p class="muted">FAQs, negocio, skills y archivos del bot. Los cambios aplican en vivo, sin redeploy. Tools siguen en código.</p>
+    <p class="muted">Aquí se define cómo habla el agente, los datos del negocio, preguntas frecuentes, skills y archivos. Los cambios se aplican de inmediato.</p>
   </div>
 </header>
 
@@ -15,11 +15,12 @@
 
 <nav class="subnav" aria-label="Knowledge">
   <a href="/dashboard/knowledge" class="{% if tab == 'overview' %}active{% endif %}">Resumen</a>
+  <a href="/dashboard/knowledge/instructions" class="{% if tab == 'instructions' %}active{% endif %}">Instrucciones</a>
   <a href="/dashboard/knowledge/business" class="{% if tab == 'business' %}active{% endif %}">Negocio</a>
   <a href="/dashboard/knowledge/faqs" class="{% if tab == 'faqs' %}active{% endif %}">FAQs</a>
   <a href="/dashboard/knowledge/skills" class="{% if tab == 'skills' %}active{% endif %}">Skills</a>
   <a href="/dashboard/knowledge/files" class="{% if tab == 'files' %}active{% endif %}">Archivos</a>
-  <a href="/dashboard/knowledge/tools" class="{% if tab == 'tools' %}active{% endif %}">Tools</a>
+  <a href="/dashboard/knowledge/tools" class="{% if tab == 'tools' %}active{% endif %}">Acciones</a>
 </nav>
 
 {% if tab == 'overview' %}
@@ -27,13 +28,26 @@
   <article class="metric-card"><p class="metric-label">FAQs activas</p><p class="metric-value">{{ stats.faqs_active }}</p><p class="metric-meta">de {{ stats.faqs_total }}</p></article>
   <article class="metric-card"><p class="metric-label">Skills activos</p><p class="metric-value">{{ stats.skills_active }}</p><p class="metric-meta">de {{ stats.skills_total }}</p></article>
   <article class="metric-card"><p class="metric-label">Archivos</p><p class="metric-value">{{ stats.files_active }}</p><p class="metric-meta">de {{ stats.files_total }}</p></article>
-  <article class="metric-card"><p class="metric-label">Chunks RAG</p><p class="metric-value">{{ stats.chunks }}</p><p class="metric-meta">pgvector · {{ settings.openai_embedding_model }}</p></article>
+  <article class="metric-card"><p class="metric-label">Fragmentos</p><p class="metric-value">{{ stats.chunks }}</p><p class="metric-meta">contenido que el agente puede consultar</p></article>
 </section>
 <section class="card">
-  <h2>Indexación</h2>
+  <h2>Actualización</h2>
   <p class="muted">Última actualización: {{ stats.last_updated|format_dt }}</p>
-  <p class="muted">Retrieval top-k: {{ settings.knowledge_retrieve_k }} · modelo agente: {{ settings.agent_model }}</p>
 </section>
+{% endif %}
+
+{% if tab == 'instructions' %}
+<form class="card stack-form" method="post" action="/dashboard/knowledge/instructions">
+  <h2>Instrucciones del agente</h2>
+  <p class="muted">Define cómo debe hablar el agente y las reglas de negocio que debe seguir (catálogo, mínimos, cuándo pasar a ventas).</p>
+  {% if using_default %}
+  <p class="notice-banner" role="status">Todavía no hay un texto guardado. Lo que ves es la versión inicial; al guardar, queda aquí y puedes cambiarlo cuando quieras.</p>
+  {% endif %}
+  <label>Instrucciones
+    <textarea name="agent_instructions" rows="22">{{ agent_instructions }}</textarea>
+  </label>
+  <button class="btn" type="submit">Guardar instrucciones</button>
+</form>
 {% endif %}
 
 {% if tab == 'business' %}
@@ -89,7 +103,7 @@
     <input type="text" name="category" value="{{ editing.category if editing else '' }}" />
   </label>
   <label class="check-row">
-    <input type="checkbox" name="active" {% if not editing or editing.active %}checked{% endif %} /> Activa (entra al RAG)
+    <input type="checkbox" name="active" {% if not editing or editing.active %}checked{% endif %} /> Activa (el agente puede usarla)
   </label>
   <div class="form-actions">
     <button class="btn" type="submit">Guardar FAQ</button>
@@ -189,9 +203,9 @@
 {% if tab == 'files' %}
 <form class="card stack-form" method="post" action="/dashboard/knowledge/files" enctype="multipart/form-data">
   <h2>Subir archivo</h2>
-  <p class="muted">PDF, TXT o Markdown. Se trocea y embebe con pgvector.</p>
+  <p class="muted">PDF, TXT o Markdown. El agente podrá consultar el contenido.</p>
   <input type="file" name="upload" accept=".pdf,.txt,.md,.markdown" required />
-  <button class="btn" type="submit">Indexar</button>
+  <button class="btn" type="submit">Subir</button>
 </form>
 
 {% if files %}
@@ -236,22 +250,20 @@
 {% endif %}
 
 {% if tab == 'tools' %}
-<p class="muted">Los tools se programan en el gateway; aquí solo se listan.</p>
+<p class="muted">Acciones que el agente puede usar al atender un chat. Esta lista no se edita aquí.</p>
 <div class="table-wrap">
   <table class="data-table">
     <thead>
       <tr>
-        <th>Tool</th>
-        <th>Cuándo usarla</th>
-        <th>Origen</th>
+        <th>Acción</th>
+        <th>Cuándo la usa</th>
       </tr>
     </thead>
     <tbody>
       {% for t in tools %}
       <tr>
-        <td><code>{{ t.name }}</code></td>
+        <td>{{ t.label }}</td>
         <td>{{ t.when }}</td>
-        <td class="muted">{{ t.source }}</td>
       </tr>
       {% endfor %}
     </tbody>

@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.agent_knowledge import _faq_question, _format_faqs
+from app.services.agent_knowledge import _faq_question, _format_faqs, resolve_agent_instructions, DEFAULT_AGENT_INSTRUCTIONS, TOOL_RULES
 from app.services.knowledge.ingest import chunk_text
 from app.services.knowledge.retriever import RetrievedHit, format_hits, retrieve_knowledge
 from app.services.knowledge.seed import faq_question
@@ -53,6 +53,18 @@ def test_format_hits_includes_faq_policy():
 def test_registered_tools_include_search_knowledge():
     names = {t["name"] for t in REGISTERED_TOOLS}
     assert names == {"create_lead", "escalate_to_human", "search_knowledge"}
+
+
+def test_resolve_agent_instructions_uses_store_or_default():
+    assert resolve_agent_instructions(None) == DEFAULT_AGENT_INSTRUCTIONS
+    empty = MagicMock()
+    empty.agent_instructions = "  "
+    assert resolve_agent_instructions(empty) == DEFAULT_AGENT_INSTRUCTIONS
+    filled = MagicMock()
+    filled.agent_instructions = "Habla de tú y sé breve."
+    assert resolve_agent_instructions(filled) == "Habla de tú y sé breve."
+    assert "HERRAMIENTAS" in TOOL_RULES
+    assert "create_lead" in TOOL_RULES
 
 
 def test_seed_source_has_catalog_limits():

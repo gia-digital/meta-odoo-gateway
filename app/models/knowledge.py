@@ -23,6 +23,7 @@ class KnowledgeBusiness(Base):
     email: Mapped[str] = mapped_column(String(255), default="")
     hours_of_operation: Mapped[str] = mapped_column(Text, default="")
     address: Mapped[str] = mapped_column(Text, default="")
+    agent_instructions: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

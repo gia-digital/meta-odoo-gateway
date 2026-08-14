@@ -1,4 +1,4 @@
-"""Instrucciones del agente GIA: políticas + business/skills desde Postgres."""
+"""Instrucciones del agente GIA: políticas editables + tools fijos + business/skills."""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -10,9 +10,14 @@ from app.services.knowledge.seed import faq_question as _faq_question
 from app.services.knowledge.store import KnowledgeStore
 from app.services.knowledge.tools_registry import REGISTERED_TOOLS
 
-HARD_RULES = """
-POLÍTICAS DURAS (prioridad máxima; si chocan con otra instrucción, ganan estas)
+# Editable en /dashboard/knowledge/instructions. Fallback si la DB está vacía.
+DEFAULT_AGENT_INSTRUCTIONS = """
+CÓMO HABLAR
+- Español, breve, de usted (salvo que el cliente use tú).
+- Sin emojis. Una o dos preguntas por mensaje; cierra con una pregunta que avance la venta.
+- No inventes IDs internos ni hables como si fueras un sistema técnico.
 
+POLÍTICAS DE NEGOCIO (prioridad alta)
 1) Catálogo: solo acero al carbono de GIA (aceros planos, acanalados, tubería
    industrial negra comercial, varilla, alambre). NO vendemos acero inoxidable
    ni aluminio. Si lo piden: dilo de inmediato, NO digas que sí se puede,
@@ -33,20 +38,17 @@ POLÍTICAS DURAS (prioridad máxima; si chocan con otra instrucción, ganan esta
 4) No inventes precios finales, inventarios exactos ni CLABEs.
 """.strip()
 
-TOOLS_NOTE = """
-HERRAMIENTAS
+# Fijo: contrato de tools. No se edita desde el dashboard.
+TOOL_RULES = """
+HERRAMIENTAS (fijas en código)
 
 - create_lead: registra un prospecto calificado en el servidor de GIA.
-  Úsala solo si el material es de catálogo y hay mayoreo (o pidió hablar
-  con ventas). NUNCA por inoxidable/aluminio ni por menudeo bajo mínimo.
+  Respeta las políticas de catálogo/mayoreo definidas arriba.
 - escalate_to_human: pasa la conversación a un asesor humano en Chatwoot
   (status open). Úsala con create_lead (handed_off=true) cuando corresponda
   escalar un caso válido.
 - search_knowledge: busca en FAQs, skills y archivos indexados si el contexto
   del turno no alcanza. No inventes lo que no aparezca ahí.
-
-Responde siempre en español, breve, de usted salvo que el cliente use tú.
-No digas IDs internos al cliente.
 """.strip()
 
 _instructions_version = 0
@@ -101,26 +103,36 @@ def _format_skills_index(skills: List[KnowledgeSkill]) -> str:
     return "\n".join(blocks)
 
 
+def resolve_agent_instructions(row: Optional[KnowledgeBusiness]) -> str:
+    """Texto editable (dashboard) o default de código si aún está vacío."""
+    if row is not None:
+        stored = (getattr(row, "agent_instructions", None) or "").strip()
+        if stored:
+            return stored
+    return DEFAULT_AGENT_INSTRUCTIONS
+
+
 async def build_agent_instructions(db: AsyncSession) -> str:
-    """System prompt corto desde DB (sin dump completo de FAQs)."""
+    """System prompt: instrucciones editables + negocio/skills + tools fijos."""
     global _instructions_cache
     if _instructions_cache and _instructions_cache[0] == _instructions_version:
         return _instructions_cache[1]
 
     store = KnowledgeStore(db)
     business_row = await store.get_business()
+    editable = resolve_agent_instructions(business_row)
     business = _format_business_row(business_row) if business_row else ""
     skills = await store.list_skills(include_inactive=False)
     skills_index = _format_skills_index(skills)
     tools_list = "\n".join(f"- {t['name']}: {t['when']}" for t in REGISTERED_TOOLS)
 
     sections = [
-        HARD_RULES,
+        editable,
         "INFORMACIÓN DE NEGOCIO\n\n" + business if business else "",
         "SKILLS (índice; detalle vía retrieval / search_knowledge)\n\n" + skills_index
         if skills_index
         else "",
-        TOOLS_NOTE + ("\n\n" + tools_list if tools_list else ""),
+        TOOL_RULES + ("\n\n" + tools_list if tools_list else ""),
     ]
     text = "\n\n---\n\n".join(s for s in sections if s)
     _instructions_cache = (_instructions_version, text)

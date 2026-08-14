@@ -108,6 +108,18 @@ async def _ensure_qualification_columns(conn) -> None:
         await conn.execute(text(f"ALTER TABLE conversations {col_sql};"))
 
 
+async def _ensure_knowledge_columns(conn) -> None:
+    """Columnas nuevas en knowledge_business (create_all no altera tablas existentes)."""
+    await conn.execute(
+        text(
+            """
+            ALTER TABLE knowledge_business
+            ADD COLUMN IF NOT EXISTS agent_instructions TEXT NOT NULL DEFAULT '';
+            """
+        )
+    )
+
+
 async def _ensure_pgvector(conn) -> None:
     await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     await conn.execute(
@@ -141,6 +153,7 @@ async def init_db() -> None:
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(Base.metadata.create_all)
             await _ensure_qualification_columns(conn)
+            await _ensure_knowledge_columns(conn)
             try:
                 await _ensure_pgvector(conn)
             except Exception as vec_exc:
@@ -156,6 +169,7 @@ async def init_db() -> None:
             async with engine.begin() as conn:
                 try:
                     await _ensure_qualification_columns(conn)
+                    await _ensure_knowledge_columns(conn)
                     try:
                         await _ensure_pgvector(conn)
                     except Exception as vec_exc:

@@ -104,6 +104,44 @@ async def knowledge_business_save(
     return _redirect("business", "Negocio actualizado")
 
 
+@router.get("/instructions", response_class=HTMLResponse, name="dashboard_knowledge_instructions")
+async def knowledge_instructions(
+    request: Request,
+    notice: str = "",
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+):
+    from app.services.agent_knowledge import resolve_agent_instructions
+
+    store = KnowledgeStore(db)
+    row = await store.get_business()
+    return templates.TemplateResponse(
+        "knowledge.html",
+        {
+            "request": request,
+            "tab": "instructions",
+            "active_nav": "knowledge",
+            "agent_instructions": resolve_agent_instructions(row),
+            "using_default": not bool(
+                row and (getattr(row, "agent_instructions", None) or "").strip()
+            ),
+            "notice": notice,
+        },
+    )
+
+
+@router.post("/instructions", name="dashboard_knowledge_instructions_save")
+async def knowledge_instructions_save(
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+    agent_instructions: str = Form(""),
+):
+    store = KnowledgeStore(db)
+    await store.upsert_business(agent_instructions=agent_instructions.strip())
+    invalidate_instructions_cache()
+    return _redirect("instructions", "Instrucciones actualizadas")
+
+
 @router.get("/faqs", response_class=HTMLResponse, name="dashboard_knowledge_faqs")
 async def knowledge_faqs(
     request: Request,

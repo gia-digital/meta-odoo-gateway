@@ -51,6 +51,8 @@ async def seed_from_agent_info(db: AsyncSession, *, agent_info: Path | None = No
             await db.execute(select(func.count()).select_from(KnowledgeBusiness))
         ).scalar() or 0
         if biz_count == 0:
+            from app.services.agent_knowledge import DEFAULT_AGENT_INSTRUCTIONS
+
             bi_path = base / "business_info.json"
             if bi_path.exists():
                 data = json.loads(bi_path.read_text(encoding="utf-8"))
@@ -65,8 +67,17 @@ async def seed_from_agent_info(db: AsyncSession, *, agent_info: Path | None = No
                     email=contact.get("email") or "",
                     hours_of_operation=contact.get("hours_of_operation") or "",
                     address=contact.get("address") or "",
+                    agent_instructions=DEFAULT_AGENT_INSTRUCTIONS,
                 )
                 result["business"] = True
+        else:
+            row = await store.get_business()
+            if row is not None and not (getattr(row, "agent_instructions", None) or "").strip():
+                from app.services.agent_knowledge import DEFAULT_AGENT_INSTRUCTIONS
+
+                row.agent_instructions = DEFAULT_AGENT_INSTRUCTIONS
+                await db.commit()
+                logger.info("knowledge_seed_backfill_agent_instructions")
 
         faq_count = (
             await db.execute(select(func.count()).select_from(KnowledgeFaq))

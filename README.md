@@ -47,7 +47,7 @@ docker compose up -d
 | GET | `/dashboard/overview` | Resumen con KPIs y gráficos de prospectos |
 | GET | `/dashboard` | Login del dashboard (token admin) |
 | GET | `/dashboard/leads` | Lista de prospectos calificados |
-| GET | `/dashboard/knowledge` | Knowledge RAG (FAQs, negocio, skills, files) |
+| GET | `/dashboard/knowledge` | Knowledge RAG (instrucciones, FAQs, negocio, skills, files) |
 | GET | `/health` | Health check |
 | GET | `/admin/conversations` | API JSON (cabecera `X-Admin-Token`) |
 
