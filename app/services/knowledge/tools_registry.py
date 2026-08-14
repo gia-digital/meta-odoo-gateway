@@ -24,7 +24,7 @@ REGISTERED_TOOLS = [
         "label": "Consultar knowledge",
         "source": "sistema",
         "when": (
-            "Si necesita más detalle de FAQs, skills o archivos para responder bien."
+            "Si necesita más detalle de productos, FAQs, skills o archivos para responder bien."
         ),
     },
 ]

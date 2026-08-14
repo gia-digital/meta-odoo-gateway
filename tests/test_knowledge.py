@@ -3,7 +3,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.agent_knowledge import _faq_question, _format_faqs, resolve_agent_instructions, DEFAULT_AGENT_INSTRUCTIONS, TOOL_RULES
+from app.services.agent_knowledge import (
+    _faq_question,
+    _format_catalog,
+    _format_faqs,
+    resolve_agent_instructions,
+    DEFAULT_AGENT_INSTRUCTIONS,
+    TOOL_RULES,
+)
 from app.services.knowledge.ingest import chunk_text
 from app.services.knowledge.retriever import RetrievedHit, format_hits, retrieve_knowledge
 from app.services.knowledge.seed import faq_question
@@ -50,6 +57,21 @@ def test_format_hits_includes_faq_policy():
     assert format_hits([]) == ""
 
 
+def test_format_hits_includes_product():
+    hits = [
+        RetrievedHit(
+            source_type="product",
+            source_id=3,
+            title="Lámina galvanizada G60 / G90",
+            text="Capa de zinc contra oxidación. Acabados G60 y G90.",
+            score=1.0,
+        )
+    ]
+    text = format_hits(hits)
+    assert "Producto:" in text
+    assert "G60" in text
+
+
 def test_registered_tools_include_search_knowledge():
     names = {t["name"] for t in REGISTERED_TOOLS}
     assert names == {"create_lead", "escalate_to_human", "search_knowledge"}
@@ -78,6 +100,50 @@ def test_seed_source_has_catalog_limits():
     skills = json.loads((root / "agent_info" / "skills.json").read_text(encoding="utf-8"))
     titles = [s.get("title") for s in skills.get("skills") or []]
     assert "Límites de catálogo y transparencia" in titles
+    products = json.loads((root / "agent_info" / "products.json").read_text(encoding="utf-8"))
+    names = [p.get("name", "").lower() for p in products.get("products") or []]
+    kinds = {p.get("kind") for p in products.get("products") or []}
+    assert any("galvanizada" in n for n in names)
+    assert any("kr-18" in n for n in names)
+    assert any("inoxidable" in n for n in names)
+    assert "product" in kinds and "service" in kinds and "out_of_catalog" in kinds
+
+
+def test_format_catalog_marks_out_of_catalog():
+    from types import SimpleNamespace
+
+    products = [
+        SimpleNamespace(
+            active=True,
+            category="aceros_planos",
+            kind="product",
+            name="Lámina galvanizada G60 / G90",
+            summary="Capa de zinc G60 y G90.",
+            details="Rollo, hoja y cinta.",
+        ),
+        SimpleNamespace(
+            active=True,
+            category="limites",
+            kind="out_of_catalog",
+            name="Acero inoxidable",
+            summary="NO se vende.",
+            details="Ofrece galvanizada.",
+        ),
+        SimpleNamespace(
+            active=False,
+            category="aceros_planos",
+            kind="product",
+            name="Inactivo",
+            summary="No debe aparecer",
+            details="",
+        ),
+    ]
+    text = _format_catalog(products)
+    assert "Lámina galvanizada G60 / G90" in text
+    assert "[NO SE OFRECE]" in text
+    assert "Acero inoxidable" in text
+    assert "Inactivo" not in text
+    assert _format_catalog([]) == ""
 
 
 @pytest.mark.asyncio
@@ -133,5 +199,7 @@ async def test_knowledge_dashboard_requires_auth(monkeypatch):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get("/dashboard/knowledge", follow_redirects=False)
+        p = await client.get("/dashboard/knowledge/products", follow_redirects=False)
     assert r.status_code == 303
+    assert p.status_code == 303
     get_settings.cache_clear()

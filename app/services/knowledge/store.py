@@ -12,6 +12,7 @@ from app.models.knowledge import (
     KnowledgeChunk,
     KnowledgeFaq,
     KnowledgeFile,
+    KnowledgeProduct,
     KnowledgeSkill,
 )
 from app.services.knowledge.embeddings import embed_texts
@@ -47,15 +48,26 @@ class KnowledgeStore:
                 .limit(1)
             )
         ).scalar_one_or_none()
+        last_product = (
+            await self.db.execute(
+                select(KnowledgeProduct.updated_at)
+                .order_by(KnowledgeProduct.updated_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
         last_biz = (
             await self.db.execute(select(KnowledgeBusiness.updated_at).limit(1))
         ).scalar_one_or_none()
-        timestamps = [t for t in (last_file, last_faq, last_skill, last_biz) if t]
+        timestamps = [
+            t for t in (last_file, last_faq, last_skill, last_product, last_biz) if t
+        ]
         return {
             "faqs_active": await _count(KnowledgeFaq, active=True),
             "faqs_total": await _count(KnowledgeFaq),
             "skills_active": await _count(KnowledgeSkill, active=True),
             "skills_total": await _count(KnowledgeSkill),
+            "products_active": await _count(KnowledgeProduct, active=True),
+            "products_total": await _count(KnowledgeProduct),
             "files_active": await _count(KnowledgeFile, active=True),
             "files_total": await _count(KnowledgeFile),
             "chunks": await _count(KnowledgeChunk),
@@ -116,6 +128,24 @@ class KnowledgeStore:
         await self.index_skill(skill)
         return skill
 
+    async def list_products(self, *, include_inactive: bool = True) -> List[KnowledgeProduct]:
+        stmt = select(KnowledgeProduct).order_by(
+            KnowledgeProduct.sort_order.asc(), KnowledgeProduct.id.asc()
+        )
+        if not include_inactive:
+            stmt = stmt.where(KnowledgeProduct.active.is_(True))
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    async def get_product(self, product_id: int) -> Optional[KnowledgeProduct]:
+        return await self.db.get(KnowledgeProduct, product_id)
+
+    async def save_product(self, product: KnowledgeProduct) -> KnowledgeProduct:
+        self.db.add(product)
+        await self.db.commit()
+        await self.db.refresh(product)
+        await self.index_product(product)
+        return product
+
     async def list_files(self) -> List[KnowledgeFile]:
         stmt = select(KnowledgeFile).order_by(KnowledgeFile.id.desc())
         return list((await self.db.execute(stmt)).scalars().all())
@@ -152,6 +182,28 @@ class KnowledgeStore:
             source_type="faq",
             source_id=faq.id,
             title=(faq.question or "")[:255],
+            texts=[text],
+        )
+
+    async def index_product(self, product: KnowledgeProduct) -> None:
+        await self._delete_chunks("product", product.id)
+        if not product.active:
+            await self.db.commit()
+            return
+        aliases = (product.aliases or "").strip()
+        text = (
+            f"{product.name.strip()}\n"
+            f"Tipo: {(product.kind or 'product').strip()}\n"
+            f"Categoría: {(product.category or '').strip()}\n"
+            f"{(product.summary or '').strip()}\n"
+            f"{(product.details or '').strip()}"
+        )
+        if aliases:
+            text += f"\nTambién conocido como: {aliases}"
+        await self._insert_chunks(
+            source_type="product",
+            source_id=product.id,
+            title=(product.name or "")[:255],
             texts=[text],
         )
 

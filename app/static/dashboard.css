@@ -1358,6 +1358,7 @@ dd.mono {
 
 .stack-form input[type="text"],
 .stack-form input[type="search"],
+.stack-form select,
 .stack-form textarea,
 .filters input[type="search"] {
   font: inherit;

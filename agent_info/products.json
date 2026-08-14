@@ -1,0 +1,217 @@
+{
+  "generated_from": [
+    "agent_info/Carta Presentación GIA.pdf",
+    "agent_info/faqs.json (categoría producto)",
+    "agent_info/business_info.json"
+  ],
+  "notes": "Catálogo operativo actual (mayoreo). Carta Presentación GIA es la fuente de líneas y perfiles. Presentación GIA.pdf es corporativa e incluye expansión 2027 (menudeo, etc.): no se toma como oferta vigente.",
+  "products": [
+    {
+      "name": "Lámina caliente (HR)",
+      "kind": "product",
+      "category": "aceros_planos",
+      "sort_order": 10,
+      "aliases": "HR, hot rolled, caliente sin decapar, rolado en caliente, antiderrapante",
+      "summary": "Acero rolado en caliente, acabado rugoso, tolerancias más amplias; liso o antiderrapante. Formatos: rollo, hoja y cinta.",
+      "details": "Se lamina a altas temperaturas. Peso teórico: espesor mm × ancho m × largo m × 7.85 (densidad 7,850 kg/m³); rige la báscula de GIA. Medidas estándar y especiales. Solo acero al carbono."
+    },
+    {
+      "name": "Lámina caliente decapada (HRPO)",
+      "kind": "product",
+      "category": "aceros_planos",
+      "sort_order": 20,
+      "aliases": "HRPO, hot rolled pickled, caliente decapada, pickled and oiled",
+      "summary": "Lámina caliente decapada (ácido clorhídrico): limpia, lista para usar, favorece pintura y recubrimientos. Rollo, hoja y cinta.",
+      "details": "También llamada Hot Rolled & Pickled. En seco (sin aceite ni pasivado) se vende sin garantía por óxido. Peso teórico orientativo; rige báscula GIA."
+    },
+    {
+      "name": "Lámina fría recocida (CR)",
+      "kind": "product",
+      "category": "aceros_planos",
+      "sort_order": 30,
+      "aliases": "CR, cold rolled, fría recocida, lámina fría, cold rolled annealed",
+      "summary": "Reducción de espesor en frío; acabado uniforme brillante o mate, usos estéticos. Rollo, hoja y cinta.",
+      "details": "CR seco: sin garantía por óxido. Peso teórico orientativo; rige báscula GIA. Solo acero al carbono."
+    },
+    {
+      "name": "Lámina galvanizada G60 / G90",
+      "kind": "product",
+      "category": "aceros_planos",
+      "sort_order": 40,
+      "aliases": "galvanizada, G60, G90, zinc, galv, lámina zinc",
+      "summary": "Capa de zinc contra oxidación. Acabados G60 y G90; flor mínima, regular o sin flor. Rollo, hoja y cinta.",
+      "details": "Garantía por óxido (si aplica): con aceite 45 días desde embarque; pasivado sin aceite 30 días; seco sin aceite ni pasivado: sin garantía. No es acero inoxidable ni aluminio."
+    },
+    {
+      "name": "Lámina Galvanneal",
+      "kind": "product",
+      "category": "aceros_planos",
+      "sort_order": 50,
+      "aliases": "galvanneal, galvaneel, zinc-hierro",
+      "summary": "Zinc + hierro (galvanizado y recocido): acabado suave, uniforme y delgado, buena resistencia a la oxidación.",
+      "details": "Formatos: rollo, hoja y cinta. Puede haber inventario en piso; disponibilidad la confirma el asesor."
+    },
+    {
+      "name": "Lámina electrogalvanizada",
+      "kind": "product",
+      "category": "aceros_planos",
+      "sort_order": 60,
+      "aliases": "electrogalvanizada, EG, electro zinc",
+      "summary": "Zinc por proceso electrostático: capa delgada y uniforme. Usos típicos: estructuras metálicas y componentes automotrices.",
+      "details": "Formatos: rollo, hoja y cinta."
+    },
+    {
+      "name": "Lámina Ecogal / zintroalum",
+      "kind": "product",
+      "category": "aceros_planos",
+      "sort_order": 70,
+      "aliases": "ecogal, zintroalum, zinc aluminio, 55% aluminio no, aleación zinc",
+      "summary": "Capa de zinc con ~5% de aleación de aluminio, magnesio y níquel: más resistencia a corrosión; opción ecológica.",
+      "details": "No confundir con venta de aluminio: el sustrato es acero al carbono recubierto. Formatos: rollo, hoja y cinta."
+    },
+    {
+      "name": "Lámina Pintro",
+      "kind": "product",
+      "category": "aceros_planos",
+      "sort_order": 80,
+      "aliases": "pintro, pintada, prepintada, painted",
+      "summary": "Galvanizada con pintura horneada: más duradera frente a corrosión. También se usa en acanalados.",
+      "details": "Formatos planos: rollo, hoja y cinta. Acanalados se fabrican en galvanizado y pintro."
+    },
+    {
+      "name": "Formatos de aceros planos",
+      "kind": "service",
+      "category": "servicios",
+      "sort_order": 90,
+      "aliases": "rollos, hojas, cintas, slitter, desbaste, niveladora, cizalla, medidas especiales",
+      "summary": "Rollos (peso de origen o desbaste), hojas estándar o especiales, y cintas al ancho/peso pedido.",
+      "details": "Maquinaria: niveladoras (planicidad y corte transversal), slitters (cinta), cizallas (soleras/tiras a medida). Peso teórico orientativo; rige báscula GIA (densidad 7,850 kg/m³)."
+    },
+    {
+      "name": "Lámina acanalada R-72",
+      "kind": "product",
+      "category": "acanalados",
+      "sort_order": 100,
+      "aliases": "R-72, R72, acanalada 72, techo 72",
+      "summary": "Acanalado para techos y muros; acero de alta resistencia. Fabricación propia. Galvanizado o pintro; largo estándar o especial.",
+      "details": "Carta GIA: cubre ~72 cm, peralte 2.4 cm (ancho desarrollado ~103.2 cm). Largos típicos 6.10 a 12 m (confirmar con asesor). Pedido mínimo mayoreo: 1 ton/partida y 3 ton total."
+    },
+    {
+      "name": "Lámina acanalada R-101",
+      "kind": "product",
+      "category": "acanalados",
+      "sort_order": 110,
+      "aliases": "R-101, R101, acanalada 101, cubierta 101",
+      "summary": "Cubierta expuesta, fácil instalación y alta capacidad estructural. Fabricación propia. Galvanizado o pintro.",
+      "details": "Carta GIA: cubre ~101 cm, peralte 2.4 cm. Largo estándar o especial. No calcular techos residenciales de menudeo; mayoreo industrial."
+    },
+    {
+      "name": "Lámina acanalada O-100 y O-30",
+      "kind": "product",
+      "category": "acanalados",
+      "sort_order": 120,
+      "aliases": "O-100, O-30, ondulada, lámina ondulada",
+      "summary": "O-100: ondulada para construcción, desagüe y distribución de cargas. O-30: acanalada para zonas rurales/periurbanas, tornillos autoperforantes.",
+      "details": "O-100 peralte ~1.9 cm. O-30 peralte ~1.5 cm. Galvanizado o pintro; largo estándar o especial."
+    },
+    {
+      "name": "Lámina acanalada RN-100/35",
+      "kind": "product",
+      "category": "acanalados",
+      "sort_order": 130,
+      "aliases": "RN-100, RN-100/35, RN100, doble canal",
+      "summary": "Alta resistencia y desagüe; doble canal antisifón. Galvanizado o pintro.",
+      "details": "Peralte ~3.5 cm. Largo estándar o especial."
+    },
+    {
+      "name": "Lámina acanalada KR-18 (engargolada)",
+      "kind": "product",
+      "category": "acanalados",
+      "sort_order": 140,
+      "aliases": "KR-18, KR18, engargolada, standing seam, techo hermético",
+      "summary": "Sistema de techo metálico engargolado, sin perforaciones expuestas; industrial y comercial. Fabricación propia.",
+      "details": "Carta GIA: ancho ~45.7 cm, peralte ~6.15 cm. Galvanizado o pintro; largo estándar o especial."
+    },
+    {
+      "name": "Steel Deck / Deck 25",
+      "kind": "product",
+      "category": "acanalados",
+      "sort_order": 150,
+      "aliases": "deck, deck 25, steel deck, cimbra, losa",
+      "summary": "Lámina que actúa como cimbra y refuerzo en losas de concreto. Fabricación propia.",
+      "details": "Carta GIA: cubre ~33.33 cm, peralte ~6.4 cm. Galvanizado o pintro; largo estándar o especial."
+    },
+    {
+      "name": "Tubería industrial de acero negro",
+      "kind": "product",
+      "category": "tuberia",
+      "sort_order": 160,
+      "aliases": "tubo, tubería, pipe, cédula, tubo negro, industrial, atado",
+      "summary": "Tubería industrial de acero negro comercial con costura interna. Fabricamos largos especiales. No es grado estructural ni PTR.",
+      "details": "Hoy no es tubería galvanizada de línea (puede haber Galvanneal en piso; preguntar a asesor). Venta por atados completos. Ejemplos de piezas/atado: 3\" ≈ 86 pzas, 2\" ≈ 61, 1\" ≈ 169 (tabla completa con el asesor). No sirve como estructural: decírselo con transparencia. Corte a la medida en planta."
+    },
+    {
+      "name": "Varilla",
+      "kind": "product",
+      "category": "varilla",
+      "sort_order": 170,
+      "aliases": "varilla, rebar, corrugada, varilla corrugada",
+      "summary": "Distribuimos varilla de marcas reconocidas. No es fabricación propia de GIA.",
+      "details": "Pedido mínimo: 25 toneladas (1 camión) y máximo 2 calibres por pedido."
+    },
+    {
+      "name": "Alambre pulido y galvanizado",
+      "kind": "product",
+      "category": "alambre",
+      "sort_order": 180,
+      "aliases": "alambre, alambre pulido, alambre galvanizado, 1004, 1045, wire",
+      "summary": "Alambre pulido bajo y alto carbono 1004 y 1045, y alambre galvanizado de bajo carbono.",
+      "details": "Usos: clavos, parrillas de línea blanca, cubetas, exhibidores, jaulas, etc. Pedido mínimo de alambre: 3 toneladas."
+    },
+    {
+      "name": "Ángulo camero",
+      "kind": "product",
+      "category": "servicios",
+      "sort_order": 190,
+      "aliases": "ángulo camero, angulo camero, ángulo",
+      "summary": "Fabricación de ángulo camero bajo pedido.",
+      "details": "Pedido mínimo: 15 toneladas bajo fabricación. Medidas fuera de tabla: solicitar al vendedor."
+    },
+    {
+      "name": "Acero inoxidable",
+      "kind": "out_of_catalog",
+      "category": "limites",
+      "sort_order": 200,
+      "aliases": "inoxidable, stainless, SS, 304, 316",
+      "summary": "NO se vende. Catálogo GIA: solo acero al carbono (planos, acanalados, tubo industrial, varilla, alambre).",
+      "details": "Dilo de inmediato. No digas que sí se puede. Ofrece alternativa del catálogo (galvanizada, CR, HR, etc.) y pregunta si les sirve. NO registres lead solo por inoxidable."
+    },
+    {
+      "name": "Aluminio",
+      "kind": "out_of_catalog",
+      "category": "limites",
+      "sort_order": 210,
+      "aliases": "aluminio, aluminum, aluminio 6061",
+      "summary": "NO se vende aluminio. Ecogal/zintroalum es acero recubierto, no placa de aluminio.",
+      "details": "Misma regla que inoxidable: rechazar con claridad, ofrecer línea de acero al carbono y no registrar lead."
+    },
+    {
+      "name": "PTR / perfil estructural / viga",
+      "kind": "out_of_catalog",
+      "category": "limites",
+      "sort_order": 220,
+      "aliases": "PTR, HSS, perfil estructural, viga IPS, viga IPR, monten, polín, cédula estructural",
+      "summary": "No fabricamos PTR ni perfil estructural. La tubería GIA es comercial, no grado estructural.",
+      "details": "Si el uso del cliente lo permite, se puede cotizar tubería industrial comercial con transparencia (no es estructural). No afirmes vigas IPS/IPR ni PTR como línea de catálogo."
+    },
+    {
+      "name": "Material de segunda y menudeo",
+      "kind": "out_of_catalog",
+      "category": "limites",
+      "sort_order": 230,
+      "aliases": "segunda, remanente, menudeo, por pieza, mostrador, 5 láminas",
+      "summary": "No hay material de segunda (todo es de primera con lote y certificado). No hay menudeo ni mostrador.",
+      "details": "Mínimo: 1 tonelada por partida y 3 toneladas en total. Piezas sueltas: explicar mínimo, ofrecer consolidar o distribuidor de menudeo. No registrar lead solo por menudeo bajo mínimo."
+    }
+  ]
+}

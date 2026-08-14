@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.models.knowledge import KnowledgeChunk, KnowledgeFaq, KnowledgeFile, KnowledgeSkill
+from app.models.knowledge import KnowledgeChunk, KnowledgeFaq, KnowledgeFile, KnowledgeProduct, KnowledgeSkill
 from app.services.knowledge.embeddings import embed_one
 
 logger = get_logger(__name__)
@@ -29,9 +29,12 @@ def format_hits(hits: Sequence[RetrievedHit]) -> str:
         return ""
     lines = ["CONOCIMIENTO RECUPERADO (úsalo; no contradigas las políticas duras):"]
     for i, hit in enumerate(hits, start=1):
-        label = {"faq": "FAQ", "skill": "Skill", "file": "Archivo"}.get(
-            hit.source_type, hit.source_type
-        )
+        label = {
+            "faq": "FAQ",
+            "skill": "Skill",
+            "file": "Archivo",
+            "product": "Producto",
+        }.get(hit.source_type, hit.source_type)
         title = hit.title.strip() or f"{label} #{hit.source_id}"
         body = hit.text.strip()
         if len(body) > 1200:
@@ -95,10 +98,12 @@ async def _filter_active(
     faq_ids = {r.source_id for r in rows if r.source_type == "faq"}
     skill_ids = {r.source_id for r in rows if r.source_type == "skill"}
     file_ids = {r.source_id for r in rows if r.source_type == "file"}
+    product_ids = {r.source_id for r in rows if r.source_type == "product"}
 
     active_faqs = set()
     active_skills = set()
     active_files = set()
+    active_products = set()
     if faq_ids:
         active_faqs = set(
             (
@@ -135,6 +140,19 @@ async def _filter_active(
             .scalars()
             .all()
         )
+    if product_ids:
+        active_products = set(
+            (
+                await db.execute(
+                    select(KnowledgeProduct.id).where(
+                        KnowledgeProduct.id.in_(product_ids),
+                        KnowledgeProduct.active.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
 
     for i, row in enumerate(rows):
         if row.source_type == "faq" and row.source_id not in active_faqs:
@@ -142,6 +160,8 @@ async def _filter_active(
         if row.source_type == "skill" and row.source_id not in active_skills:
             continue
         if row.source_type == "file" and row.source_id not in active_files:
+            continue
+        if row.source_type == "product" and row.source_id not in active_products:
             continue
         key = (row.source_type, row.source_id, row.chunk_index)
         score = base_score - (i * 0.02)

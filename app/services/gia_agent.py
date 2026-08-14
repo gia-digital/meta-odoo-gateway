@@ -199,9 +199,11 @@ def _build_tools():
         query: str,
     ) -> str:
         """
-        Busca en el knowledge store (FAQs, skills, archivos) con RAG/pgvector.
-        Usa si el cliente pregunta algo de catálogo, mínimos, pagos, entrega o
-        políticas y el contexto del turno no basta. No inventes si no hay hits.
+        Busca en el knowledge store (catálogo de productos/servicios, FAQs,
+        skills, archivos) con RAG/pgvector.
+        Usa si el cliente pregunta por un material, perfil, servicio, mínimos,
+        pagos, entrega o políticas y el contexto del turno no basta.
+        No inventes si no hay hits.
         """
         hits = await retrieve_knowledge(ctx.context.db, query)
         if not hits:

@@ -11,9 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models.db import get_db
-from app.models.knowledge import KnowledgeFaq, KnowledgeFile, KnowledgeSkill
+from app.models.knowledge import KnowledgeFaq, KnowledgeFile, KnowledgeProduct, KnowledgeSkill
 from app.routers.dashboard import require_dashboard_auth, templates
-from app.services.agent_knowledge import invalidate_instructions_cache
+from app.services.agent_knowledge import (
+    PRODUCT_CATEGORY_LABELS,
+    PRODUCT_KIND_LABELS,
+    invalidate_instructions_cache,
+)
 from app.services.knowledge.ingest import ingest_file, uploads_dir
 from app.services.knowledge.store import KnowledgeStore
 from app.services.knowledge.tools_registry import REGISTERED_TOOLS
@@ -21,6 +25,7 @@ from app.services.knowledge.tools_registry import REGISTERED_TOOLS
 router = APIRouter(prefix="/dashboard/knowledge", tags=["knowledge"], include_in_schema=False)
 
 ALLOWED_UPLOAD = {".pdf", ".txt", ".md", ".markdown"}
+ALLOWED_PRODUCT_KINDS = set(PRODUCT_KIND_LABELS)
 
 
 def _redirect(tab: str, notice: str = "") -> RedirectResponse:
@@ -270,6 +275,87 @@ async def knowledge_skill_toggle(
     await store.save_skill(row)
     invalidate_instructions_cache()
     return _redirect("skills", "Skill actualizado")
+
+
+@router.get("/products", response_class=HTMLResponse, name="dashboard_knowledge_products")
+async def knowledge_products(
+    request: Request,
+    notice: str = "",
+    edit: Optional[int] = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+):
+    store = KnowledgeStore(db)
+    products = await store.list_products()
+    editing = await store.get_product(edit) if edit else None
+    return templates.TemplateResponse(
+        "knowledge.html",
+        {
+            "request": request,
+            "tab": "products",
+            "active_nav": "knowledge",
+            "products": products,
+            "editing": editing,
+            "notice": notice,
+            "kind_labels": PRODUCT_KIND_LABELS,
+            "category_labels": PRODUCT_CATEGORY_LABELS,
+        },
+    )
+
+
+@router.post("/products", name="dashboard_knowledge_product_save")
+async def knowledge_product_save(
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+    product_id: str = Form(""),
+    name: str = Form(...),
+    kind: str = Form("product"),
+    category: str = Form(""),
+    summary: str = Form(""),
+    details: str = Form(""),
+    aliases: str = Form(""),
+    sort_order: str = Form("0"),
+    active: Optional[str] = Form(default=None),
+):
+    store = KnowledgeStore(db)
+    pid = int(product_id) if str(product_id).strip().isdigit() else None
+    row = await store.get_product(pid) if pid else None
+    if row is None:
+        row = KnowledgeProduct(source="manual")
+    kind_key = (kind or "product").strip()
+    if kind_key not in ALLOWED_PRODUCT_KINDS:
+        kind_key = "product"
+    try:
+        order = int(str(sort_order).strip() or "0")
+    except ValueError:
+        order = 0
+    row.name = name.strip()
+    row.kind = kind_key
+    row.category = category.strip()
+    row.summary = summary.strip()
+    row.details = details.strip()
+    row.aliases = aliases.strip()
+    row.sort_order = order
+    row.active = active == "on"
+    await store.save_product(row)
+    invalidate_instructions_cache()
+    return _redirect("products", "Producto guardado")
+
+
+@router.post("/products/{product_id}/toggle", name="dashboard_knowledge_product_toggle")
+async def knowledge_product_toggle(
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+):
+    store = KnowledgeStore(db)
+    row = await store.get_product(product_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    row.active = not row.active
+    await store.save_product(row)
+    invalidate_instructions_cache()
+    return _redirect("products", "Producto actualizado")
 
 
 @router.get("/files", response_class=HTMLResponse, name="dashboard_knowledge_files")

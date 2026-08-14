@@ -9,7 +9,13 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.models.knowledge import KnowledgeBusiness, KnowledgeFaq, KnowledgeFile, KnowledgeSkill
+from app.models.knowledge import (
+    KnowledgeBusiness,
+    KnowledgeFaq,
+    KnowledgeFile,
+    KnowledgeProduct,
+    KnowledgeSkill,
+)
 from app.services.knowledge.ingest import copy_into_uploads, ingest_file
 from app.services.knowledge.store import KnowledgeStore
 
@@ -39,7 +45,7 @@ async def seed_from_agent_info(db: AsyncSession, *, agent_info: Path | None = No
     """Carga JSON + PDFs si las tablas están vacías. Idempotente."""
     base = agent_info or AGENT_INFO
     store = KnowledgeStore(db)
-    result = {"business": False, "faqs": 0, "skills": 0, "files": 0}
+    result = {"business": False, "faqs": 0, "skills": 0, "products": 0, "files": 0}
 
     try:
         await db.execute(text("SELECT pg_advisory_lock(872364)"))
@@ -150,6 +156,36 @@ async def seed_from_agent_info(db: AsyncSession, *, agent_info: Path | None = No
                     from app.services.agent_knowledge import invalidate_instructions_cache
 
                     invalidate_instructions_cache()
+
+        product_count = (
+            await db.execute(select(func.count()).select_from(KnowledgeProduct))
+        ).scalar() or 0
+        products_path = base / "products.json"
+        if products_path.exists() and product_count == 0:
+            data = json.loads(products_path.read_text(encoding="utf-8"))
+            for item in data.get("products") or []:
+                name = (item.get("name") or "").strip()
+                if not name:
+                    continue
+                product = KnowledgeProduct(
+                    name=name,
+                    kind=(item.get("kind") or "product").strip() or "product",
+                    category=(item.get("category") or "").strip(),
+                    summary=(item.get("summary") or "").strip(),
+                    details=(item.get("details") or "").strip(),
+                    aliases=(item.get("aliases") or "").strip(),
+                    sort_order=int(item.get("sort_order") or 0),
+                    active=True,
+                    source="seed",
+                )
+                db.add(product)
+                await db.flush()
+                await store.index_product(product)
+                result["products"] += 1
+            if result["products"]:
+                from app.services.agent_knowledge import invalidate_instructions_cache
+
+                invalidate_instructions_cache()
 
         file_count = (
             await db.execute(select(func.count()).select_from(KnowledgeFile))

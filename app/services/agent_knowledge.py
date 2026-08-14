@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.knowledge import KnowledgeBusiness, KnowledgeSkill
+from app.models.knowledge import KnowledgeBusiness, KnowledgeProduct, KnowledgeSkill
 from app.services.knowledge.seed import faq_question as _faq_question
 from app.services.knowledge.store import KnowledgeStore
 from app.services.knowledge.tools_registry import REGISTERED_TOOLS
@@ -47,8 +47,9 @@ HERRAMIENTAS (fijas en código)
 - escalate_to_human: pasa la conversación a un asesor humano en Chatwoot
   (status open). Úsala con create_lead (handed_off=true) cuando corresponda
   escalar un caso válido.
-- search_knowledge: busca en FAQs, skills y archivos indexados si el contexto
-  del turno no alcanza. No inventes lo que no aparezca ahí.
+- search_knowledge: busca en el catálogo de productos/servicios, FAQs, skills
+  y archivos indexados si el contexto del turno no alcanza. No inventes lo
+  que no aparezca ahí.
 """.strip()
 
 _instructions_version = 0
@@ -90,6 +91,62 @@ def _format_business_row(row: KnowledgeBusiness) -> str:
     return "\n".join(p for p in parts if not p.endswith(": "))
 
 
+PRODUCT_KIND_LABELS = {
+    "product": "Producto",
+    "service": "Servicio",
+    "out_of_catalog": "No se ofrece",
+}
+
+PRODUCT_CATEGORY_LABELS = {
+    "aceros_planos": "Aceros planos",
+    "acanalados": "Lámina acanalada",
+    "tuberia": "Tubería industrial",
+    "varilla": "Varilla",
+    "alambre": "Alambre",
+    "servicios": "Servicios de transformación",
+    "limites": "Fuera de catálogo",
+}
+
+
+def _format_catalog(products: List[KnowledgeProduct]) -> str:
+    active = [p for p in products if p.active]
+    if not active:
+        return ""
+    groups: Dict[str, List[KnowledgeProduct]] = {}
+    order: List[str] = []
+    for p in active:
+        key = (p.category or "otros").strip() or "otros"
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(p)
+
+    blocks = [
+        "Usa esta lista como fuente de verdad de lo que GIA vende hoy. "
+        "No afirmes líneas que no estén aquí. Si el cliente pide algo marcado "
+        "como NO SE OFRECE, dilo de inmediato y ofrece una alternativa del catálogo."
+    ]
+    for cat in order:
+        heading = PRODUCT_CATEGORY_LABELS.get(cat, cat.replace("_", " ").capitalize())
+        lines = [heading]
+        for p in groups[cat]:
+            summary = (p.summary or "").strip()
+            details = (p.details or "").strip()
+            marker = ""
+            if p.kind == "out_of_catalog":
+                marker = " [NO SE OFRECE]"
+            elif p.kind == "service":
+                marker = " [servicio]"
+            line = f"- {p.name}{marker}"
+            if summary:
+                line += f": {summary}"
+            lines.append(line)
+            if details:
+                lines.append(f"  {details}")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
 def _format_skills_index(skills: List[KnowledgeSkill]) -> str:
     blocks = []
     for s in skills:
@@ -124,11 +181,14 @@ async def build_agent_instructions(db: AsyncSession) -> str:
     business = _format_business_row(business_row) if business_row else ""
     skills = await store.list_skills(include_inactive=False)
     skills_index = _format_skills_index(skills)
+    products = await store.list_products(include_inactive=False)
+    catalog = _format_catalog(products)
     tools_list = "\n".join(f"- {t['name']}: {t['when']}" for t in REGISTERED_TOOLS)
 
     sections = [
         editable,
         "INFORMACIÓN DE NEGOCIO\n\n" + business if business else "",
+        "CATÁLOGO Y SERVICIOS\n\n" + catalog if catalog else "",
         "SKILLS (índice; detalle vía retrieval / search_knowledge)\n\n" + skills_index
         if skills_index
         else "",

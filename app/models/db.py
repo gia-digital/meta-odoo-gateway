@@ -145,6 +145,7 @@ async def init_db() -> None:
         KnowledgeChunk,
         KnowledgeFaq,
         KnowledgeFile,
+        KnowledgeProduct,
         KnowledgeSkill,
     )
 

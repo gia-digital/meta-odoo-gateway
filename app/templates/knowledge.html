@@ -5,7 +5,7 @@
   <div>
     <p class="eyebrow">Agente GIA</p>
     <h1>Knowledge</h1>
-    <p class="muted">Aquí se define cómo habla el agente, los datos del negocio, preguntas frecuentes, skills y archivos. Los cambios se aplican de inmediato.</p>
+    <p class="muted">Aquí se define cómo habla el agente, el catálogo de productos y servicios, los datos del negocio, preguntas frecuentes, skills y archivos. Los cambios se aplican de inmediato.</p>
   </div>
 </header>
 
@@ -16,6 +16,7 @@
 <nav class="subnav" aria-label="Knowledge">
   <a href="/dashboard/knowledge" class="{% if tab == 'overview' %}active{% endif %}">Resumen</a>
   <a href="/dashboard/knowledge/instructions" class="{% if tab == 'instructions' %}active{% endif %}">Instrucciones</a>
+  <a href="/dashboard/knowledge/products" class="{% if tab == 'products' %}active{% endif %}">Productos</a>
   <a href="/dashboard/knowledge/business" class="{% if tab == 'business' %}active{% endif %}">Negocio</a>
   <a href="/dashboard/knowledge/faqs" class="{% if tab == 'faqs' %}active{% endif %}">FAQs</a>
   <a href="/dashboard/knowledge/skills" class="{% if tab == 'skills' %}active{% endif %}">Skills</a>
@@ -25,6 +26,7 @@
 
 {% if tab == 'overview' %}
 <section class="metric-grid" aria-label="Knowledge">
+  <article class="metric-card"><p class="metric-label">Productos activos</p><p class="metric-value">{{ stats.products_active }}</p><p class="metric-meta">de {{ stats.products_total }}</p></article>
   <article class="metric-card"><p class="metric-label">FAQs activas</p><p class="metric-value">{{ stats.faqs_active }}</p><p class="metric-meta">de {{ stats.faqs_total }}</p></article>
   <article class="metric-card"><p class="metric-label">Skills activos</p><p class="metric-value">{{ stats.skills_active }}</p><p class="metric-meta">de {{ stats.skills_total }}</p></article>
   <article class="metric-card"><p class="metric-label">Archivos</p><p class="metric-value">{{ stats.files_active }}</p><p class="metric-meta">de {{ stats.files_total }}</p></article>
@@ -78,6 +80,88 @@
   </label>
   <button class="btn" type="submit">Guardar negocio</button>
 </form>
+{% endif %}
+
+{% if tab == 'products' %}
+<form class="card stack-form" method="post" action="/dashboard/knowledge/products">
+  <h2>{% if editing %}Editar {{ editing.name }}{% else %}Nuevo producto o servicio{% endif %}</h2>
+  <p class="muted">El agente usa este catálogo en cada conversación. Marca «No se ofrece» para materiales que hay que rechazar (inoxidable, aluminio, PTR, etc.).</p>
+  {% if editing %}<input type="hidden" name="product_id" value="{{ editing.id }}" />{% endif %}
+  <label>Nombre
+    <input type="text" name="name" required value="{{ editing.name if editing else '' }}" />
+  </label>
+  <label>Tipo
+    <select name="kind">
+      {% for key, label in kind_labels.items() %}
+      <option value="{{ key }}" {% if editing and editing.kind == key %}selected{% elif not editing and key == 'product' %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Categoría
+    <select name="category">
+      <option value="">—</option>
+      {% for key, label in category_labels.items() %}
+      <option value="{{ key }}" {% if editing and editing.category == key %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Resumen (lo que el agente debe saber de un vistazo)
+    <textarea name="summary" rows="3">{{ editing.summary if editing else '' }}</textarea>
+  </label>
+  <label>Detalle (perfiles, mínimos, notas)
+    <textarea name="details" rows="6">{{ editing.details if editing else '' }}</textarea>
+  </label>
+  <label>También se conoce como
+    <input type="text" name="aliases" value="{{ editing.aliases if editing else '' }}" placeholder="HR, caliente, hot rolled" />
+  </label>
+  <label>Orden
+    <input type="text" name="sort_order" value="{{ editing.sort_order if editing else '0' }}" />
+  </label>
+  <label class="check-row">
+    <input type="checkbox" name="active" {% if not editing or editing.active %}checked{% endif %} /> Activo (el agente puede usarlo)
+  </label>
+  <div class="form-actions">
+    <button class="btn" type="submit">Guardar</button>
+    {% if editing %}<a class="btn btn-sm" href="/dashboard/knowledge/products">Cancelar</a>{% endif %}
+  </div>
+</form>
+
+{% if products %}
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Tipo</th>
+        <th>Categoría</th>
+        <th>Estado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in products %}
+      <tr>
+        <td>
+          <div class="contact-name">{{ p.name }}</div>
+          <div class="muted small">{{ p.summary|truncate_text(90) }}</div>
+        </td>
+        <td>{{ kind_labels.get(p.kind, p.kind) }}</td>
+        <td>{{ category_labels.get(p.category, p.category or '—') }}</td>
+        <td>{% if p.active %}<span class="product-label">Activo</span>{% else %}<span class="muted">Inactivo</span>{% endif %}</td>
+        <td class="actions-col">
+          <a class="row-action" href="/dashboard/knowledge/products?edit={{ p.id }}">Editar</a>
+          <form method="post" action="/dashboard/knowledge/products/{{ p.id }}/toggle" class="inline-form">
+            <button type="submit" class="row-action">{{ 'Desactivar' if p.active else 'Activar' }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted">No hay productos todavía. El catálogo se carga al arrancar si la tabla está vacía.</p>
+{% endif %}
 {% endif %}
 
 {% if tab == 'faqs' %}
