@@ -278,6 +278,7 @@ async def chatwoot_agent_webhook(
     body = await request.body()
 
     if not settings.chatwoot_enabled:
+        logger.warning("chatwoot_disabled_skip")
         return {"status": "disabled"}
 
     secret = settings.chatwoot_webhook_secret
@@ -306,8 +307,10 @@ async def chatwoot_agent_webhook(
     if event in ("message_created", "message_updated", ""):
         # "" por si el payload viene sin event pero con content (tests)
         if event == "message_updated":
+            logger.info("chatwoot_ignored_event", chatwoot_event=event)
             return {"status": "ignored", "reason": "message_updated"}
         background_tasks.add_task(_process_incoming_message, payload)
         return {"status": "ok", "queued": "true"}
 
+    logger.info("chatwoot_ignored_event", chatwoot_event=event or "unknown")
     return {"status": "ignored", "event": event or "unknown"}
