@@ -2,90 +2,55 @@
 
 Este documento describe qué pasa, paso a paso, cuando un usuario envía un mensaje.
 
-**Fase actual:** Meta Agent califica leads vía `POST /leads` (tool; alias legacy `POST /webhook/meta/lead`) o handovers. El scoring local es secundario. Odoo está desactivado (`ODOO_ENABLED=false`); los prospectos se revisan en `/dashboard/leads`. El diagrama inferior aún muestra Odoo como destino final de la fase siguiente.
+**Fase actual:** WhatsApp llega a Chatwoot. El Agent Bot llama a `POST /webhook/chatwoot`; el agente GIA responde y califica leads con el tool `create_lead`. El scoring local es secundario. Odoo está desactivado (`ODOO_ENABLED=false`); los prospectos se revisan en `/dashboard/leads`.
 
 ## Diagrama de secuencia
 
 ```
-Cliente            Meta            Meta Business      FastAPI         Odoo
-(WhatsApp)        Platform         Agent              Gateway         Enterprise
-   |                |                 |                  |                |
-   | Hola, busco    |                 |                  |                |
-   | información    |                 |                  |                |
-   |--------------->|                 |                  |                |
-   |                | webhook event   |                  |                |
-   |                |---------------->|                  |                |
-   |                |                 | LLM genera resp. |                |
-   |                |                 |                  |                |
-   |                |                 | webhook copia    |                |
-   |                |                 |----------------->|                |
-   |                |                 |                  | Guarda msg     |
-   |                |                 |                  | en DB local    |
-   |                |                 |                  |                |
-   |                |                 |                  | Calcula score  |
-   |                |                 |                  | (score=3)      |
-   |                |                 |                  |                |
-   |                |                 |                  | No alcanza     |
-   |                |                 |                  | umbral → wait  |
-   |                |                 |                  |                |
-   |                |  respuesta IA   |                  |                |
-   |                |<----------------|                  |                |
-   | Hola! Cómo te  |                 |                  |                |
-   | puedo ayudar?  |                 |                  |                |
-   |<---------------|                 |                  |                |
-   |                |                 |                  |                |
-   | Quiero el plan |                 |                  |                |
-   | premium para   |                 |                  |                |
-   | mi empresa,    |                 |                  |                |
-   | presupuesto    |                 |                  |                |
-   | $5000 USD      |                 |                  |                |
-   |--------------->|                 |                  |                |
-   |                |---------------->|                  |                |
-   |                |                 |----------------->|                |
-   |                |                 |                  | Score=7        |
-   |                |                 |                  | (≥ 6)          |
-   |                |                 |                  |                |
-   |                |                 |                  | Buscar partner |
-   |                |                 |                  |--------------->|
-   |                |                 |                  |<---------------|
-   |                |                 |                  | Crear partner  |
-   |                |                 |                  |--------------->|
-   |                |                 |                  |<---partner_id--|
-   |                |                 |                  | Crear lead     |
-   |                |                 |                  |--------------->|
-   |                |                 |                  |<---lead_id-----|
-   |                |                 |                  |                |
-   | Respuesta IA   |                 |                  |                |
-   | informativa    |                 |                  |                |
-   |<---------------|<----------------|                  |                |
-   |                |                 |                  |                |
-   | Quiero hablar  |                 |                  |                |
-   | con un asesor  |                 |                  |                |
-   |--------------->|                 |                  |                |
-   |                |---------------->|                  |                |
-   |                |                 |----------------->|                |
-   |                |                 |                  | Score=12       |
-   |                |                 |                  | (≥ 9)          |
-   |                |                 |                  |                |
-   |                |                 |                  | Crear activity |
-   |                |                 |                  | mail.activity  |
-   |                |                 |                  |--------------->|
-   |                |                 |                  | Nota interna   |
-   |                |                 |                  |--------------->|
-   |                |                 |                  |                |
-   |                |                 |                  |                | Vendedor recibe
-   |                |                 |                  |                | notificación
-   |                |                 |                  |                | en Odoo
+Cliente            Chatwoot         FastAPI           Postgres
+(WhatsApp)         inbox            Gateway           + RAG
+   |                  |                |                 |
+   | Hola, busco      |                |                 |
+   | información      |                |                 |
+   |----------------->|                |                 |
+   |                  | POST           |                 |
+   |                  | /webhook/      |                 |
+   |                  | chatwoot       |                 |
+   |                  |--------------->|                 |
+   |                  |                | Guarda msg      |
+   |                  |                |---------------->|
+   |                  |                | Retrieval RAG   |
+   |                  |                |<----------------|
+   |                  |                | LLM (agente GIA)|
+   |                  | reply          |                 |
+   |                  |<---------------|                 |
+   | Respuesta IA     |                |                 |
+   |<-----------------|                |                 |
+   |                  |                |                 |
+   | Quiero cotizar   |                |                 |
+   | lámina, 10 ton   |                |                 |
+   |----------------->|--------------->|                 |
+   |                  |                | tool create_lead|
+   |                  |                | status=qualified|
+   |                  |                |---------------->|
+   |                  |                |                 |
+   | Quiero hablar    |                |                 |
+   | con un asesor    |                |                 |
+   |----------------->|--------------->|                 |
+   |                  |                | escalate +      |
+   |                  | toggle_status  | handed_off      |
+   |                  | open           |                 |
+   |                  |<---------------|                 |
 ```
 
 ## Decisiones de diseño
 
-### ¿Por qué guardar mensajes en la DB del gateway si Meta ya los guarda?
+### ¿Por qué guardar mensajes en la DB del gateway si Chatwoot ya los guarda?
 
-1. **Recálculo de score**: necesitamos el historial para reaplicar reglas si cambiamos la lógica.
-2. **Auditoría**: trazabilidad de qué generó cada lead.
-3. **Independencia de Meta**: si Meta cambia su API o tarda en responder consultas históricas, el gateway sigue funcionando.
-4. **Latencia**: scoring local es < 10ms vs. consultar a Meta cada vez.
+1. **Contexto del agente**: el LLM usa los últimos `AGENT_MAX_HISTORY_MESSAGES` de la conversación local.
+2. **Recálculo de score**: historial para reaplicar reglas si cambia la lógica.
+3. **Auditoría**: trazabilidad de qué generó cada lead (detalle en `/dashboard/leads/{id}`).
+4. **Latencia**: scoring local es < 10ms.
 
 ### ¿Por qué scoring por reglas y no LLM?
 
@@ -108,11 +73,11 @@ Mejora futura: cola de reintentos persistente (Redis + Arq, o tabla de "outbox")
 
 ### ¿Qué pasa si llega un mensaje duplicado?
 
-Meta puede reenviar webhooks (at-least-once delivery). El campo `external_message_id` es único: si llega un mensaje con el mismo ID, deberíamos detectarlo. Mejora pendiente: agregar un `UNIQUE INDEX` en `messages.external_message_id` y atrapar la excepción de integridad.
+Chatwoot (o reintentos de red) puede reenviar el mismo evento. El campo `external_message_id` identifica el mensaje; mejora pendiente: `UNIQUE INDEX` en `messages.external_message_id` y atrapar la excepción de integridad.
 
 ### ¿Y los mensajes no-texto (audio, imagen)?
 
-Por ahora el gateway los ignora con un log. Roadmap:
+Por ahora el gateway ignora contenido vacío. Roadmap:
 - Audio: transcribir con Whisper, alimentar el scoring con el texto.
 - Imagen: si es comprobante de pago, captura, etc., adjuntar al lead en Odoo.
 
@@ -120,9 +85,10 @@ Por ahora el gateway los ignora con un log. Roadmap:
 
 | Variable | Efecto |
 |---|---|
-| `LEAD_CREATION_THRESHOLD` | Score mínimo para crear lead automáticamente |
+| `LEAD_CREATION_THRESHOLD` | Score mínimo para crear lead automáticamente (si Odoo está on) |
 | `HUMAN_HANDOFF_THRESHOLD` | Score mínimo para crear actividad urgente al vendedor |
 | `ODOO_DEFAULT_SALESPERSON_ID` | A quién se asignan los leads por defecto |
+| `AGENT_MAX_HISTORY_MESSAGES` | Ventana de historial que ve el agente |
 | Reglas en `lead_scorer.py` | Lista de criterios y puntos otorgados |
 | Keywords en `lead_scorer.py` | Palabras clave para detectar productos, urgencia, etc. |
 

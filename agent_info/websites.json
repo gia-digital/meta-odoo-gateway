@@ -1,8 +1,5 @@
 {
-  "entity_id": "1247354378459524",
-  "api": "https://api.facebook.com/{entity_id}/agent_config/websites",
-  "docs": "https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-knowledge-websites",
-  "notes": "POST body is only {\"url\"}. Meta crawls each URL into agent knowledge. Re-add or PUT by website_id after content changes on the site. Prefer script for batch; Postman for one-off checks.",
+  "notes": "URLs de referencia para el knowledge del agente GIA (Chatwoot).",
   "websites": [
     {
       "url": "https://giacerero.com/",

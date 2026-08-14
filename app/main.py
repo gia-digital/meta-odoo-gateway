@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import get_settings
 from app.core.logging import get_logger, setup_logging
 from app.models.db import SessionLocal, init_db
-from app.routers import admin, chatwoot_webhook, dashboard, health, knowledge as knowledge_router, leads, meta_webhook
+from app.routers import admin, chatwoot_webhook, dashboard, health, knowledge as knowledge_router, leads
 from app.services.knowledge.seed import seed_from_agent_info
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -49,7 +49,6 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(health.router)
-app.include_router(meta_webhook.router)
 app.include_router(chatwoot_webhook.router)
 app.include_router(leads.router)
 app.include_router(admin.router)

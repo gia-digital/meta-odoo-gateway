@@ -1,4 +1,4 @@
-"""Tablas genéricas de knowledge (estilo Meta BA). Reutilizables fuera de GIA."""
+"""Tablas genéricas de knowledge. Reutilizables fuera de GIA."""
 from datetime import datetime
 from typing import List, Optional
 

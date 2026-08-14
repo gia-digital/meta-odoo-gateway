@@ -76,7 +76,7 @@ Por cada mensaje: retrieval híbrido (cosine `<=>` + keywords) e inyección de t
 
 ## 5. Tools del agente
 
-- **create_lead** — same fields as Meta tool; `qualification_source=chatwoot_agent`; visible en `/dashboard/leads`.
+- **create_lead** — registra prospecto calificado (`qualification_source=chatwoot_agent`); visible en `/dashboard/leads`.
 - **escalate_to_human** — marca handoff en DB + `toggle_status` → `open` en Chatwoot.
 - **search_knowledge** — RAG sobre FAQs/skills/files en pgvector.
 

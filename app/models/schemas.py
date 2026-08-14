@@ -4,47 +4,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-# ============================================================
-# Payloads de Meta (WhatsApp + Messenger)
-# ============================================================
-
-
-class MetaWebhookEntry(BaseModel):
-    """Una entrada dentro del webhook de Meta."""
-
-    id: str
-    time: Optional[int] = None
-    changes: Optional[List[Dict[str, Any]]] = None  # WhatsApp
-    messaging: Optional[List[Dict[str, Any]]] = None  # Messenger
-
-
-class MetaWebhookPayload(BaseModel):
-    """Payload top-level del webhook de Meta."""
-
-    object: str  # "whatsapp_business_account" o "page"
-    entry: List[MetaWebhookEntry]
-
-
-class MetaLeadPayload(BaseModel):
-    """
-    Payload legacy para POST /webhook/meta/lead.
-    Preferir LeadCreate / POST /leads como tool del agente.
-    """
-
-    channel: str = "whatsapp"  # whatsapp | messenger | instagram
-    external_user_id: str
-    user_name: Optional[str] = None
-    user_phone: Optional[str] = None
-    user_email: Optional[str] = None
-    reason: Optional[str] = None
-    summary: Optional[str] = None
-    product_interest: Optional[str] = None
-    budget: Optional[str] = None
-    timeline: Optional[str] = None
-    preferred_contact_time: Optional[str] = None
-    handed_off: bool = False
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
 
 class LeadCreate(BaseModel):
     """
@@ -57,7 +16,7 @@ class LeadCreate(BaseModel):
     )
     external_user_id: str = Field(
         ...,
-        description="ID del usuario en el canal (wa_id o PSID)",
+        description="ID del usuario en el canal (teléfono WhatsApp u otro id)",
     )
     user_name: Optional[str] = Field(
         default=None, description="Nombre completo del contacto o razón social"
@@ -130,26 +89,14 @@ class LeadOut(BaseModel):
 
 
 class NormalizedMessage(BaseModel):
-    """
-    Representación común de un mensaje, independiente del canal.
-    El gateway normaliza WhatsApp/Messenger a esta forma.
-    """
+    """Representación común de un mensaje, independiente del canal."""
 
-    channel: str  # "whatsapp" | "messenger"
+    channel: str  # "whatsapp" | "messenger" | "instagram"
     external_user_id: str
     external_message_id: Optional[str] = None
     user_name: Optional[str] = None
     user_phone: Optional[str] = None
     text: str
-    raw: Dict[str, Any] = Field(default_factory=dict)
-
-
-class NormalizedHandover(BaseModel):
-    """Evento de handoff / thread control desde Meta."""
-
-    channel: str
-    external_user_id: str
-    reason: Optional[str] = None
     raw: Dict[str, Any] = Field(default_factory=dict)
 
 

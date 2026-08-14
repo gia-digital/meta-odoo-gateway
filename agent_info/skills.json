@@ -1,23 +1,8 @@
 {
-  "entity_id": "1247354378459524",
-  "api": "https://api.facebook.com/{entity_id}/agent_config/skills",
-  "docs": "https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-skills",
-  "create_lead_tool": {
-    "id": "pfbid02WTE5fxeCTAmRLLEuU22mTyPxmwuwbM6rHRsYNX6XrtsECCHQ8QxnXdyd2mDoSP8LwXL5GbM16sHS9UrSkcPRN1onxufrYPQDGrl",
-    "name": "create_lead",
-    "description": "Registra un prospecto calificado en el servidor de la empresa.",
-    "request_definition": {
-      "method": "POST",
-      "path": "/webhook/meta/lead"
-    },
-    "user_auth_required": false
-  },
   "generated_from": [
-    "agent_info/Guia_Respuesta_GIA.docx",
-    "docs/agent_prompt.md",
-    "tool create_lead registered in Meta"
+    "agent_info/Guia_Respuesta_GIA.docx"
   ],
-  "notes": "Titles are lowercase-hyphen per Meta. Skills avoid conflicting 'do this first' directives: only greeting-and-active-client-filter owns the first-message sequence; create-qualified-lead owns the tool call.",
+  "notes": "Skills del agente GIA (Chatwoot). greeting-and-active-client-filter cubre el primer mensaje; create-qualified-lead cubre la llamada al tool create_lead.",
   "skills": [
     {
       "title": "greeting-and-active-client-filter",

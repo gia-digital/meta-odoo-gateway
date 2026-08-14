@@ -21,7 +21,7 @@ Odoo Enterprise permite API Keys que reemplazan el password — más seguro y re
 
 1. Inicia sesión como el usuario de integración (`integrations@...`).
 2. Ve a **Preferences (avatar arriba) → Account Security → New API Key**.
-3. Pon una descripción: `Meta Gateway production`.
+3. Pon una descripción: `GIA Gateway production`.
 4. Genera la key. **Cópiala inmediatamente** — solo se muestra una vez.
 5. Pégala en `.env`:
    ```
@@ -119,9 +119,9 @@ En **CRM → Reporting → Pipeline Analysis** filtra por `Source = Whatsapp` o 
 
 ## 7. Módulo opcional Odoo (alternativa)
 
-Si prefieres una integración más profunda (sin gateway intermedio para Odoo), se puede desarrollar un módulo custom de Odoo que escuche directamente al webhook. Sin embargo, esto **acopla la lógica de Meta a Odoo** — el patrón con FastAPI intermedio es más mantenible porque:
+Si prefieres una integración más profunda (sin gateway intermedio para Odoo), se puede desarrollar un módulo custom de Odoo que escuche directamente al webhook. Sin embargo, esto **acopla Chatwoot/el agente a Odoo** — el patrón con FastAPI intermedio es más mantenible porque:
 
-- Aísla cambios de la API de Meta del core de Odoo
+- Aísla cambios del Agent Bot del core de Odoo
 - Permite agregar más canales (Telegram, web chat, etc.) sin tocar Odoo
 - Facilita testing y debugging independiente
 - Mantiene Odoo enfocado en su rol de CRM, no de integrador

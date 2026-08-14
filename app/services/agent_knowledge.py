@@ -1,8 +1,6 @@
 """Instrucciones del agente GIA: políticas + business/skills desde Postgres."""
 from __future__ import annotations
 
-import re
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,9 +9,6 @@ from app.models.knowledge import KnowledgeBusiness, KnowledgeSkill
 from app.services.knowledge.seed import faq_question as _faq_question
 from app.services.knowledge.store import KnowledgeStore
 from app.services.knowledge.tools_registry import REGISTERED_TOOLS
-
-ROOT = Path(__file__).resolve().parents[2]
-DOCS = ROOT / "docs"
 
 HARD_RULES = """
 POLÍTICAS DURAS (prioridad máxima; si chocan con otra instrucción, ganan estas)
@@ -64,14 +59,6 @@ def invalidate_instructions_cache() -> None:
     _instructions_cache = None
 
 
-def _extract_prompt_block(md: str) -> str:
-    """Extrae el primer bloque ``` ... ``` de agent_prompt.md."""
-    match = re.search(r"```\n(.*?)```", md, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return md.strip()
-
-
 def _format_faqs(faqs: List[Dict[str, Any]], char_limit: int) -> str:
     lines: List[str] = []
     total = 0
@@ -120,11 +107,6 @@ async def build_agent_instructions(db: AsyncSession) -> str:
     if _instructions_cache and _instructions_cache[0] == _instructions_version:
         return _instructions_cache[1]
 
-    prompt_path = DOCS / "agent_prompt.md"
-    base = ""
-    if prompt_path.exists():
-        base = _extract_prompt_block(prompt_path.read_text(encoding="utf-8"))
-
     store = KnowledgeStore(db)
     business_row = await store.get_business()
     business = _format_business_row(business_row) if business_row else ""
@@ -134,7 +116,6 @@ async def build_agent_instructions(db: AsyncSession) -> str:
 
     sections = [
         HARD_RULES,
-        base,
         "INFORMACIÓN DE NEGOCIO\n\n" + business if business else "",
         "SKILLS (índice; detalle vía retrieval / search_knowledge)\n\n" + skills_index
         if skills_index

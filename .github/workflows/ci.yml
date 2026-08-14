@@ -11,10 +11,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      META_VERIFY_TOKEN: ci-verify-token
-      META_APP_SECRET: ci-app-secret
-      META_ACCESS_TOKEN: ci-access-token
-      META_LEAD_WEBHOOK_TOKEN: ci-lead-token
+      LEAD_WEBHOOK_TOKEN: ci-lead-token
       ADMIN_API_TOKEN: ci-admin-token
       DATABASE_URL: postgresql+asyncpg://gateway:gateway@localhost/gateway
       ODOO_ENABLED: "false"

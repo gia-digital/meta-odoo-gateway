@@ -1,12 +1,8 @@
-# Skills — Meta Business Agent (GIA)
+# Skills — agente GIA (Chatwoot)
 
 Total: **9** skills.
 
-Docs: [agent-skills](https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-skills)
-
-Tool de leads: `create_lead` (`pfbid02WTE5fxeCTAmRLLEuU22mTyPxmwuwbM6rHRsYNX6XrtsECCHQ8QxnXdyd2mDoSP8LwXL5GbM16sHS9UrSkcPRN1onxufrYPQDGrl`) → `POST /webhook/meta/lead`
-
-Subir: `./scripts/upload_meta_skills.sh`
+Tool de leads: `create_lead` (OpenAI Agents SDK en el gateway; `qualification_source=chatwoot_agent`).
 
 ## `greeting-and-active-client-filter`
 
@@ -54,7 +50,7 @@ Cuando el prospecto esté calificado (pidió cotización + volumen/urgencia/cont
 **When:** Apply when the prospect is qualified: requested a quote with concrete material/volume, shared urgency or delivery needs, asked to speak with sales, or expressed clear purchase intent. This skill governs the create_lead tool.
 
 ```
-Debes usar el tool `create_lead` (id pfbid02WTE5fxeCTAmRLLEuU22mTyPxmwuwbM6rHRsYNX6XrtsECCHQ8QxnXdyd2mDoSP8LwXL5GbM16sHS9UrSkcPRN1onxufrYPQDGrl, POST /webhook/meta/lead) para registrar el prospecto calificado en el servidor de GIA.
+Debes usar el tool `create_lead` para registrar el prospecto calificado en el servidor de GIA.
 
 Cuándo llamar al tool (cualquiera aplica):
 - Pidió cotización de un material/línea concreta

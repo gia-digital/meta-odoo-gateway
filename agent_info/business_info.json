@@ -1,10 +1,6 @@
 {
-  "entity_id": "1247354378459524",
-  "api": "https://api.facebook.com/{entity_id}/agent_config/business_info",
-  "docs": "https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-knowledge-business-info",
   "generated_from": [
-    "agent_info/Guia_Respuesta_GIA.docx (§2, §6, §12, §13, §15)",
-    "docs/agent_prompt.md"
+    "agent_info/Guia_Respuesta_GIA.docx (§2, §6, §12, §13, §15)"
   ],
   "payload": {
     "business_description": "Grupo Industrial Acerero, S.A. de C.V. (GIA), RFC GIA971119FV5, empresa 100% mexicana (antes UNIACERO) con más de 30 años en comercialización y transformación de acero. Centro de servicio en Francisco Villa No. 27, Col. Jardines de Xalostoc, C.P. 55330, Ecatepec de Morelos, Estado de México: 40,000 m², almacenamiento de 35,000 ton y capacidad de transformación de hasta 5,000 toneladas mensuales. Más de 200 colaboradores, transporte propio y maquinaria (niveladoras, cizallas, slitters, molinos de tubería, cortadoras y acanaladoras). Fabricamos lámina acanalada KR-18, R-101, R-72 y Steel Deck; comercializamos aceros planos (HR, HRPO, CR, galvanizada G60/G90, Galvanneal, electrogalvanizada, Ecogal/zintroalum, Pintro), tubería industrial de acero negro comercial, varilla y alambre. Certificación NMX-CC/ISO 9001 (en proceso IATF 16949), trazabilidad por número de lote y certificados de calidad vía vendedor. Operamos ventas spot/piso, desarrollo de producto y back-to-back; entregas DDP o FOB. Sitio: https://giacerero.com — Términos: https://giacerero.com/terminos-y-condiciones. Negocio de mayoreo industrial (no menudeo ni mostrador).",

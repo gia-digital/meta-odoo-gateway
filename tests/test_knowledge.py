@@ -70,8 +70,6 @@ def test_seed_source_has_catalog_limits():
 
 @pytest.mark.asyncio
 async def test_retrieve_keyword_ranks_inoxidable(monkeypatch):
-    monkeypatch.setenv("META_VERIFY_TOKEN", "v")
-    monkeypatch.setenv("META_APP_SECRET", "s")
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     from app.core.config import get_settings
@@ -111,8 +109,6 @@ async def test_retrieve_keyword_ranks_inoxidable(monkeypatch):
 @pytest.mark.asyncio
 async def test_knowledge_dashboard_requires_auth(monkeypatch):
     monkeypatch.setenv("CHATWOOT_ENABLED", "false")
-    monkeypatch.setenv("META_VERIFY_TOKEN", "v")
-    monkeypatch.setenv("META_APP_SECRET", "s")
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     from app.core.config import get_settings

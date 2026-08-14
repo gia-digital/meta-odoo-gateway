@@ -1,4 +1,4 @@
-"""Tests de calificación por Meta Agent y gating de Odoo."""
+"""Tests de calificación de leads y gating de Odoo."""
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -10,11 +10,7 @@ from app.models.conversation import (
     ConversationStatus,
     QualificationSource,
 )
-from app.models.schemas import LeadCreate, MetaLeadPayload
-from app.routers.meta_webhook import (
-    _parse_messenger_handovers,
-    _parse_whatsapp_handovers,
-)
+from app.models.schemas import LeadCreate
 from app.services.conversation import ConversationService
 from app.services.lead_scorer import score_conversation
 
@@ -25,17 +21,6 @@ def make_message(text: str, direction: str = "inbound"):
         direction=SimpleNamespace(value=direction),
         created_at=datetime.utcnow(),
     )
-
-
-def test_meta_lead_payload_accepts_minimal():
-    payload = MetaLeadPayload(
-        channel="whatsapp",
-        external_user_id="5215512345678",
-        reason="Interés en plan premium",
-    )
-    assert payload.channel == "whatsapp"
-    assert payload.handed_off is False
-    assert payload.external_user_id == "5215512345678"
 
 
 def test_lead_create_tool_schema_with_structured_fields():
@@ -60,72 +45,6 @@ def test_lead_create_tool_schema_with_structured_fields():
     assert payload.handed_off is True
 
 
-def test_meta_lead_payload_with_handoff_and_interest():
-    payload = MetaLeadPayload.model_validate(
-        {
-            "channel": "messenger",
-            "external_user_id": "psid-123",
-            "user_name": "Ana",
-            "product_interest": "Plan Premium",
-            "handed_off": True,
-            "summary": "Quiere asesor",
-        }
-    )
-    assert payload.handed_off is True
-    assert payload.product_interest == "Plan Premium"
-
-
-def test_parse_messenger_pass_thread_control():
-    entries = [
-        {
-            "messaging": [
-                {
-                    "sender": {"id": "USER_PSID"},
-                    "recipient": {"id": "PAGE_ID"},
-                    "pass_thread_control": {
-                        "new_owner_app_id": "123",
-                        "metadata": "customer_requested_agent",
-                    },
-                }
-            ]
-        }
-    ]
-    handovers = _parse_messenger_handovers(entries, channel="messenger")
-    assert len(handovers) == 1
-    assert handovers[0].external_user_id == "USER_PSID"
-    assert "customer_requested_agent" in (handovers[0].reason or "")
-
-
-def test_parse_whatsapp_messaging_handovers_meta_v26():
-    """Formato oficial Meta Cloud API v25/v26 (Send to My Server)."""
-    entries = [
-        {
-            "changes": [
-                {
-                    "field": "messaging_handovers",
-                    "value": {
-                        "messaging_product": "whatsapp",
-                        "recipient": {
-                            "display_phone_number": "16505553333",
-                            "phone_number_id": "123456789",
-                        },
-                        "sender": {"phone_number": "151005553333"},
-                        "timestamp": "1697041663",
-                        "control_passed": {
-                            "metadata": "Information about the conversation"
-                        },
-                    },
-                }
-            ]
-        }
-    ]
-    handovers = _parse_whatsapp_handovers(entries)
-    assert len(handovers) == 1
-    assert handovers[0].channel == "whatsapp"
-    assert handovers[0].external_user_id == "151005553333"
-    assert handovers[0].reason == "Information about the conversation"
-
-
 def test_scoring_still_works_as_secondary_signal():
     msgs = [
         make_message("Quiero cotizar lámina galvanizada"),
@@ -140,8 +59,6 @@ def test_scoring_still_works_as_secondary_signal():
 @pytest.mark.asyncio
 async def test_process_after_message_does_not_call_odoo_when_disabled(monkeypatch):
     monkeypatch.setenv("ODOO_ENABLED", "false")
-    monkeypatch.setenv("META_VERIFY_TOKEN", "v")
-    monkeypatch.setenv("META_APP_SECRET", "s")
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     from app.core.config import get_settings
@@ -182,10 +99,8 @@ async def test_process_after_message_does_not_call_odoo_when_disabled(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_qualify_from_meta_sets_structured_lead_fields(monkeypatch):
+async def test_qualify_lead_sets_structured_lead_fields(monkeypatch):
     monkeypatch.setenv("ODOO_ENABLED", "false")
-    monkeypatch.setenv("META_VERIFY_TOKEN", "v")
-    monkeypatch.setenv("META_APP_SECRET", "s")
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     from app.core.config import get_settings
@@ -217,7 +132,7 @@ async def test_qualify_from_meta_sets_structured_lead_fields(monkeypatch):
     db.refresh = AsyncMock()
     service = ConversationService(db)
 
-    result = await service.qualify_from_meta(
+    result = await service.qualify_lead(
         conv,
         reason="Pidió cotización",
         user_name="Ana",
@@ -231,7 +146,7 @@ async def test_qualify_from_meta_sets_structured_lead_fields(monkeypatch):
     )
 
     assert result.status == ConversationStatus.handed_off
-    assert result.qualification_source == QualificationSource.meta_agent
+    assert result.qualification_source == QualificationSource.chatwoot_agent
     assert result.user_name == "Ana"
     assert result.qualification_reason == "Pidió cotización"
     assert result.product_interest == "Premium"
@@ -247,8 +162,6 @@ async def test_qualify_from_meta_sets_structured_lead_fields(monkeypatch):
 @pytest.mark.asyncio
 async def test_create_lead_from_payload_uses_whatsapp_id_as_phone(monkeypatch):
     monkeypatch.setenv("ODOO_ENABLED", "false")
-    monkeypatch.setenv("META_VERIFY_TOKEN", "v")
-    monkeypatch.setenv("META_APP_SECRET", "s")
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     from app.core.config import get_settings
@@ -294,4 +207,5 @@ async def test_create_lead_from_payload_uses_whatsapp_id_as_phone(monkeypatch):
     assert result.product_interest == "Plan Básico"
     assert result.user_phone == "5215512345678"
     assert result.status == ConversationStatus.qualified
+    assert result.qualification_source == QualificationSource.chatwoot_agent
     get_settings.cache_clear()

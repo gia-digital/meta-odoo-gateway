@@ -6,27 +6,25 @@
 
 - [ ] Aprovisionar servidor (cloud o on-prem) con Docker
 - [ ] Configurar dominio + HTTPS (Caddy/Cloudflare Tunnel)
-- [ ] Crear Meta Developer App en modo desarrollo
-- [ ] Verificar acceso a Meta Business Agent en la región del cliente
-- [ ] Crear usuario de integración y API Key en Odoo
+- [ ] Crear Agent Bot en Chatwoot y apuntar a `/webhook/chatwoot`
+- [ ] Crear usuario de integración y API Key en Odoo (fase posterior)
 - [ ] Clonar este repo, configurar `.env`, levantar con `docker compose up`
 
-**Entregable**: gateway respondiendo healthchecks, webhook verificado en Meta.
+**Entregable**: gateway respondiendo healthchecks, bot conectado en Chatwoot.
 
 ### Semana 2 — Integración técnica
 
-- [ ] Conectar webhook real de WhatsApp en sandbox
+- [ ] Conectar inbox WhatsApp de Chatwoot al Agent Bot
 - [ ] Validar que mensajes llegan al endpoint y se guardan en DB
-- [ ] Conectar Odoo: crear primer lead manual desde `/admin/conversations/{id}/reprocess`
-- [ ] Verificar formato del lead en Odoo, ajustar mapping si hace falta
-- [ ] Configurar Messenger (página de Facebook)
+- [ ] Verificar replies del agente y handoff a humano (`status=open`)
+- [ ] Conectar Odoo (cuando aplique): primer lead desde `/admin/conversations/{id}/reprocess`
 
 **Entregable**: flujo end-to-end funcionando con datos de prueba.
 
 ### Semana 3 — Configuración del agente IA
 
-- [ ] Cargar base de conocimiento en Meta Business Agent (catálogo, FAQs, precios)
-- [ ] Iterar sobre el system prompt con casos reales
+- [ ] Revisar knowledge en `/dashboard/knowledge` (catálogo, FAQs, precios)
+- [ ] Iterar skills / instrucciones con casos reales
 - [ ] Pruebas con 5-10 conversaciones simuladas internas
 - [ ] Ajustar reglas y keywords del scorer según contexto del negocio
 - [ ] Definir los productos/servicios específicos en `PRODUCT_KEYWORDS`
@@ -46,7 +44,7 @@
 ### Semana 5 — Lanzamiento producción
 
 - [ ] Activar modo auto-reply
-- [ ] Anunciar canal de WhatsApp/Messenger a clientes
+- [ ] Anunciar canal de WhatsApp a clientes
 - [ ] Monitoreo intensivo (logs, leads creados, tiempos de respuesta)
 - [ ] Setup de alertas (Sentry/Datadog para errores)
 - [ ] Capacitar al equipo de ventas en el flujo de handoff desde Odoo
@@ -76,11 +74,11 @@
 | Backups y storage | $5–10 USD |
 | **Total infraestructura** | **~$30–50 USD/mes** |
 
-### Costos de Meta
+### Costos de canal / LLM
 
-- **WhatsApp Cloud API**: las conversaciones se cobran por categoría (utility, marketing, service, authentication) y país. Service conversations iniciadas por el cliente son **gratis** las primeras 1000/mes; después varía entre $0.005 y $0.10 USD según país.
-- **Messenger**: gratis para mensajería estándar dentro de la ventana de 24h.
-- **Meta Business Agent**: actualmente Meta no cobra por uso del agente conversacional en sí (sujeto a cambios), pero las conversaciones de WhatsApp sí cuentan para el tarificador estándar.
+- **WhatsApp vía Chatwoot**: el cobro de conversaciones depende del proveedor del inbox (Cloud API u otro BSP).
+- **LLM**: OpenAI / Anthropic según `AGENT_MODEL` y volumen de mensajes.
+- **Chatwoot**: self-hosted o plan SaaS, según el despliegue.
 
 ### Costos de Odoo
 
@@ -110,7 +108,7 @@ Si ya tienes Odoo Enterprise self-hosted, el costo marginal de la integración e
 
 ### Verificación de webhooks
 
-El gateway valida `X-Hub-Signature-256` en cada request de Meta. **Sin esta verificación**, cualquiera con tu URL podría inyectar mensajes falsos y crear leads spam.
+El gateway valida `X-Chatwoot-Signature` cuando `CHATWOOT_WEBHOOK_SECRET` está definido. **Sin esta verificación**, cualquiera con tu URL podría inyectar mensajes falsos.
 
 ---
 
@@ -122,10 +120,10 @@ El gateway valida `X-Hub-Signature-256` en cada request de Meta. **Sin esta veri
 - Tiempo de respuesta humano post-handoff
 - Tasa de no-respuesta del prospecto
 
-### De calidad del agente (Meta)
+### De calidad del agente (Chatwoot)
 
 - % de conversaciones resueltas sin handoff
-- CSAT post-chat (si Meta lo soporta)
+- CSAT post-chat (si Chatwoot lo soporta)
 - Tasa de abandono (usuarios que no responden tras N mensajes)
 
 ### Operativas (Gateway)
@@ -166,7 +164,7 @@ El gateway valida `X-Hub-Signature-256` en cada request de Meta. **Sin esta veri
 
 | Riesgo | Mitigación |
 |---|---|
-| Meta deprecia o cambia Business Agent | El gateway puede operar con un LLM propio (Claude) llamado desde FastAPI sin cambiar el resto |
+| Chatwoot o el inbox WhatsApp cambia de API | El agente vive en el gateway; solo hay que adaptar `chatwoot_webhook` / `ChatwootClient` |
 | Odoo upgrade rompe la API | Pin de versión de Odoo en producción, staging antes de upgrade |
 | Crecimiento explosivo de mensajes | Migrar a workers async (Celery/Arq) + Redis para procesamiento desacoplado |
 | Falsos positivos generan leads spam | Marcar como "junk" en Odoo + retroalimentar al scorer |

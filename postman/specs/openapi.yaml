@@ -1,13 +1,13 @@
 openapi: 3.0.3
 info:
-  title: GIA Prospectos — Meta → Gateway
+  title: GIA Prospectos — Chatwoot Agent Gateway
   version: 0.2.0
   description: |
-    Intermediate FastAPI gateway for Grupo Industrial Acerero (GIA).
-    Receives WhatsApp/Messenger traffic and qualified leads from the Meta Business Agent,
-    persists them in PostgreSQL, and exposes admin/dashboard APIs.
+    FastAPI gateway for Grupo Industrial Acerero (GIA).
+    Hosts the Chatwoot Agent Bot (WhatsApp), persists conversations and qualified leads
+    in PostgreSQL, and exposes admin/dashboard APIs.
 
-    Primary agent tool: `POST /leads` (create/update a qualified prospect for sales).
+    Primary inbound channel: `POST /webhook/chatwoot`. Optional HTTP tool: `POST /leads`.
   contact:
     name: GIA Digital
 servers:
@@ -22,9 +22,9 @@ tags:
   - name: health
     description: Liveness
   - name: leads
-    description: Meta Business Agent lead tool + admin lead listing
-  - name: meta
-    description: Meta webhook verification and inbound events
+    description: Lead create/list APIs
+  - name: chatwoot
+    description: Chatwoot Agent Bot webhook
   - name: admin
     description: Internal admin JSON APIs (X-Admin-Token)
 paths:
@@ -55,11 +55,11 @@ paths:
       tags: [leads]
       summary: Crear o actualizar prospecto calificado
       description: |
-        Tool for the GIA Meta Business Agent. Registers a steel prospect with
-        material, volume, delivery timing, and contact data for the sales team.
+        Registers a steel prospect with material, volume, delivery timing,
+        and contact data for the sales team. The Chatwoot agent also creates
+        leads internally via the create_lead tool.
       security:
-        - MetaLeadToken: []
-        - MetaHubSignature: []
+        - LeadToken: []
       requestBody:
         required: true
         content:
@@ -166,66 +166,33 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /webhook/meta:
-    get:
-      operationId: verifyMetaWebhook
-      tags: [meta]
-      summary: Verificación del webhook Meta
-      description: Meta hub challenge verification for WhatsApp / Messenger webhooks.
-      parameters:
-        - name: hub.mode
-          in: query
-          required: true
-          schema:
-            type: string
-            example: subscribe
-        - name: hub.verify_token
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: hub.challenge
-          in: query
-          required: true
-          schema:
-            type: string
-            example: "1234567890"
-      responses:
-        "200":
-          description: Challenge echoed as plain text
-          content:
-            text/plain:
-              schema:
-                type: string
-                example: "1234567890"
-        "403":
-          description: Verification failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
+  /webhook/chatwoot:
     post:
-      operationId: receiveMetaWebhook
-      tags: [meta]
-      summary: Mensajes y handovers de Meta
-      description: Inbound WhatsApp/Messenger webhook events. Requires Meta HMAC signature.
+      operationId: chatwootAgentWebhook
+      tags: [chatwoot]
+      summary: Agent Bot de Chatwoot
+      description: |
+        Outgoing URL del Agent Bot. Recibe `message_created`, responde 200 de inmediato
+        y genera la respuesta del agente GIA en background.
       security:
-        - MetaHubSignature: []
+        - ChatwootSignature: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/MetaWebhookPayload"
+              type: object
+              additionalProperties: true
             example:
-              object: whatsapp_business_account
-              entry:
-                - id: "PHONE_NUMBER_ID"
-                  time: 1710000000
-                  changes: []
+              event: message_created
+              content: "Hola, quiero cotizar lámina"
+              message_type: incoming
+              conversation:
+                id: 42
+                status: pending
       responses:
         "200":
-          description: Event accepted
+          description: Event queued or ignored
           content:
             application/json:
               schema:
@@ -238,36 +205,6 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
-
-  /webhook/meta/lead:
-    post:
-      operationId: createLeadLegacy
-      tags: [meta]
-      summary: Alias legacy de POST /leads
-      description: Legacy CRM/handoff endpoint. Prefer `POST /leads`.
-      deprecated: true
-      security:
-        - MetaLeadToken: []
-        - MetaHubSignature: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LeadCreate"
-      responses:
-        "200":
-          description: Lead created or updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LeadOut"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "422":
-          $ref: "#/components/responses/ValidationError"
 
   /admin/conversations:
     get:
@@ -295,7 +232,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [none, meta_agent, local_scorer]
+            enum: [none, meta_agent, local_score, chatwoot_agent]
       responses:
         "200":
           description: Conversation list
@@ -370,18 +307,18 @@ components:
       in: header
       name: X-Admin-Token
       description: Shared admin API token (`ADMIN_API_TOKEN`).
-    MetaLeadToken:
+    LeadToken:
       type: apiKey
       in: header
-      name: X-Meta-Lead-Token
+      name: X-Lead-Token
       description: |
-        Shared token for the Meta agent lead tool (`META_LEAD_WEBHOOK_TOKEN`).
-        Alternatively pass `?token=` or Meta HMAC `X-Hub-Signature-256`.
-    MetaHubSignature:
+        Shared token for POST /leads (`LEAD_WEBHOOK_TOKEN`).
+        Alternatively pass `?token=`.
+    ChatwootSignature:
       type: apiKey
       in: header
-      name: X-Hub-Signature-256
-      description: Meta Graph HMAC signature header (`sha256=<hex>`).
+      name: X-Chatwoot-Signature
+      description: HMAC-SHA256 of `{timestamp}.{body}` when `CHATWOOT_WEBHOOK_SECRET` is set.
 
   responses:
     BadRequest:
@@ -438,7 +375,7 @@ components:
           example: whatsapp
         external_user_id:
           type: string
-          description: ID del usuario en el canal (wa_id o PSID)
+          description: ID del usuario en el canal (teléfono WhatsApp u otro id)
           example: "5215512345678"
         user_name:
           type: string
@@ -516,7 +453,7 @@ components:
           example: qualified
         qualification_source:
           type: string
-          example: meta_agent
+          example: chatwoot_agent
         qualification_reason:
           type: string
           nullable: true
@@ -551,20 +488,6 @@ components:
         updated_at:
           type: string
           format: date-time
-
-    MetaWebhookPayload:
-      type: object
-      required: [object, entry]
-      properties:
-        object:
-          type: string
-          description: whatsapp_business_account or page
-          example: whatsapp_business_account
-        entry:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
 
     ConversationOut:
       type: object

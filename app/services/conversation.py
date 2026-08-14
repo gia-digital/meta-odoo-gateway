@@ -4,7 +4,7 @@ Servicio de orquestación de conversaciones.
 Une:
 - Persistencia (Conversation, Message)
 - Scoring local (señal secundaria)
-- Calificación por Meta Agent (fuente principal de leads)
+- Calificación por el agente GIA (Chatwoot)
 - Creación de leads en Odoo (solo si ODOO_ENABLED=true)
 """
 from datetime import datetime, timezone
@@ -122,7 +122,7 @@ class ConversationService:
 
         await self.db.commit()
 
-    async def qualify_from_meta(
+    async def qualify_lead(
         self,
         conversation: Conversation,
         *,
@@ -137,10 +137,10 @@ class ConversationService:
         timeline: Optional[str] = None,
         preferred_contact_time: Optional[str] = None,
         metadata: Optional[dict] = None,
-        qualification_source: QualificationSource = QualificationSource.meta_agent,
+        qualification_source: QualificationSource = QualificationSource.chatwoot_agent,
     ) -> Conversation:
         """
-        Califica un prospecto (Meta Agent, Chatwoot Agent Bot, etc.).
+        Califica un prospecto (Chatwoot Agent Bot u otra fuente).
         No llama a Odoo (fase posterior).
         """
         if user_name:
@@ -171,11 +171,12 @@ class ConversationService:
             conversation.preferred_contact_time = str(lead_contact_time)
 
         conversation.qualification_source = qualification_source
-        default_reason = (
-            "Qualified by Chatwoot Agent Bot"
-            if qualification_source == QualificationSource.chatwoot_agent
-            else "Qualified by Meta Business Agent"
-        )
+        if qualification_source == QualificationSource.chatwoot_agent:
+            default_reason = "Qualified by Chatwoot Agent Bot"
+        elif qualification_source == QualificationSource.local_score:
+            default_reason = "Qualified by local score"
+        else:
+            default_reason = "Qualified lead"
         conversation.qualification_reason = reason or default_reason
         if conversation.qualified_at is None:
             conversation.qualified_at = datetime.now(timezone.utc)
@@ -221,9 +222,9 @@ class ConversationService:
         timeline: Optional[str] = None,
         preferred_contact_time: Optional[str] = None,
         handed_off: bool = False,
-        qualification_source: QualificationSource = QualificationSource.meta_agent,
+        qualification_source: QualificationSource = QualificationSource.chatwoot_agent,
     ) -> Conversation:
-        """Alta de lead vía tool POST /leads, Meta webhook o Chatwoot Agent Bot."""
+        """Alta de lead vía tool del agente Chatwoot o POST /leads."""
         conv = await self.get_or_create(
             channel=channel,
             external_user_id=external_user_id,
@@ -233,12 +234,13 @@ class ConversationService:
         if not phone and channel == Channel.whatsapp:
             phone = external_user_id
 
-        default_reason = (
-            "Qualified by Chatwoot Agent Bot"
-            if qualification_source == QualificationSource.chatwoot_agent
-            else "Qualified by Meta Business Agent"
-        )
-        return await self.qualify_from_meta(
+        if qualification_source == QualificationSource.chatwoot_agent:
+            default_reason = "Qualified by Chatwoot Agent Bot"
+        elif qualification_source == QualificationSource.local_score:
+            default_reason = "Qualified by local score"
+        else:
+            default_reason = "Qualified lead"
+        return await self.qualify_lead(
             conv,
             reason=reason or summary or default_reason,
             user_name=user_name,
@@ -327,7 +329,7 @@ class ConversationService:
                 conversation.odoo_partner_id = partner_id
 
             summary_lines = [
-                "<b>Conversación capturada por Meta Business Agent</b><br/><br/>"
+                "<b>Conversación capturada por el agente GIA (Chatwoot)</b><br/><br/>"
             ]
             for m in conversation.messages[-20:]:
                 role = "Cliente" if m.direction == Direction.inbound else "Agente"
@@ -391,7 +393,7 @@ class ConversationService:
             )
             await odoo.create_activity(
                 lead_id=conversation.odoo_lead_id,
-                summary="Contactar lead caliente (Meta)",
+                summary="Contactar lead caliente (Chatwoot)",
                 note=note,
             )
             await odoo.post_internal_note(

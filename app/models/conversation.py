@@ -18,7 +18,7 @@ class Channel(str, enum.Enum):
 class ConversationStatus(str, enum.Enum):
     active = "active"  # IA activa
     qualified = "qualified"  # Lead local listo para revisar
-    handed_off = "handed_off"  # Escalado a humano (Meta handoff)
+    handed_off = "handed_off"  # Escalado a humano
     closed = "closed"  # Cerrado
 
 
@@ -61,7 +61,7 @@ class Conversation(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    # Datos estructurados del lead (tool POST /leads / Meta Agent)
+    # Datos estructurados del lead (tool create_lead / POST /leads)
     product_interest: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     lead_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     budget: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

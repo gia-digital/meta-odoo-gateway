@@ -1,10 +1,6 @@
-# Business Info — Meta Business Agent (GIA)
+# Business Info — agente GIA (Chatwoot)
 
-entity_id: `1247354378459524`
-
-Docs: [business-info](https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-knowledge-business-info)
-
-Subir: `./scripts/upload_meta_business_info.sh`
+Fuente: `agent_info/business_info.json` (seed a Postgres).
 
 ## business_description
 

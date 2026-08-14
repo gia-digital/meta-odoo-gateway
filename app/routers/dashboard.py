@@ -32,7 +32,7 @@ CHANNEL_LABELS = {
 }
 SOURCE_LABELS = {
     "none": "Sin fuente",
-    "meta_agent": "Meta AI",
+    "meta_agent": "Histórico (Meta)",
     "local_score": "Score local",
     "chatwoot_agent": "Chatwoot Agent Bot",
 }

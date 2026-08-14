@@ -1,6 +1,6 @@
 """Configuración centralizada del gateway."""
 from functools import lru_cache
-from typing import List, Optional
+from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,15 +16,8 @@ class Settings(BaseSettings):
     app_debug: bool = False
     log_level: str = "INFO"
 
-    # Meta
-    meta_verify_token: str
-    meta_app_secret: str
-    meta_access_token: str = ""
-    whatsapp_phone_number_id: str = ""
-    messenger_page_id: str = ""
-    meta_graph_version: str = "v21.0"
-    # Token para POST /webhook/meta/lead (acciones CRM / handoff sin HMAC Graph)
-    meta_lead_webhook_token: str = ""
+    # Token para POST /leads (cabecera X-Lead-Token o query ?token=)
+    lead_webhook_token: str = ""
 
     # Odoo (fase posterior; desactivado por defecto)
     odoo_enabled: bool = False
@@ -67,10 +60,6 @@ class Settings(BaseSettings):
     @property
     def admin_ips_list(self) -> List[str]:
         return [ip.strip() for ip in self.admin_allowed_ips.split(",") if ip.strip()]
-
-    @property
-    def graph_base_url(self) -> str:
-        return f"https://graph.facebook.com/{self.meta_graph_version}"
 
 
 @lru_cache

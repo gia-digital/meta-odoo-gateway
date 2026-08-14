@@ -136,7 +136,7 @@ curl -fsSI https://gia.init.com.mx/health
 URLs:
 
 - Dashboard: `https://gia.init.com.mx/dashboard`
-- Webhook Meta: `https://gia.init.com.mx/webhook/meta`
+- Webhook Chatwoot: `https://gia.init.com.mx/webhook/chatwoot`
 
 Imagen publicada: `ghcr.io/gia-digital/meta-odoo-gateway:<short-sha>` y `:latest`.
 

@@ -1,11 +1,11 @@
-"""API de leads: tool para Meta Business Agent + listado admin."""
+"""API de leads: creación autenticada + listado admin."""
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import require_admin_token, require_meta_lead_auth
+from app.core.security import require_admin_token, require_lead_auth
 from app.models.conversation import Channel, Conversation, ConversationStatus
 from app.models.db import get_db
 from app.models.schemas import LeadCreate, LeadOut
@@ -79,7 +79,7 @@ async def create_lead_from_create(
     ),
 )
 async def create_lead(
-    body: bytes = Depends(require_meta_lead_auth),
+    body: bytes = Depends(require_lead_auth),
     db: AsyncSession = Depends(get_db),
 ) -> LeadOut:
     import json

@@ -1,12 +1,9 @@
 {
-  "entity_id": "1247354378459524",
-  "api": "https://api.facebook.com/{entity_id}/agent_config/faq",
-  "docs": "https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-knowledge-faqs",
   "generated_from": [
     "agent_info/Guia_Respuesta_GIA.docx (§25 Banco FAQ)",
     "agent_info/conversaciones_whatsapp.txt (temas frecuentes: cotización, lámina, tubo, menudeo, ubicación, entrega)"
   ],
-  "notes": "Cada FAQ es un tema único (recomendación Meta). Respuestas tomadas del banco aprobado de la Guía comercial GIA; priorizadas por frecuencia en WhatsApp.",
+  "notes": "Cada FAQ es un tema único. Respuestas tomadas del banco aprobado de la Guía comercial GIA; priorizadas por frecuencia en WhatsApp.",
   "faqs": [
     {
       "question": "¿Venden por pieza / menudeo?",

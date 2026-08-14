@@ -1,12 +1,8 @@
-# FAQs Meta Business Agent — GIA
+# FAQs — agente GIA (Chatwoot)
 
 Total: **45** entradas.
 
 Fuente principal: `Guia_Respuesta_GIA.docx` §25, validada con temas frecuentes de `conversaciones_whatsapp.txt`.
-
-API: [`agent_config/faq`](https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-knowledge-faqs)
-
-Subir: `./scripts/upload_meta_faqs.sh`
 
 ## Compra y precios
 

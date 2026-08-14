@@ -116,8 +116,6 @@ def test_faq_formatter_uses_singular_question():
 @pytest.mark.asyncio
 async def test_webhook_disabled_returns_disabled(monkeypatch):
     monkeypatch.setenv("CHATWOOT_ENABLED", "false")
-    monkeypatch.setenv("META_VERIFY_TOKEN", "v")
-    monkeypatch.setenv("META_APP_SECRET", "s")
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     from app.core.config import get_settings
@@ -147,8 +145,6 @@ async def test_webhook_disabled_returns_disabled(monkeypatch):
 @pytest.mark.asyncio
 async def test_create_lead_chatwoot_source(monkeypatch):
     monkeypatch.setenv("ODOO_ENABLED", "false")
-    monkeypatch.setenv("META_VERIFY_TOKEN", "v")
-    monkeypatch.setenv("META_APP_SECRET", "s")
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     from app.core.config import get_settings
