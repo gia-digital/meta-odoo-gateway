@@ -258,13 +258,15 @@ def build_gia_agent(instructions: str):
             model=model_id,
         )
 
-    return Agent[BotContext](
-        name="GIA Sales Assistant",
-        instructions=instructions,
-        model=model,
-        model_settings=model_settings,
-        tools=_build_tools(),
-    )
+    agent_kwargs = {
+        "name": "GIA Sales Assistant",
+        "instructions": instructions,
+        "model": model,
+        "tools": _build_tools(),
+    }
+    if model_settings is not None:
+        agent_kwargs["model_settings"] = model_settings
+    return Agent[BotContext](**agent_kwargs)
 
 
 async def run_gia_agent(

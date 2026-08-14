@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     app_env: str = "production"
     app_debug: bool = False
     log_level: str = "INFO"
+    # Zona horaria para fechas del dashboard (IANA). Los datos siguen en UTC.
+    display_timezone: str = "America/Mexico_City"
 
     # Token para POST /leads (cabecera X-Lead-Token o query ?token=)
     lead_webhook_token: str = ""

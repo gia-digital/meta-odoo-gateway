@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from app.models.conversation import Channel, ConversationStatus, QualificationSource
-from app.routers.dashboard import build_lead_stats
+from app.routers.dashboard import build_lead_stats, format_dt
 
 
 def _lead(**kwargs):
@@ -60,3 +60,18 @@ def test_build_lead_stats_aggregates():
     assert "Messenger" in stats["channel_labels"]
     assert stats["material_labels"][0] == "Lámina galvanizada"
     assert stats["material_values"][0] == 2
+
+
+def test_format_dt_uses_mexico_city_timezone(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    monkeypatch.setenv("DISPLAY_TIMEZONE", "America/Mexico_City")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    try:
+        utc = datetime(2026, 8, 13, 19, 0, tzinfo=timezone.utc)
+        assert format_dt(utc) == "13/08/2026 13:00"
+        assert format_dt(None) == "—"
+    finally:
+        get_settings.cache_clear()

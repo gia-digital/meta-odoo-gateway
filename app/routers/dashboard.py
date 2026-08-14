@@ -4,6 +4,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -75,11 +76,25 @@ def label_signal(value: Any) -> str:
     return key.replace("_", " ").capitalize() if key else "—"
 
 
+def _aware(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _display_tz() -> ZoneInfo:
+    name = get_settings().display_timezone or "America/Mexico_City"
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError:
+        return ZoneInfo("UTC")
+
+
 def format_dt(value: Any) -> str:
     if value is None or value == "":
         return "—"
     if isinstance(value, datetime):
-        return value.strftime("%d/%m/%Y %H:%M")
+        return _aware(value).astimezone(_display_tz()).strftime("%d/%m/%Y %H:%M")
     return str(value)
 
 
@@ -131,12 +146,6 @@ async def require_dashboard_auth(request: Request) -> None:
             status_code=status.HTTP_303_SEE_OTHER,
             headers={"Location": str(request.url_for("dashboard_login"))},
         )
-
-
-def _aware(dt: datetime) -> datetime:
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
 
 
 def _as_utc_date(value: Optional[datetime]) -> Optional[date]:
