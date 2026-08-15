@@ -13,6 +13,7 @@
 <p class="notice-banner" role="status">{{ notice }}</p>
 {% endif %}
 
+<div class="subnav-wrap">
 <nav class="subnav" aria-label="Knowledge">
   <a href="/dashboard/knowledge" class="{% if tab == 'overview' %}active{% endif %}">Resumen</a>
   <a href="/dashboard/knowledge/instructions" class="{% if tab == 'instructions' %}active{% endif %}">Instrucciones</a>
@@ -24,6 +25,7 @@
   <a href="/dashboard/knowledge/files" class="{% if tab == 'files' %}active{% endif %}">Archivos</a>
   <a href="/dashboard/knowledge/tools" class="{% if tab == 'tools' %}active{% endif %}">Acciones</a>
 </nav>
+</div>
 
 {% if tab == 'overview' %}
 <section class="metric-grid" aria-label="Knowledge">
@@ -49,7 +51,7 @@
   <label>Instrucciones
     <textarea name="agent_instructions" rows="22">{{ agent_instructions }}</textarea>
   </label>
-  <button class="btn" type="submit">Guardar instrucciones</button>
+  <button class="btn btn-primary" type="submit">Guardar instrucciones</button>
 </form>
 {% endif %}
 
@@ -95,7 +97,7 @@
     {% endif %}
   </div>
   <p class="muted small">Las embeddings de Knowledge son fijas en el servidor (<code>OPENAI_EMBEDDING_MODEL=text-embedding-3-small</code>) y usan la llave de OpenAI.</p>
-  <button class="btn" type="submit">Guardar</button>
+  <button class="btn btn-primary" type="submit">Guardar</button>
 </form>
 <script>
 (function () {
@@ -174,53 +176,15 @@
   <label>Dirección
     <textarea name="address" rows="2">{{ business.address if business else '' }}</textarea>
   </label>
-  <button class="btn" type="submit">Guardar negocio</button>
+  <button class="btn btn-primary" type="submit">Guardar negocio</button>
 </form>
 {% endif %}
 
 {% if tab == 'products' %}
-<form class="card stack-form" method="post" action="/dashboard/knowledge/products">
-  <h2>{% if editing %}Editar {{ editing.name }}{% else %}Nuevo producto o servicio{% endif %}</h2>
+<div class="section-toolbar">
   <p class="muted">El agente usa este catálogo en cada conversación. Marca «No se ofrece» para materiales que hay que rechazar (inoxidable, aluminio, PTR, etc.).</p>
-  {% if editing %}<input type="hidden" name="product_id" value="{{ editing.id }}" />{% endif %}
-  <label>Nombre
-    <input type="text" name="name" required value="{{ editing.name if editing else '' }}" />
-  </label>
-  <label>Tipo
-    <select name="kind">
-      {% for key, label in kind_labels.items() %}
-      <option value="{{ key }}" {% if editing and editing.kind == key %}selected{% elif not editing and key == 'product' %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Categoría
-    <select name="category">
-      <option value="">—</option>
-      {% for key, label in category_labels.items() %}
-      <option value="{{ key }}" {% if editing and editing.category == key %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Resumen (lo que el agente debe saber de un vistazo)
-    <textarea name="summary" rows="3">{{ editing.summary if editing else '' }}</textarea>
-  </label>
-  <label>Detalle (perfiles, mínimos, notas)
-    <textarea name="details" rows="6">{{ editing.details if editing else '' }}</textarea>
-  </label>
-  <label>También se conoce como
-    <input type="text" name="aliases" value="{{ editing.aliases if editing else '' }}" placeholder="HR, caliente, hot rolled" />
-  </label>
-  <label>Orden
-    <input type="text" name="sort_order" value="{{ editing.sort_order if editing else '0' }}" />
-  </label>
-  <label class="check-row">
-    <input type="checkbox" name="active" {% if not editing or editing.active %}checked{% endif %} /> Activo (el agente puede usarlo)
-  </label>
-  <div class="form-actions">
-    <button class="btn" type="submit">Guardar</button>
-    {% if editing %}<a class="btn btn-sm" href="/dashboard/knowledge/products">Cancelar</a>{% endif %}
-  </div>
-</form>
+  <button type="button" class="btn btn-primary" data-open-dialog="product-modal">Nuevo producto</button>
+</div>
 
 {% if products %}
 <div class="table-wrap">
@@ -231,7 +195,7 @@
         <th>Tipo</th>
         <th>Categoría</th>
         <th>Estado</th>
-        <th></th>
+        <th class="actions-col"></th>
       </tr>
     </thead>
     <tbody>
@@ -243,12 +207,14 @@
         </td>
         <td>{{ kind_labels.get(p.kind, p.kind) }}</td>
         <td>{{ category_labels.get(p.category, p.category or '—') }}</td>
-        <td>{% if p.active %}<span class="product-label">Activo</span>{% else %}<span class="muted">Inactivo</span>{% endif %}</td>
+        <td>{% if p.active %}<span class="badge status-qualified"><span class="badge-dot" aria-hidden="true"></span>Activo</span>{% else %}<span class="badge status-inactive"><span class="badge-dot" aria-hidden="true"></span>Inactivo</span>{% endif %}</td>
         <td class="actions-col">
-          <a class="row-action" href="/dashboard/knowledge/products?edit={{ p.id }}">Editar</a>
-          <form method="post" action="/dashboard/knowledge/products/{{ p.id }}/toggle" class="inline-form">
-            <button type="submit" class="row-action">{{ 'Desactivar' if p.active else 'Activar' }}</button>
-          </form>
+          <div class="row-actions">
+            <a class="btn btn-ghost btn-sm" href="/dashboard/knowledge/products?edit={{ p.id }}">Editar</a>
+            <form method="post" action="/dashboard/knowledge/products/{{ p.id }}/toggle" class="inline-form">
+              <button type="submit" class="btn btn-ghost btn-sm">{{ 'Desactivar' if p.active else 'Activar' }}</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}
@@ -256,40 +222,85 @@
   </table>
 </div>
 {% else %}
-<p class="muted">No hay productos todavía. El catálogo se carga al arrancar si la tabla está vacía.</p>
+<div class="empty">
+  <p class="empty-title">No hay productos todavía</p>
+  <p class="muted">El catálogo se carga al arrancar si la tabla está vacía.</p>
+</div>
 {% endif %}
+
+<dialog class="modal" id="product-modal"{% if editing %} data-open="true" data-dismiss-url="/dashboard/knowledge/products"{% endif %}>
+  <form class="modal-card stack-form" method="post" action="/dashboard/knowledge/products">
+    <div class="modal-head">
+      <div>
+        <h2>{% if editing %}Editar {{ editing.name }}{% else %}Nuevo producto o servicio{% endif %}</h2>
+        <p class="muted">El agente usa este catálogo en cada conversación.</p>
+      </div>
+      {% if editing %}
+      <a class="modal-close" href="/dashboard/knowledge/products" aria-label="Cerrar">×</a>
+      {% else %}
+      <button type="button" class="modal-close" data-close-dialog aria-label="Cerrar">×</button>
+      {% endif %}
+    </div>
+    <div class="modal-body">
+      {% if editing %}<input type="hidden" name="product_id" value="{{ editing.id }}" />{% endif %}
+      <label>Nombre
+        <input type="text" name="name" required value="{{ editing.name if editing else '' }}" />
+      </label>
+      <label>Tipo
+        <select name="kind">
+          {% for key, label in kind_labels.items() %}
+          <option value="{{ key }}" {% if editing and editing.kind == key %}selected{% elif not editing and key == 'product' %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Categoría
+        <select name="category">
+          <option value="">—</option>
+          {% for key, label in category_labels.items() %}
+          <option value="{{ key }}" {% if editing and editing.category == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Resumen (lo que el agente debe saber de un vistazo)
+        <textarea name="summary" rows="3">{{ editing.summary if editing else '' }}</textarea>
+      </label>
+      <label>Detalle (perfiles, mínimos, notas)
+        <textarea name="details" rows="6">{{ editing.details if editing else '' }}</textarea>
+      </label>
+      <label>También se conoce como
+        <input type="text" name="aliases" value="{{ editing.aliases if editing else '' }}" placeholder="HR, caliente, hot rolled" />
+      </label>
+      <label>Orden
+        <input type="text" name="sort_order" value="{{ editing.sort_order if editing else '0' }}" />
+      </label>
+      <label class="check-row">
+        <input type="checkbox" name="active" {% if not editing or editing.active %}checked{% endif %} /> Activo (el agente puede usarlo)
+      </label>
+    </div>
+    <div class="modal-foot form-actions">
+      <button class="btn btn-primary" type="submit">Guardar</button>
+      {% if editing %}
+      <a class="btn btn-secondary" href="/dashboard/knowledge/products">Cancelar</a>
+      {% else %}
+      <button class="btn btn-secondary" type="button" data-close-dialog>Cancelar</button>
+      {% endif %}
+    </div>
+  </form>
+</dialog>
 {% endif %}
 
 {% if tab == 'faqs' %}
-<form class="filters" method="get" action="/dashboard/knowledge/faqs">
-  <div class="filters-fields">
-    <label>Buscar
-      <input type="search" name="q" value="{{ q or '' }}" placeholder="pregunta o respuesta" />
-    </label>
-  </div>
-  <button type="submit">Filtrar</button>
-</form>
-
-<form class="card stack-form" method="post" action="/dashboard/knowledge/faqs">
-  <h2>{% if editing %}Editar FAQ #{{ editing.id }}{% else %}Nueva FAQ{% endif %}</h2>
-  {% if editing %}<input type="hidden" name="faq_id" value="{{ editing.id }}" />{% endif %}
-  <label>Pregunta
-    <input type="text" name="question" required value="{{ editing.question if editing else '' }}" />
-  </label>
-  <label>Respuesta
-    <textarea name="answer" rows="5" required>{{ editing.answer if editing else '' }}</textarea>
-  </label>
-  <label>Categoría
-    <input type="text" name="category" value="{{ editing.category if editing else '' }}" />
-  </label>
-  <label class="check-row">
-    <input type="checkbox" name="active" {% if not editing or editing.active %}checked{% endif %} /> Activa (el agente puede usarla)
-  </label>
-  <div class="form-actions">
-    <button class="btn" type="submit">Guardar FAQ</button>
-    {% if editing %}<a class="btn btn-sm" href="/dashboard/knowledge/faqs">Cancelar</a>{% endif %}
-  </div>
-</form>
+<div class="section-toolbar">
+  <form class="filters" method="get" action="/dashboard/knowledge/faqs">
+    <div class="filters-fields">
+      <label>Buscar
+        <input type="search" name="q" value="{{ q or '' }}" placeholder="pregunta o respuesta" />
+      </label>
+    </div>
+    <button type="submit">Filtrar</button>
+  </form>
+  <button type="button" class="btn btn-primary" data-open-dialog="faq-modal">Nueva FAQ</button>
+</div>
 
 {% if faqs %}
 <div class="table-wrap">
@@ -299,7 +310,7 @@
         <th>Pregunta</th>
         <th>Categoría</th>
         <th>Estado</th>
-        <th></th>
+        <th class="actions-col"></th>
       </tr>
     </thead>
     <tbody>
@@ -310,12 +321,14 @@
           <div class="muted small">{{ f.answer|truncate_text(90) }}</div>
         </td>
         <td>{{ f.category or '—' }}</td>
-        <td>{% if f.active %}<span class="product-label">Activa</span>{% else %}<span class="muted">Inactiva</span>{% endif %}</td>
+        <td>{% if f.active %}<span class="badge status-qualified"><span class="badge-dot" aria-hidden="true"></span>Activa</span>{% else %}<span class="badge status-inactive"><span class="badge-dot" aria-hidden="true"></span>Inactiva</span>{% endif %}</td>
         <td class="actions-col">
-          <a class="row-action" href="/dashboard/knowledge/faqs?edit={{ f.id }}">Editar</a>
-          <form method="post" action="/dashboard/knowledge/faqs/{{ f.id }}/toggle" class="inline-form">
-            <button type="submit" class="row-action">{{ 'Desactivar' if f.active else 'Activar' }}</button>
-          </form>
+          <div class="row-actions">
+            <a class="btn btn-ghost btn-sm" href="/dashboard/knowledge/faqs?edit={{ f.id }}">Editar</a>
+            <form method="post" action="/dashboard/knowledge/faqs/{{ f.id }}/toggle" class="inline-form">
+              <button type="submit" class="btn btn-ghost btn-sm">{{ 'Desactivar' if f.active else 'Activar' }}</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}
@@ -323,31 +336,57 @@
   </table>
 </div>
 {% else %}
-<p class="muted">No hay FAQs todavía. El seed las carga al arrancar si la tabla está vacía.</p>
+<div class="empty">
+  <p class="empty-title">No hay FAQs todavía</p>
+  <p class="muted">El seed las carga al arrancar si la tabla está vacía.</p>
+</div>
 {% endif %}
+
+<dialog class="modal" id="faq-modal"{% if editing %} data-open="true" data-dismiss-url="/dashboard/knowledge/faqs"{% endif %}>
+  <form class="modal-card stack-form" method="post" action="/dashboard/knowledge/faqs">
+    <div class="modal-head">
+      <div>
+        <h2>{% if editing %}Editar FAQ #{{ editing.id }}{% else %}Nueva FAQ{% endif %}</h2>
+        <p class="muted">Preguntas que el agente puede responder de inmediato.</p>
+      </div>
+      {% if editing %}
+      <a class="modal-close" href="/dashboard/knowledge/faqs" aria-label="Cerrar">×</a>
+      {% else %}
+      <button type="button" class="modal-close" data-close-dialog aria-label="Cerrar">×</button>
+      {% endif %}
+    </div>
+    <div class="modal-body">
+      {% if editing %}<input type="hidden" name="faq_id" value="{{ editing.id }}" />{% endif %}
+      <label>Pregunta
+        <input type="text" name="question" required value="{{ editing.question if editing else '' }}" />
+      </label>
+      <label>Respuesta
+        <textarea name="answer" rows="5" required>{{ editing.answer if editing else '' }}</textarea>
+      </label>
+      <label>Categoría
+        <input type="text" name="category" value="{{ editing.category if editing else '' }}" />
+      </label>
+      <label class="check-row">
+        <input type="checkbox" name="active" {% if not editing or editing.active %}checked{% endif %} /> Activa (el agente puede usarla)
+      </label>
+    </div>
+    <div class="modal-foot form-actions">
+      <button class="btn btn-primary" type="submit">Guardar FAQ</button>
+      {% if editing %}
+      <a class="btn btn-secondary" href="/dashboard/knowledge/faqs">Cancelar</a>
+      {% else %}
+      <button class="btn btn-secondary" type="button" data-close-dialog>Cancelar</button>
+      {% endif %}
+    </div>
+  </form>
+</dialog>
 {% endif %}
 
 {% if tab == 'skills' %}
-<form class="card stack-form" method="post" action="/dashboard/knowledge/skills">
-  <h2>{% if editing %}Editar skill{% else %}Nuevo skill{% endif %}</h2>
-  {% if editing %}<input type="hidden" name="skill_id" value="{{ editing.id }}" />{% endif %}
-  <label>Título
-    <input type="text" name="title" required value="{{ editing.title if editing else '' }}" />
-  </label>
-  <label>Cuándo aplicar
-    <textarea name="when_to_apply" rows="3">{{ editing.when_to_apply if editing else '' }}</textarea>
-  </label>
-  <label>Cuerpo
-    <textarea name="body" rows="8">{{ editing.body if editing else '' }}</textarea>
-  </label>
-  <label class="check-row">
-    <input type="checkbox" name="active" {% if not editing or editing.active %}checked{% endif %} /> Activo
-  </label>
-  <div class="form-actions">
-    <button class="btn" type="submit">Guardar skill</button>
-    {% if editing %}<a class="btn btn-sm" href="/dashboard/knowledge/skills">Cancelar</a>{% endif %}
-  </div>
-</form>
+<div class="section-toolbar">
+  <p class="muted">Instrucciones que el agente aplica según el tipo de conversación.</p>
+  <button type="button" class="btn btn-primary" data-open-dialog="skill-modal">Nuevo skill</button>
+</div>
 
 {% if skills %}
 <div class="table-wrap">
@@ -357,7 +396,7 @@
         <th>Skill</th>
         <th>Cuándo</th>
         <th>Estado</th>
-        <th></th>
+        <th class="actions-col"></th>
       </tr>
     </thead>
     <tbody>
@@ -365,28 +404,72 @@
       <tr>
         <td class="contact-name">{{ s.title }}</td>
         <td class="muted">{{ s.when_to_apply|truncate_text(80) }}</td>
-        <td>{% if s.active %}<span class="product-label">Activo</span>{% else %}<span class="muted">Inactivo</span>{% endif %}</td>
+        <td>{% if s.active %}<span class="badge status-qualified"><span class="badge-dot" aria-hidden="true"></span>Activo</span>{% else %}<span class="badge status-inactive"><span class="badge-dot" aria-hidden="true"></span>Inactivo</span>{% endif %}</td>
         <td class="actions-col">
-          <a class="row-action" href="/dashboard/knowledge/skills?edit={{ s.id }}">Editar</a>
-          <form method="post" action="/dashboard/knowledge/skills/{{ s.id }}/toggle" class="inline-form">
-            <button type="submit" class="row-action">{{ 'Desactivar' if s.active else 'Activar' }}</button>
-          </form>
+          <div class="row-actions">
+            <a class="btn btn-ghost btn-sm" href="/dashboard/knowledge/skills?edit={{ s.id }}">Editar</a>
+            <form method="post" action="/dashboard/knowledge/skills/{{ s.id }}/toggle" class="inline-form">
+              <button type="submit" class="btn btn-ghost btn-sm">{{ 'Desactivar' if s.active else 'Activar' }}</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+{% else %}
+<div class="empty">
+  <p class="empty-title">No hay skills todavía</p>
+  <p class="muted">Crea el primero para guiar cómo responde el agente.</p>
+</div>
 {% endif %}
+
+<dialog class="modal" id="skill-modal"{% if editing %} data-open="true" data-dismiss-url="/dashboard/knowledge/skills"{% endif %}>
+  <form class="modal-card stack-form" method="post" action="/dashboard/knowledge/skills">
+    <div class="modal-head">
+      <div>
+        <h2>{% if editing %}Editar skill{% else %}Nuevo skill{% endif %}</h2>
+        <p class="muted">Define cuándo aplicarlo y qué debe hacer el agente.</p>
+      </div>
+      {% if editing %}
+      <a class="modal-close" href="/dashboard/knowledge/skills" aria-label="Cerrar">×</a>
+      {% else %}
+      <button type="button" class="modal-close" data-close-dialog aria-label="Cerrar">×</button>
+      {% endif %}
+    </div>
+    <div class="modal-body">
+      {% if editing %}<input type="hidden" name="skill_id" value="{{ editing.id }}" />{% endif %}
+      <label>Título
+        <input type="text" name="title" required value="{{ editing.title if editing else '' }}" />
+      </label>
+      <label>Cuándo aplicar
+        <textarea name="when_to_apply" rows="3">{{ editing.when_to_apply if editing else '' }}</textarea>
+      </label>
+      <label>Cuerpo
+        <textarea name="body" rows="8">{{ editing.body if editing else '' }}</textarea>
+      </label>
+      <label class="check-row">
+        <input type="checkbox" name="active" {% if not editing or editing.active %}checked{% endif %} /> Activo
+      </label>
+    </div>
+    <div class="modal-foot form-actions">
+      <button class="btn btn-primary" type="submit">Guardar skill</button>
+      {% if editing %}
+      <a class="btn btn-secondary" href="/dashboard/knowledge/skills">Cancelar</a>
+      {% else %}
+      <button class="btn btn-secondary" type="button" data-close-dialog>Cancelar</button>
+      {% endif %}
+    </div>
+  </form>
+</dialog>
 {% endif %}
 
 {% if tab == 'files' %}
-<form class="card stack-form" method="post" action="/dashboard/knowledge/files" enctype="multipart/form-data">
-  <h2>Subir archivo</h2>
+<div class="section-toolbar">
   <p class="muted">PDF, TXT o Markdown. El agente podrá consultar el contenido.</p>
-  <input type="file" name="upload" accept=".pdf,.txt,.md,.markdown" required />
-  <button class="btn" type="submit">Subir</button>
-</form>
+  <button type="button" class="btn btn-primary" data-open-dialog="file-modal">Subir archivo</button>
+</div>
 
 {% if files %}
 <div class="table-wrap">
@@ -396,7 +479,7 @@
         <th>Archivo</th>
         <th>Estado</th>
         <th>Tamaño</th>
-        <th></th>
+        <th class="actions-col"></th>
       </tr>
     </thead>
     <tbody>
@@ -406,18 +489,26 @@
           <div class="contact-name">{{ f.filename }}</div>
           {% if f.error_message %}<div class="muted small">{{ f.error_message }}</div>{% endif %}
         </td>
-        <td>{{ f.status }}{% if not f.active %} · inactivo{% endif %}</td>
+        <td>
+          {% if f.active %}
+          <span class="badge status-qualified"><span class="badge-dot" aria-hidden="true"></span>{{ f.status }}</span>
+          {% else %}
+          <span class="badge status-inactive"><span class="badge-dot" aria-hidden="true"></span>{{ f.status }} · inactivo</span>
+          {% endif %}
+        </td>
         <td class="muted">{{ f.byte_size }} B</td>
         <td class="actions-col">
-          <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/reindex" class="inline-form">
-            <button type="submit" class="row-action">Reindexar</button>
-          </form>
-          <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/toggle" class="inline-form">
-            <button type="submit" class="row-action">{{ 'Desactivar' if f.active else 'Activar' }}</button>
-          </form>
-          <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/delete" class="inline-form" onsubmit="return confirm('¿Eliminar este archivo?');">
-            <button type="submit" class="row-action">Borrar</button>
-          </form>
+          <div class="row-actions">
+            <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/reindex" class="inline-form">
+              <button type="submit" class="btn btn-ghost btn-sm">Reindexar</button>
+            </form>
+            <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/toggle" class="inline-form">
+              <button type="submit" class="btn btn-ghost btn-sm">{{ 'Desactivar' if f.active else 'Activar' }}</button>
+            </form>
+            <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/delete" class="inline-form" onsubmit="return confirm('¿Eliminar este archivo?');">
+              <button type="submit" class="btn btn-danger btn-sm">Borrar</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}
@@ -425,8 +516,34 @@
   </table>
 </div>
 {% else %}
-<p class="muted">No hay archivos indexados.</p>
+<div class="empty">
+  <p class="empty-title">No hay archivos indexados</p>
+  <p class="muted">Sube un PDF, TXT o Markdown para que el agente pueda consultarlo.</p>
+</div>
 {% endif %}
+
+<dialog class="modal" id="file-modal">
+  <form class="modal-card stack-form" method="post" action="/dashboard/knowledge/files" enctype="multipart/form-data">
+    <div class="modal-head">
+      <div>
+        <h2>Subir archivo</h2>
+        <p class="muted">PDF, TXT o Markdown. El agente podrá consultar el contenido.</p>
+      </div>
+      <button type="button" class="modal-close" data-close-dialog aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="file-drop">
+        <input type="file" name="upload" accept=".pdf,.txt,.md,.markdown" required />
+        <span class="file-drop-title">Seleccionar archivo</span>
+        <span class="file-drop-hint">PDF, TXT o Markdown</span>
+      </label>
+    </div>
+    <div class="modal-foot form-actions">
+      <button class="btn btn-primary" type="submit">Subir</button>
+      <button class="btn btn-secondary" type="button" data-close-dialog>Cancelar</button>
+    </div>
+  </form>
+</dialog>
 {% endif %}
 
 {% if tab == 'tools' %}

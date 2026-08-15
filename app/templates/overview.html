@@ -5,7 +5,7 @@
   <div>
     <h1>Resumen de prospectos</h1>
   </div>
-  <a class="btn btn-sm" href="/dashboard/leads">Ver lista</a>
+  <a class="btn btn-primary btn-sm" href="/dashboard/leads">Ver lista</a>
 </header>
 
 <section class="metric-grid" aria-label="Indicadores">
@@ -85,7 +85,7 @@
 <section class="card recent-leads-card">
   <div class="transcript-header">
     <h2>Últimos prospectos</h2>
-    <a href="/dashboard/leads" class="row-action">Ver todos →</a>
+    <a href="/dashboard/leads" class="btn btn-ghost btn-sm">Ver todos →</a>
   </div>
   {% if recent_leads %}
   <div class="table-wrap table-wrap-flat">
@@ -96,7 +96,7 @@
           <th>Material</th>
           <th>Estado</th>
           <th>Fecha</th>
-          <th></th>
+          <th class="actions-col"></th>
         </tr>
       </thead>
       <tbody>
@@ -114,7 +114,11 @@
             </span>
           </td>
           <td class="muted small nowrap">{{ c.qualified_at|format_dt }}</td>
-          <td class="actions-col"><a class="row-action" href="/dashboard/leads/{{ c.id }}">Abrir</a></td>
+          <td class="actions-col">
+            <div class="row-actions">
+              <a class="btn btn-ghost btn-sm" href="/dashboard/leads/{{ c.id }}">Abrir</a>
+            </div>
+          </td>
         </tr>
         {% endfor %}
       </tbody>

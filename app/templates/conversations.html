@@ -52,7 +52,7 @@
         <th>Fuente</th>
         <th>Score</th>
         <th>Actualizado</th>
-        <th></th>
+        <th class="actions-col"></th>
       </tr>
     </thead>
     <tbody>
@@ -87,7 +87,11 @@
         </td>
         <td><span class="score-cell{% if c.score >= 8 %} score-high{% elif c.score >= 4 %} score-mid{% endif %}">{{ c.score }}</span></td>
         <td class="muted small nowrap">{{ c.updated_at|format_dt }}</td>
-        <td class="actions-col"><a class="row-action" href="/dashboard/conversations/{{ c.id }}">Abrir <span aria-hidden="true">→</span></a></td>
+        <td class="actions-col">
+          <div class="row-actions">
+            <a class="btn btn-ghost btn-sm" href="/dashboard/conversations/{{ c.id }}">Abrir <span aria-hidden="true">→</span></a>
+          </div>
+        </td>
       </tr>
       {% endfor %}
     </tbody>

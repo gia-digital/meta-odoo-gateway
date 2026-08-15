@@ -50,7 +50,7 @@
         <th>Canal</th>
         <th>Estado</th>
         <th>Fecha</th>
-        <th></th>
+        <th class="actions-col"></th>
       </tr>
     </thead>
     <tbody>
@@ -97,7 +97,11 @@
           </span>
         </td>
         <td class="muted small nowrap">{{ c.qualified_at|format_dt }}</td>
-        <td class="actions-col"><a class="row-action" href="/dashboard/leads/{{ c.id }}">Abrir <span aria-hidden="true">→</span></a></td>
+        <td class="actions-col">
+          <div class="row-actions">
+            <a class="btn btn-ghost btn-sm" href="/dashboard/leads/{{ c.id }}">Abrir <span aria-hidden="true">→</span></a>
+          </div>
+        </td>
       </tr>
       {% endfor %}
     </tbody>

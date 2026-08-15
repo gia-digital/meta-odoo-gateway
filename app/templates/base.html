@@ -20,7 +20,7 @@
           <span class="brand-sub">Prospectos · Ventas</span>
         </div>
       </div>
-      <nav class="nav-pills" aria-label="Principal">
+      <nav class="nav-pills" id="primary-nav" aria-label="Principal">
         <a href="/dashboard/overview" class="{% if active_nav == 'overview' %}active{% endif %}">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 12.5V7.5M6.5 12.5V3.5M10.5 12.5v-3M13.5 12.5V5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           Resumen
@@ -38,17 +38,27 @@
           Knowledge
         </a>
       </nav>
-      <form method="post" action="/dashboard/logout" class="logout-form">
-        <button type="submit">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3H3.5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1H6M10.5 11.5L14 8l-3.5-3.5M14 8H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Salir
+      <div class="topbar-actions">
+        <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="primary-nav" aria-label="Abrir menú">
+          <span class="nav-toggle-bar"></span>
+          <span class="nav-toggle-bar"></span>
+          <span class="nav-toggle-bar"></span>
         </button>
-      </form>
+        <form method="post" action="/dashboard/logout" class="logout-form">
+          <button type="submit">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3H3.5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1H6M10.5 11.5L14 8l-3.5-3.5M14 8H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Salir
+          </button>
+        </form>
+      </div>
     </div>
   </header>
   {% endif %}
   <main class="{% block main_class %}container{% endblock %}">
     {% block content %}{% endblock %}
   </main>
+  {% if active_nav is defined %}
+  <script src="/static/dashboard.js"></script>
+  {% endif %}
 </body>
 </html>
