@@ -1,4 +1,5 @@
 """Configuración SQLAlchemy async."""
+import asyncio
 from typing import AsyncGenerator
 
 from sqlalchemy import text
@@ -9,6 +10,31 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def is_deadlock(exc: BaseException) -> bool:
+    text_exc = str(exc).lower()
+    return "deadlock" in text_exc or "deadlockdetected" in text_exc
+
+
+async def commit_with_retry(session: AsyncSession, *, attempts: int = 3) -> None:
+    """Reintenta commit ante deadlock de Postgres (p. ej. DDL de arranque)."""
+    delay = 0.15
+    last: BaseException | None = None
+    for i in range(attempts):
+        try:
+            await session.commit()
+            return
+        except Exception as exc:
+            last = exc
+            await session.rollback()
+            if not is_deadlock(exc) or i == attempts - 1:
+                raise
+            logger.warning("db_deadlock_retry", attempt=i + 1, error=str(exc))
+            await asyncio.sleep(delay)
+            delay *= 2
+    if last:
+        raise last
 
 
 class Base(DeclarativeBase):
@@ -30,6 +56,44 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             await session.close()
+
+
+async def _column_exists(conn, table: str, column: str) -> bool:
+    result = await conn.execute(
+        text(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = :table
+              AND column_name = :column
+            """
+        ),
+        {"table": table, "column": column},
+    )
+    return result.scalar() is not None
+
+
+async def _index_exists(conn, name: str) -> bool:
+    result = await conn.execute(
+        text(
+            """
+            SELECT 1
+            FROM pg_indexes
+            WHERE schemaname = 'public' AND indexname = :name
+            """
+        ),
+        {"name": name},
+    )
+    return result.scalar() is not None
+
+
+async def _add_column_if_missing(conn, table: str, column: str, ddl: str) -> None:
+    """Evita ALTER (AccessExclusiveLock) si la columna ya existe."""
+    if await _column_exists(conn, table, column):
+        return
+    await conn.execute(text(f"ALTER TABLE {table} {ddl}"))
+    logger.info("schema_column_added", table=table, column=column)
 
 
 async def _ensure_qualification_columns(conn) -> None:
@@ -65,75 +129,67 @@ async def _ensure_qualification_columns(conn) -> None:
             """
         )
     )
-    await conn.execute(
-        text(
-            """
-            ALTER TABLE conversations
-            ADD COLUMN IF NOT EXISTS qualification_source qualificationsource
-                NOT NULL DEFAULT 'none';
-            """
-        )
-    )
-    await conn.execute(
-        text(
-            """
-            ALTER TABLE conversations
-            ADD COLUMN IF NOT EXISTS qualification_reason TEXT;
-            """
-        )
-    )
-    await conn.execute(
-        text(
-            """
-            ALTER TABLE conversations
-            ADD COLUMN IF NOT EXISTS qualified_at TIMESTAMPTZ;
-            """
-        )
-    )
-    await conn.execute(
-        text(
-            """
-            CREATE INDEX IF NOT EXISTS ix_conversations_qualification_source
-            ON conversations (qualification_source);
-            """
-        )
-    )
-    for col_sql in (
-        "ADD COLUMN IF NOT EXISTS product_interest VARCHAR(255)",
-        "ADD COLUMN IF NOT EXISTS lead_summary TEXT",
-        "ADD COLUMN IF NOT EXISTS budget VARCHAR(255)",
-        "ADD COLUMN IF NOT EXISTS timeline VARCHAR(255)",
-        "ADD COLUMN IF NOT EXISTS preferred_contact_time VARCHAR(255)",
+    for column, ddl in (
+        (
+            "qualification_source",
+            "ADD COLUMN qualification_source qualificationsource NOT NULL DEFAULT 'none'",
+        ),
+        ("qualification_reason", "ADD COLUMN qualification_reason TEXT"),
+        ("qualified_at", "ADD COLUMN qualified_at TIMESTAMPTZ"),
+        ("handed_off_at", "ADD COLUMN handed_off_at TIMESTAMPTZ"),
+        ("product_interest", "ADD COLUMN product_interest VARCHAR(255)"),
+        ("lead_summary", "ADD COLUMN lead_summary TEXT"),
+        ("budget", "ADD COLUMN budget VARCHAR(255)"),
+        ("timeline", "ADD COLUMN timeline VARCHAR(255)"),
+        ("preferred_contact_time", "ADD COLUMN preferred_contact_time VARCHAR(255)"),
     ):
-        await conn.execute(text(f"ALTER TABLE conversations {col_sql};"))
+        await _add_column_if_missing(conn, "conversations", column, ddl)
+
+    if not await _index_exists(conn, "ix_conversations_qualification_source"):
+        await conn.execute(
+            text(
+                """
+                CREATE INDEX ix_conversations_qualification_source
+                ON conversations (qualification_source)
+                """
+            )
+        )
 
 
 async def _ensure_knowledge_columns(conn) -> None:
     """Columnas nuevas en knowledge_business (create_all no altera tablas existentes)."""
-    await conn.execute(
-        text(
-            """
-            ALTER TABLE knowledge_business
-            ADD COLUMN IF NOT EXISTS agent_instructions TEXT NOT NULL DEFAULT '';
-            """
-        )
+    await _add_column_if_missing(
+        conn,
+        "knowledge_business",
+        "agent_instructions",
+        "ADD COLUMN agent_instructions TEXT NOT NULL DEFAULT ''",
     )
-    await conn.execute(
-        text(
-            """
-            ALTER TABLE runtime_settings
-            ADD COLUMN IF NOT EXISTS llm_provider VARCHAR(32) NOT NULL DEFAULT '';
-            """
-        )
+    await _add_column_if_missing(
+        conn,
+        "runtime_settings",
+        "llm_provider",
+        "ADD COLUMN llm_provider VARCHAR(32) NOT NULL DEFAULT ''",
     )
+    for column, ddl in (
+        ("debounce_seconds", "ADD COLUMN debounce_seconds DOUBLE PRECISION"),
+        ("reply_max_bubbles", "ADD COLUMN reply_max_bubbles INTEGER"),
+        ("reply_bubble_delay_ms", "ADD COLUMN reply_bubble_delay_ms INTEGER"),
+        ("reply_min_seconds", "ADD COLUMN reply_min_seconds DOUBLE PRECISION"),
+        ("reply_think_seconds", "ADD COLUMN reply_think_seconds DOUBLE PRECISION"),
+        ("reply_chars_per_sec", "ADD COLUMN reply_chars_per_sec DOUBLE PRECISION"),
+        ("reply_max_delay_seconds", "ADD COLUMN reply_max_delay_seconds DOUBLE PRECISION"),
+    ):
+        await _add_column_if_missing(conn, "runtime_settings", column, ddl)
 
 
 async def _ensure_pgvector(conn) -> None:
     await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    if await _index_exists(conn, "ix_knowledge_chunks_embedding"):
+        return
     await conn.execute(
         text(
             """
-            CREATE INDEX IF NOT EXISTS ix_knowledge_chunks_embedding
+            CREATE INDEX ix_knowledge_chunks_embedding
             ON knowledge_chunks
             USING hnsw (embedding vector_cosine_ops)
             """

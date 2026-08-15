@@ -1,20 +1,50 @@
 """Webhook del Agent Bot de Chatwoot."""
 from __future__ import annotations
 
+import asyncio
 import hmac
 import hashlib
 import json
+import random
+import time
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
 
+from app.core.agent_behavior import get_agent_behavior
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.models.conversation import Channel
 from app.models.db import SessionLocal
 from app.models.schemas import NormalizedMessage
 from app.services.chatwoot_client import ChatwootClient, ChatwootError
+from app.services.chatwoot_payload import has_attachments, human_assignee_name
 from app.services.conversation import ConversationService
+from app.services.reply_bubbles import (
+    first_send_wait_seconds,
+    next_bubble_wait_seconds,
+    split_reply_bubbles,
+)
+from app.services.turn_guard import (
+    debounce_payloads,
+    has_newer_inbound,
+    is_agent_error_reason,
+    is_stale_handoff,
+    record_agent_failure,
+    record_agent_success,
+)
+
+ATTACHMENT_REPLY = (
+    "Recibí su archivo. ¿Puede describirlo por texto para poder ayudarle?"
+)
+AGENT_RETRY_REPLY = (
+    "Disculpe, tengo un problema técnico momentáneo. "
+    "¿Puede repetir su mensaje en un momento?"
+)
+AGENT_HANDOFF_REPLY = (
+    "Disculpe, tengo un problema técnico. "
+    "En breve un asesor de GIA le atenderá."
+)
 
 router = APIRouter(prefix="/webhook", tags=["chatwoot"])
 logger = get_logger(__name__)
@@ -156,29 +186,127 @@ def _contact_identity(payload: Dict[str, Any]) -> Tuple[str, Optional[str], Opti
     )
 
 
+def _merge_incoming_texts(batch: list) -> str:
+    texts: list[str] = []
+    for item in batch:
+        content = _incoming_content(item)
+        if content and content.strip() and (not texts or texts[-1] != content.strip()):
+            texts.append(content.strip())
+    return "\n".join(texts)
+
+
+async def _maybe_resume_open_unassigned(
+    payload: Dict[str, Any], cw_conv_id: int, status_conv: str
+) -> bool:
+    """
+    True = no atender (humano tiene el hilo o handoff reciente).
+    False = seguir; puede haber vuelto Chatwoot a pending.
+    """
+    if not status_conv or status_conv in ("pending", ""):
+        return False
+
+    assignee = human_assignee_name(payload)
+    if status_conv != "open":
+        logger.info(
+            "chatwoot_skip_not_pending",
+            conversation_id=cw_conv_id,
+            status=status_conv,
+            reason="not_pending",
+            assignee=assignee,
+        )
+        return True
+    if assignee:
+        logger.info(
+            "chatwoot_skip_not_pending",
+            conversation_id=cw_conv_id,
+            status=status_conv,
+            reason="human_assigned",
+            assignee=assignee,
+        )
+        return True
+
+    external_user_id, user_name, _, _ = _contact_identity(payload)
+    async with SessionLocal() as db:
+        service = ConversationService(db)
+        conv = await service.get_or_create(
+            channel=Channel.whatsapp,
+            external_user_id=external_user_id,
+            user_name=user_name,
+        )
+        our_handed = conv.status.value == "handed_off"
+        stale = is_stale_handoff(conv.handed_off_at)
+        agent_err = is_agent_error_reason(conv.qualification_reason)
+        if our_handed and not stale and not agent_err:
+            logger.info(
+                "chatwoot_skip_not_pending",
+                conversation_id=cw_conv_id,
+                status=status_conv,
+                reason="awaiting_human",
+                handed_off_at=str(conv.handed_off_at) if conv.handed_off_at else None,
+            )
+            return True
+        if our_handed:
+            await service.resume_bot(conv)
+        resume_reason = (
+            "stale_handoff" if stale else ("agent_error" if agent_err else "unassigned_open")
+        )
+    try:
+        async with ChatwootClient() as cw:
+            await cw.set_status(cw_conv_id, "pending")
+    except Exception as exc:
+        logger.error(
+            "chatwoot_resume_status_failed",
+            conversation_id=cw_conv_id,
+            error=str(exc),
+        )
+    logger.info(
+        "chatwoot_auto_resumed",
+        conversation_id=cw_conv_id,
+        reason=resume_reason,
+    )
+    return False
+
+
 async def _process_incoming_message(payload: Dict[str, Any]) -> None:
     settings = get_settings()
     if not settings.chatwoot_enabled:
         return
 
-    content = _incoming_content(payload)
-    if not content or not content.strip():
-        logger.info("chatwoot_skip_empty_content")
-        return
-
-    if not _is_incoming_event(payload):
-        logger.info("chatwoot_skip_non_incoming")
-        return
-
-    status_conv = _conversation_status(payload)
-    # Solo responder mientras el bot tiene el hilo (pending). Si ya está open, humano.
-    if status_conv and status_conv not in ("pending", ""):
-        logger.info("chatwoot_skip_not_pending", status=status_conv)
-        return
-
     cw_conv_id = _conversation_id(payload)
     if not cw_conv_id:
         logger.warning("chatwoot_missing_conversation_id")
+        return
+
+    batch = await debounce_payloads(cw_conv_id, payload)
+    if batch is None:
+        logger.info("chatwoot_debounced", conversation_id=cw_conv_id)
+        return
+
+    incoming_batch = [item for item in batch if _is_incoming_event(item)]
+    if not incoming_batch:
+        logger.info("chatwoot_skip_non_incoming", conversation_id=cw_conv_id)
+        return
+
+    payload = incoming_batch[-1]
+    content = _merge_incoming_texts(incoming_batch)
+    attached = any(has_attachments(item) for item in incoming_batch)
+    started_at = time.monotonic()
+
+    status_conv = _conversation_status(payload)
+    if await _maybe_resume_open_unassigned(payload, cw_conv_id, status_conv):
+        return
+    # Tras auto-resume el payload puede seguir diciendo open; el bot ya retomó.
+    if status_conv == "open":
+        status_conv = "pending"
+
+    if not content:
+        if attached:
+            content = ATTACHMENT_REPLY
+            await _reply_without_agent(
+                payload, cw_conv_id, content, started_at=started_at
+            )
+            return
+        logger.info("chatwoot_skip_empty_content", conversation_id=cw_conv_id)
         return
 
     external_user_id, user_name, user_phone, user_email = _contact_identity(payload)
@@ -206,12 +334,15 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
         await service.add_inbound_message(conv, nm)
         await service.process_after_message(conv)
 
-        # Chatwoot pending = el bot vuelve a tener el hilo. Si el gateway la había
-        # marcado handed_off (p. ej. error del agente), reactivar.
+        # Chatwoot pending = el bot vuelve a tener el hilo.
         if status_conv == "pending" and conv.status.value == "handed_off":
             await service.resume_bot(conv)
         elif conv.status.value == "handed_off":
-            logger.info("chatwoot_skip_already_handed_off", conversation_id=conv.id)
+            logger.info(
+                "chatwoot_skip_already_handed_off",
+                conversation_id=conv.id,
+                chatwoot_conversation_id=cw_conv_id,
+            )
             return
 
         from app.services.gia_agent import BotContext, run_gia_agent
@@ -233,30 +364,167 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
                 user_message=content.strip(),
                 history_messages=conv.messages,
             )
+            record_agent_success(cw_conv_id)
         except Exception as exc:
-            logger.exception("chatwoot_agent_run_failed", error=str(exc))
-            reply = (
-                "Disculpe, tengo un problema técnico momentáneo. "
-                "En breve un asesor de GIA le atenderá."
+            fails = record_agent_failure(cw_conv_id)
+            logger.exception(
+                "chatwoot_agent_run_failed",
+                error=str(exc),
+                conversation_id=cw_conv_id,
+                fail_count=fails,
             )
-            try:
-                async with ChatwootClient() as cw:
-                    await cw.handoff_to_human(cw_conv_id)
-                await service.mark_handed_off(conv, reason=f"agent_error: {exc}")
-            except Exception as handoff_exc:
-                logger.error("chatwoot_error_handoff_failed", error=str(handoff_exc))
+            threshold = settings.agent_error_handoff_threshold
+            if threshold > 0 and fails >= threshold:
+                reply = AGENT_HANDOFF_REPLY
+                try:
+                    async with ChatwootClient() as cw:
+                        await cw.handoff_to_human(
+                            cw_conv_id,
+                            note=(
+                                f"Handoff por {fails} errores seguidos del agente: {exc}"
+                            ),
+                        )
+                    await service.mark_handed_off(conv, reason=f"agent_error: {exc}")
+                except Exception as handoff_exc:
+                    logger.error(
+                        "chatwoot_error_handoff_failed",
+                        error=str(handoff_exc),
+                        conversation_id=cw_conv_id,
+                    )
+            else:
+                reply = AGENT_RETRY_REPLY
 
         try:
-            async with ChatwootClient() as cw:
-                sent = await cw.send_message(cw_conv_id, reply)
+            await _deliver_reply(
+                service, conv, cw_conv_id, reply, started_at=started_at
+            )
+        except ChatwootError as exc:
+            logger.error(
+                "chatwoot_reply_failed",
+                error=str(exc),
+                conversation_id=cw_conv_id,
+            )
+
+
+async def _deliver_reply(
+    service,
+    conv,
+    cw_conv_id: int,
+    reply: str,
+    *,
+    started_at: Optional[float] = None,
+) -> None:
+    """Envía 1..N burbujas con pausa de escritura; aborta si llegó otro inbound."""
+    behavior = await get_agent_behavior()
+    bubbles = split_reply_bubbles(
+        reply, max_bubbles=behavior.reply_max_bubbles
+    )
+    if not bubbles:
+        return
+    elapsed = (time.monotonic() - started_at) if started_at else 0.0
+    span = max(
+        0.0,
+        float(behavior.reply_max_delay_seconds) - float(behavior.reply_min_seconds),
+    )
+    jitter = random.uniform(0.0, min(4.0, span)) if span else 0.0
+    first_wait = first_send_wait_seconds(
+        bubbles[0],
+        elapsed=elapsed,
+        think=behavior.reply_think_seconds,
+        chars_per_sec=behavior.reply_chars_per_sec,
+        min_total=behavior.reply_min_seconds,
+        max_wait=behavior.reply_max_delay_seconds,
+        jitter=jitter,
+    )
+    if first_wait:
+        await asyncio.sleep(first_wait)
+    if has_newer_inbound(cw_conv_id):
+        logger.info("chatwoot_reply_superseded", conversation_id=cw_conv_id)
+        return
+
+    min_gap = max(0, int(behavior.reply_bubble_delay_ms)) / 1000.0
+    async with ChatwootClient() as cw:
+        for i, bubble in enumerate(bubbles):
+            if has_newer_inbound(cw_conv_id):
+                logger.info(
+                    "chatwoot_reply_superseded",
+                    conversation_id=cw_conv_id,
+                    sent=i,
+                )
+                return
+            if i:
+                gap = next_bubble_wait_seconds(
+                    bubble,
+                    chars_per_sec=behavior.reply_chars_per_sec,
+                    min_wait=min_gap,
+                    max_wait=min(5.0, behavior.reply_max_delay_seconds),
+                )
+                if gap:
+                    await asyncio.sleep(gap)
+                if has_newer_inbound(cw_conv_id):
+                    logger.info(
+                        "chatwoot_reply_superseded",
+                        conversation_id=cw_conv_id,
+                        sent=i,
+                    )
+                    return
+            sent = await cw.send_message(cw_conv_id, bubble)
             await service.add_outbound_message(
                 conv,
-                reply,
+                bubble,
                 external_message_id=str(sent.get("id") or "") or None,
                 raw=sent if isinstance(sent, dict) else {},
             )
+    logger.info(
+        "chatwoot_reply_delivered",
+        conversation_id=cw_conv_id,
+        bubbles=len(bubbles),
+        first_wait_s=round(first_wait, 2),
+        llm_s=round(elapsed, 2),
+    )
+
+
+async def _reply_without_agent(
+    payload: Dict[str, Any],
+    cw_conv_id: int,
+    reply: str,
+    *,
+    started_at: Optional[float] = None,
+) -> None:
+    """Respuesta fija (p. ej. adjunto sin texto) sin llamar al LLM."""
+    external_user_id, user_name, user_phone, _ = _contact_identity(payload)
+    async with SessionLocal() as db:
+        service = ConversationService(db)
+        conv = await service.get_or_create(
+            channel=Channel.whatsapp,
+            external_user_id=external_user_id,
+            user_name=user_name,
+        )
+        await service.add_inbound_message(
+            conv,
+            NormalizedMessage(
+                channel=Channel.whatsapp.value,
+                external_user_id=external_user_id,
+                text="[archivo adjunto]",
+                external_message_id=str(
+                    (payload.get("message") or {}).get("id") or payload.get("id") or ""
+                )
+                or None,
+                user_name=user_name,
+                user_phone=user_phone,
+                raw=payload,
+            ),
+        )
+        try:
+            await _deliver_reply(
+                service, conv, cw_conv_id, reply, started_at=started_at
+            )
         except ChatwootError as exc:
-            logger.error("chatwoot_reply_failed", error=str(exc))
+            logger.error(
+                "chatwoot_reply_failed",
+                error=str(exc),
+                conversation_id=cw_conv_id,
+            )
 
 
 @router.post("/chatwoot", status_code=200)

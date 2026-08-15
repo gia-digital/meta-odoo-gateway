@@ -116,6 +116,7 @@ async def test_qualify_lead_sets_structured_lead_fields(monkeypatch):
         qualification_source=QualificationSource.none,
         qualification_reason=None,
         qualified_at=None,
+        handed_off_at=None,
         product_interest=None,
         lead_summary=None,
         budget=None,
@@ -155,6 +156,7 @@ async def test_qualify_lead_sets_structured_lead_fields(monkeypatch):
     assert result.timeline == "Este mes"
     assert result.preferred_contact_time == "Mañanas"
     assert result.qualified_at is not None
+    assert result.handed_off_at is not None
     db.commit.assert_awaited()
     get_settings.cache_clear()
 
@@ -177,6 +179,7 @@ async def test_create_lead_from_payload_uses_whatsapp_id_as_phone(monkeypatch):
         qualification_source=QualificationSource.none,
         qualification_reason=None,
         qualified_at=None,
+        handed_off_at=None,
         product_interest=None,
         lead_summary=None,
         budget=None,

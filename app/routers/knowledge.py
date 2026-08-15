@@ -9,6 +9,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.agent_behavior import (
+    get_agent_behavior,
+    parse_behavior_form,
+    public_behavior_view,
+)
 from app.core.config import get_settings
 from app.core.llm_runtime import (
     compose_agent_model,
@@ -525,6 +530,60 @@ async def knowledge_model_save(
         anthropic_api_key=anthropic_stored,
     )
     return _redirect("model", "Modelo y llaves actualizados")
+
+
+@router.get("/agent", response_class=HTMLResponse, name="dashboard_knowledge_agent")
+async def knowledge_agent(
+    request: Request,
+    notice: str = "",
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+):
+    behavior = await get_agent_behavior(db)
+    return templates.TemplateResponse(
+        "knowledge.html",
+        {
+            "request": request,
+            "tab": "agent",
+            "active_nav": "knowledge",
+            "notice": notice,
+            "agent": public_behavior_view(behavior),
+        },
+    )
+
+
+@router.post("/agent", name="dashboard_knowledge_agent_save")
+async def knowledge_agent_save(
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+    debounce_seconds: str = Form(""),
+    reply_max_bubbles: str = Form(""),
+    reply_bubble_delay_ms: str = Form(""),
+    reply_min_seconds: str = Form(""),
+    reply_think_seconds: str = Form(""),
+    reply_chars_per_sec: str = Form(""),
+    reply_max_delay_seconds: str = Form(""),
+    reset_defaults: Optional[str] = Form(default=None),
+):
+    fields = parse_behavior_form(
+        {
+            "debounce_seconds": debounce_seconds,
+            "reply_max_bubbles": reply_max_bubbles,
+            "reply_bubble_delay_ms": reply_bubble_delay_ms,
+            "reply_min_seconds": reply_min_seconds,
+            "reply_think_seconds": reply_think_seconds,
+            "reply_chars_per_sec": reply_chars_per_sec,
+            "reply_max_delay_seconds": reply_max_delay_seconds,
+        },
+        reset=reset_defaults == "on",
+    )
+    await upsert_runtime_settings(db, **fields)
+    notice = (
+        "Tiempos del agente restaurados a los defaults del servidor"
+        if reset_defaults == "on"
+        else "Configuración del agente actualizada"
+    )
+    return _redirect("agent", notice)
 
 
 @router.get("/tools", response_class=HTMLResponse, name="dashboard_knowledge_tools")

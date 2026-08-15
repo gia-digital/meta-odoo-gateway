@@ -21,10 +21,12 @@ async def lifespan(app: FastAPI):
     setup_logging()
     await init_db()
     try:
+        from app.core.agent_behavior import load_agent_behavior
         from app.core.llm_runtime import load_llm_runtime
 
         async with SessionLocal() as db:
             await load_llm_runtime(db)
+            await load_agent_behavior(db)
     except Exception as exc:
         logger.warning("llm_runtime_load_failed", error=str(exc))
 

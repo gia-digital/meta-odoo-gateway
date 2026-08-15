@@ -3,6 +3,11 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 from app.core.llm_runtime import get_llm_runtime
 from app.models.conversation import Channel

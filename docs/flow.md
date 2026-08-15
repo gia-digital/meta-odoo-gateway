@@ -39,8 +39,11 @@ Cliente            Chatwoot         FastAPI           Postgres
    |----------------->|--------------->|                 |
    |                  |                | escalate +      |
    |                  | toggle_status  | handed_off      |
-   |                  | open           |                 |
+   |                  | open + nota    |                 |
    |                  |<---------------|                 |
+   |                  |                | si nadie asigna |
+   |                  | pending otra   | (N minutos)     |
+   |                  | vez            |                 |
 ```
 
 ## Decisiones de diseño

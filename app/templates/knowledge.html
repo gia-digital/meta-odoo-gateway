@@ -18,6 +18,7 @@
   <a href="/dashboard/knowledge" class="{% if tab == 'overview' %}active{% endif %}">Resumen</a>
   <a href="/dashboard/knowledge/instructions" class="{% if tab == 'instructions' %}active{% endif %}">Instrucciones</a>
   <a href="/dashboard/knowledge/model" class="{% if tab == 'model' %}active{% endif %}">Modelo y llaves</a>
+  <a href="/dashboard/knowledge/agent" class="{% if tab == 'agent' %}active{% endif %}">Agente</a>
   <a href="/dashboard/knowledge/products" class="{% if tab == 'products' %}active{% endif %}">Productos</a>
   <a href="/dashboard/knowledge/business" class="{% if tab == 'business' %}active{% endif %}">Negocio</a>
   <a href="/dashboard/knowledge/faqs" class="{% if tab == 'faqs' %}active{% endif %}">FAQs</a>
@@ -148,6 +149,50 @@
   sync();
 })();
 </script>
+{% endif %}
+
+{% if tab == 'agent' %}
+<form class="card stack-form" method="post" action="/dashboard/knowledge/agent">
+  <h2>Configuración del agente</h2>
+  <p class="muted">Pausas y burbujas de WhatsApp. Si dejas un campo vacío, se usa el default del servidor (<code>.env</code>). Los cambios aplican en el siguiente mensaje.</p>
+  {% if agent.using_dashboard %}
+  <p class="notice-banner" role="status">Hay valores guardados en esta pantalla. Los que dicen “servidor” siguen saliendo del .env.</p>
+  {% endif %}
+  <div class="form-grid-2">
+    <label>Espera por más mensajes (s)
+      <input type="number" name="debounce_seconds" min="0" max="30" step="0.5" value="{{ agent.values.debounce_seconds }}" />
+      <span class="muted small">Default servidor: {{ agent.defaults.debounce_seconds }} · ahora {{ agent.source_labels.debounce_seconds }}</span>
+    </label>
+    <label>Máximo de burbujas por turno
+      <input type="number" name="reply_max_bubbles" min="1" max="8" step="1" value="{{ agent.values.reply_max_bubbles }}" />
+      <span class="muted small">Default servidor: {{ agent.defaults.reply_max_bubbles }} · ahora {{ agent.source_labels.reply_max_bubbles }}</span>
+    </label>
+    <label>Pausa mínima entre burbujas (ms)
+      <input type="number" name="reply_bubble_delay_ms" min="0" max="8000" step="50" value="{{ agent.values.reply_bubble_delay_ms }}" />
+      <span class="muted small">Default servidor: {{ agent.defaults.reply_bubble_delay_ms }} · ahora {{ agent.source_labels.reply_bubble_delay_ms }}</span>
+    </label>
+    <label>Velocidad de escritura (caracteres/s)
+      <input type="number" name="reply_chars_per_sec" min="1" max="80" step="1" value="{{ agent.values.reply_chars_per_sec }}" />
+      <span class="muted small">Default servidor: {{ agent.defaults.reply_chars_per_sec }} · ahora {{ agent.source_labels.reply_chars_per_sec }}</span>
+    </label>
+    <label>Pausa mínima hasta el primer mensaje (s)
+      <input type="number" name="reply_min_seconds" min="0" max="60" step="0.5" value="{{ agent.values.reply_min_seconds }}" />
+      <span class="muted small">Default servidor: {{ agent.defaults.reply_min_seconds }} · ahora {{ agent.source_labels.reply_min_seconds }}</span>
+    </label>
+    <label>Pausa máxima hasta el primer mensaje (s)
+      <input type="number" name="reply_max_delay_seconds" min="0" max="60" step="0.5" value="{{ agent.values.reply_max_delay_seconds }}" />
+      <span class="muted small">Default servidor: {{ agent.defaults.reply_max_delay_seconds }} · ahora {{ agent.source_labels.reply_max_delay_seconds }}</span>
+    </label>
+    <label>Tiempo base de “pensar” (s)
+      <input type="number" name="reply_think_seconds" min="0" max="20" step="0.1" value="{{ agent.values.reply_think_seconds }}" />
+      <span class="muted small">Default servidor: {{ agent.defaults.reply_think_seconds }} · ahora {{ agent.source_labels.reply_think_seconds }}</span>
+    </label>
+  </div>
+  <label class="check-row">
+    <input type="checkbox" name="reset_defaults" /> Volver a los defaults del servidor (.env)
+  </label>
+  <button class="btn btn-primary" type="submit">Guardar</button>
+</form>
 {% endif %}
 
 {% if tab == 'business' %}

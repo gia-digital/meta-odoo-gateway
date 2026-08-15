@@ -70,6 +70,7 @@ El bot **no** mete todas las FAQs en el system prompt. El conocimiento vive en P
 | Negocio | pestaña Negocio |
 | FAQs / Skills / Archivos | CRUD + indexado (embeddings) |
 | Tools | solo lectura (`create_lead`, `escalate_to_human`, `search_knowledge`) |
+| Agente | pausas, burbujas y espera por más mensajes (defaults del `.env`) |
 
 Seed inicial al primer boot desde `agent_info/*.json` y PDFs de presentación (no se ingiere `conversaciones_whatsapp.txt`). Cambios en el dashboard aplican **sin redeploy**.
 
@@ -84,9 +85,17 @@ Por cada mensaje: retrieval híbrido (cosine `<=>` + keywords) e inyección de t
 ## 6. Prueba rápida
 
 1. Escribe al WhatsApp Business conectado a Chatwoot.
-2. Debe aparecer reply del bot en el hilo.
+2. Debe aparecer reply del bot en el hilo (1 mensaje, o 2–3 si el agente decide partir), con una pausa de 8–16 s.
 3. Pide cotización con toneladas → debe crear lead.
 4. Pide “hablar con un asesor” → conversación pasa a **open**.
+
+El bot deja una **nota privada** en el hilo. Si nadie asigna el ticket en
+`CHATWOOT_HANDOFF_RESUME_MINUTES` (15 por defecto), vuelve a **pending**.
+Un error puntual del LLM **no** abre el ticket; solo tras
+`AGENT_ERROR_HANDOFF_THRESHOLD` fallos seguidos.
+
+En droplets de 1 GB el API corre con **1 worker** uvicorn. No subir
+`--workers` sin una cola externa (Redis): debounce y contadores van en memoria.
 
 ## 7. Troubleshooting
 
@@ -94,7 +103,9 @@ Por cada mensaje: retrieval híbrido (cosine `<=>` + keywords) e inyección de t
 |---------|----------------|
 | Chatwoot: *error with the agent bot* + logs `401` en `/webhook/chatwoot` | Firma HMAC inválida. Chatwoot firma `HMAC(secret, "{timestamp}.{body}")` con `X-Chatwoot-Signature` + `X-Chatwoot-Timestamp`. Confirma que `CHATWOOT_WEBHOOK_SECRET` sea el **secret del bot** (no el access token). |
 | Desbloqueo rápido | Vacía `CHATWOOT_WEBHOOK_SECRET=` en `.env`, recrea el contenedor `api`, vuelve a probar. Luego restaura el secret con un deploy que tenga la verificación correcta. |
-| Bot no responde pero HTTP 200 | Conversación no está en status `pending`, o falta `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`. |
+| Bot no responde pero HTTP 200 | Conversación `open` **y** asignada a un humano, o handoff reciente sin asignar (ventana de resume). Logs: `chatwoot_skip_not_pending` con `reason` y `conversation_id`. Falta de API key. |
+| Hilo `open` sin respuesta humana | Esperar la ventana de resume, o poner status **Pending** a mano. No abrir tickets `pending` solo para mirarlos (pasa a `open`). |
+| Adjunto / audio sin texto | El bot pide descripción por texto (`chatwoot_skip_empty_content` solo si no hay attachments). |
 | RAG vacío / no respeta catálogo | Ver `/dashboard/knowledge` (FAQs activas, chunks > 0). Seed corre al arrancar si las tablas están vacías. Sin `OPENAI_API_KEY` no hay embeddings (solo keyword). |
 
 ## 8. Dependencias

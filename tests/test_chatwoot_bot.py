@@ -1,19 +1,37 @@
 """Tests del webhook Chatwoot Agent Bot (sin llamar LLM)."""
+import asyncio
 import hashlib
 import hmac
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from app.models.db import is_deadlock
 from app.routers.chatwoot_webhook import (
     _contact_identity,
     _conversation_id,
     _incoming_content,
     _is_incoming_event,
+    _merge_incoming_texts,
     _message_type_is_incoming,
     _verify_chatwoot_signature,
 )
+from app.services.chatwoot_payload import has_attachments, human_assignee_name
+from app.services.turn_guard import (
+    debounce_payloads,
+    is_agent_error_reason,
+    is_stale_handoff,
+    record_agent_failure,
+    record_agent_success,
+    reset_for_tests,
+)
 from app.services.agent_knowledge import _faq_question, _format_faqs
 from app.services.gia_agent import _parse_model, history_to_input
+from app.services.reply_bubbles import (
+    first_send_wait_seconds,
+    next_bubble_wait_seconds,
+    split_reply_bubbles,
+)
 
 
 def test_message_type_incoming_variants():
@@ -189,3 +207,152 @@ async def test_create_lead_chatwoot_source(monkeypatch):
     assert result is fake_conv
     assert fake_conv.qualification_source == QualificationSource.chatwoot_agent
     get_settings.cache_clear()
+
+
+def test_human_assignee_and_attachments():
+    assert human_assignee_name({"conversation": {"status": "open"}}) is None
+    assert (
+        human_assignee_name(
+            {"meta": {"assignee": {"type": "agent_bot", "name": "GIA"}}}
+        )
+        is None
+    )
+    assert (
+        human_assignee_name(
+            {
+                "conversation": {
+                    "meta": {"assignee": {"type": "user", "name": "Ana"}}
+                }
+            }
+        )
+        == "Ana"
+    )
+    assert has_attachments({"message": {"attachments": [{"id": 1}]}}) is True
+    assert has_attachments({"content": "hola"}) is False
+
+
+def test_merge_incoming_and_agent_error_reason():
+    batch = [
+        {"message_type": "incoming", "content": "Hola"},
+        {"message_type": "incoming", "content": "Hola"},
+        {"message_type": "incoming", "content": "¿tienen lámina?"},
+    ]
+    assert _merge_incoming_texts(batch) == "Hola\n¿tienen lámina?"
+    assert is_agent_error_reason("agent_error: timeout") is True
+    assert is_agent_error_reason("Qualified by Chatwoot Agent Bot") is False
+
+
+def test_stale_handoff_window(monkeypatch):
+    monkeypatch.setenv("CHATWOOT_HANDOFF_RESUME_MINUTES", "15")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    now = datetime(2026, 8, 15, 19, 20, tzinfo=timezone.utc)
+    recent = now - timedelta(minutes=5)
+    old = now - timedelta(minutes=16)
+    assert is_stale_handoff(recent, now=now) is False
+    assert is_stale_handoff(old, now=now) is True
+    assert is_stale_handoff(None, now=now) is True
+    get_settings.cache_clear()
+
+
+def test_is_deadlock_helper():
+    assert is_deadlock(Exception("deadlock detected")) is True
+    assert is_deadlock(Exception("unique violation")) is False
+
+
+@pytest.mark.asyncio
+async def test_debounce_keeps_latest_batch(monkeypatch):
+    monkeypatch.setenv("CHATWOOT_DEBOUNCE_SECONDS", "0.05")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.core.agent_behavior import invalidate_agent_behavior
+
+    invalidate_agent_behavior()
+    reset_for_tests()
+    first_task = asyncio.create_task(debounce_payloads(99, {"content": "a"}))
+    await asyncio.sleep(0.01)
+    second_task = asyncio.create_task(debounce_payloads(99, {"content": "b"}))
+    first, second = await asyncio.gather(first_task, second_task)
+    assert first is None
+    assert second == [{"content": "a"}, {"content": "b"}]
+    reset_for_tests()
+    invalidate_agent_behavior()
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_agent_fail_count_resets(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    reset_for_tests()
+    assert record_agent_failure(7) == 1
+    assert record_agent_failure(7) == 2
+    record_agent_success(7)
+    assert record_agent_failure(7) == 1
+    reset_for_tests()
+    get_settings.cache_clear()
+
+
+def test_split_reply_bubbles_only_when_model_marks():
+    assert split_reply_bubbles("Solo un mensaje.") == ["Solo un mensaje."]
+    # Misma idea en varios renglones: un solo mensaje.
+    assert split_reply_bubbles(
+        "Buen día.\n\nManejamos lámina galvanizada.\n\n¿Qué medida busca?"
+    ) == ["Buen día.\n\nManejamos lámina galvanizada.\n\n¿Qué medida busca?"]
+    assert split_reply_bubbles(
+        "Buen día, gracias por escribir.\n---\n¿Qué calibre necesita?"
+    ) == ["Buen día, gracias por escribir.", "¿Qué calibre necesita?"]
+    many = split_reply_bubbles("A\n---\nB\n---\nC\n---\nD\n---\nE", max_bubbles=3)
+    assert many == ["A", "B", "C\n\nD\n\nE"]
+
+
+def test_first_send_wait_counts_llm_time():
+    # Mínimo 8s de total; si el LLM ya tardó 2s, faltan ~6s.
+    wait = first_send_wait_seconds(
+        "Sí, ¿qué calibre busca?",
+        elapsed=2.0,
+        think=1.2,
+        chars_per_sec=16.0,
+        min_total=8.0,
+        max_wait=16.0,
+    )
+    assert 5.8 <= wait <= 6.3
+    # Tope 16s de total: texto largo no espera más.
+    long_text = "x" * 800
+    wait_long = first_send_wait_seconds(
+        long_text,
+        elapsed=2.0,
+        think=1.2,
+        chars_per_sec=16.0,
+        min_total=8.0,
+        max_wait=16.0,
+    )
+    assert wait_long == 14.0
+    # LLM ya pasó el mínimo: no se añade pausa.
+    assert (
+        first_send_wait_seconds(
+            "Ok",
+            elapsed=10.0,
+            think=1.2,
+            chars_per_sec=16.0,
+            min_total=8.0,
+            max_wait=16.0,
+        )
+        == 0.0
+    )
+    gap = next_bubble_wait_seconds(
+        "¿Le parece bien esa medida?",
+        chars_per_sec=16.0,
+        min_wait=0.7,
+        max_wait=5.0,
+    )
+    assert 0.7 <= gap <= 3.0

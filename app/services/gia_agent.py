@@ -142,7 +142,13 @@ def _build_tools():
             bot.handed_off = True
             try:
                 async with ChatwootClient() as cw:
-                    await cw.handoff_to_human(bot.chatwoot_conversation_id)
+                    await cw.handoff_to_human(
+                        bot.chatwoot_conversation_id,
+                        note=(
+                            f"Lead creado y escalado. Motivo: {reason}. "
+                            f"{summary}".strip()
+                        ),
+                    )
             except Exception as exc:
                 logger.error(
                     "agent_create_lead_handoff_failed",
@@ -175,7 +181,10 @@ def _build_tools():
         bot.handed_off = True
         try:
             async with ChatwootClient() as cw:
-                await cw.handoff_to_human(bot.chatwoot_conversation_id)
+                await cw.handoff_to_human(
+                    bot.chatwoot_conversation_id,
+                    note=f"Escalado por el agente. Motivo: {reason}",
+                )
         except Exception as exc:
             logger.error(
                 "agent_escalate_chatwoot_failed",
@@ -298,7 +307,9 @@ async def run_gia_agent(
         parts.append(
             f"Historial reciente:\n{transcript}\n\n"
             f"Nuevo mensaje del cliente:\n{user_message}\n\n"
-            "Responde solo el mensaje para el cliente (sin prefijos)."
+            "Responde solo el texto para el cliente (sin prefijos). "
+            "Un mensaje si es la misma idea. Parte con una línea --- "
+            "solo si un asesor en WhatsApp mandaría otro mensaje aparte."
         )
     else:
         parts.append(user_message)

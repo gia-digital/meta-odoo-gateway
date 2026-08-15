@@ -1582,6 +1582,7 @@ dd.mono {
 .stack-form input[type="text"],
 .stack-form input[type="search"],
 .stack-form input[type="password"],
+.stack-form input[type="number"],
 .stack-form select,
 .stack-form textarea,
 .filters input[type="search"] {
@@ -1606,6 +1607,16 @@ dd.mono {
 }
 
 .stack-form textarea { resize: vertical; min-height: 4.5rem; }
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem 1rem;
+}
+
+@media (max-width: 720px) {
+  .form-grid-2 { grid-template-columns: 1fr; }
+}
 
 .filters input[type="search"] {
   min-width: 0;

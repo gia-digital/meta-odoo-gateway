@@ -47,6 +47,21 @@ class Settings(BaseSettings):
     chatwoot_account_id: int = 0
     chatwoot_bot_token: str = ""
     chatwoot_webhook_secret: str = ""
+    # Junta mensajes rápidos del mismo hilo antes de llamar al LLM (1 worker).
+    chatwoot_debounce_seconds: float = 4.0
+    # Fallos seguidos del agente antes de abrir el ticket (0 = nunca por error).
+    agent_error_handoff_threshold: int = 3
+    # Si el handoff sigue sin asignar, el bot retoma el hilo (0 = no auto-retomar).
+    chatwoot_handoff_resume_minutes: int = 15
+    # Tope de burbujas si el LLM las marca con ---.
+    chatwoot_reply_max_bubbles: int = 4
+    # Piso entre burbujas; el delay real simula escritura.
+    chatwoot_reply_bubble_delay_ms: int = 700
+    # Tiempo percibido hasta el primer envío (el LLM cuenta). Rango 8–16 s.
+    chatwoot_reply_min_seconds: float = 8.0
+    chatwoot_reply_think_seconds: float = 1.2
+    chatwoot_reply_chars_per_sec: float = 16.0
+    chatwoot_reply_max_delay_seconds: float = 16.0
 
     # LLM (OpenAI Agents SDK): openai/* → Responses API; anthropic/* → LiteLLM
     # Examples: openai/gpt-5.6-luna | openai/gpt-4.1-mini | anthropic/claude-sonnet-4-20250514

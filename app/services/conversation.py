@@ -7,6 +7,7 @@ Une:
 - Calificación por el agente GIA (Chatwoot)
 - Creación de leads en Odoo (solo si ODOO_ENABLED=true)
 """
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -16,6 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.models.db import commit_with_retry, is_deadlock
 from app.models.conversation import (
     Channel,
     Conversation,
@@ -69,7 +71,7 @@ class ConversationService:
             qualification_source=QualificationSource.none,
         )
         self.db.add(conv)
-        await self.db.commit()
+        await commit_with_retry(self.db)
         await self.db.refresh(conv, ["messages"])
         logger.info("conversation_created", id=conv.id, channel=channel.value)
         return conv
@@ -91,7 +93,7 @@ class ConversationService:
         if message.user_phone and not conversation.user_phone:
             conversation.user_phone = message.user_phone
 
-        await self.db.commit()
+        await commit_with_retry(self.db)
         await self.db.refresh(conversation, ["messages"])
         return msg
 
@@ -120,7 +122,7 @@ class ConversationService:
             if score_result.notify_human and conversation.odoo_lead_id:
                 await self._handoff_to_human(conversation)
 
-        await self.db.commit()
+        await commit_with_retry(self.db)
 
     async def qualify_lead(
         self,
@@ -183,6 +185,8 @@ class ConversationService:
 
         if handed_off:
             conversation.status = ConversationStatus.handed_off
+            if getattr(conversation, "handed_off_at", None) is None:
+                conversation.handed_off_at = datetime.now(timezone.utc)
         elif conversation.status == ConversationStatus.active:
             conversation.status = ConversationStatus.qualified
 
@@ -194,7 +198,7 @@ class ConversationService:
                 "signals": [s.model_dump() for s in score_result.signals]
             }
 
-        await self.db.commit()
+        await commit_with_retry(self.db)
         await self.db.refresh(conversation)
 
         logger.info(
@@ -263,25 +267,44 @@ class ConversationService:
         external_message_id: Optional[str] = None,
         raw: Optional[dict] = None,
     ) -> Message:
-        msg = Message(
-            conversation_id=conversation.id,
-            direction=Direction.outbound,
-            body=body,
-            external_message_id=external_message_id,
-            raw_payload=raw or {},
-        )
-        self.db.add(msg)
-        await self.db.commit()
-        await self.db.refresh(conversation, ["messages"])
-        return msg
+        last_exc: Optional[Exception] = None
+        for attempt in range(3):
+            msg = Message(
+                conversation_id=conversation.id,
+                direction=Direction.outbound,
+                body=body,
+                external_message_id=external_message_id,
+                raw_payload=raw or {},
+            )
+            self.db.add(msg)
+            try:
+                await self.db.commit()
+                await self.db.refresh(conversation, ["messages"])
+                return msg
+            except Exception as exc:
+                last_exc = exc
+                await self.db.rollback()
+                if is_deadlock(exc) and attempt < 2:
+                    logger.warning(
+                        "outbound_deadlock_retry",
+                        conversation_id=conversation.id,
+                        attempt=attempt + 1,
+                    )
+                    await asyncio.sleep(0.2 * (attempt + 1))
+                    continue
+                raise
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("add_outbound_message failed")
 
     async def mark_handed_off(
         self, conversation: Conversation, *, reason: Optional[str] = None
     ) -> Conversation:
         conversation.status = ConversationStatus.handed_off
+        conversation.handed_off_at = datetime.now(timezone.utc)
         if reason:
             conversation.qualification_reason = reason
-        await self.db.commit()
+        await commit_with_retry(self.db)
         await self.db.refresh(conversation)
         logger.info(
             "conversation_handed_off",
@@ -296,7 +319,8 @@ class ConversationService:
             return conversation
         previous = conversation.status.value
         conversation.status = ConversationStatus.active
-        await self.db.commit()
+        conversation.handed_off_at = None
+        await commit_with_retry(self.db)
         await self.db.refresh(conversation)
         logger.info(
             "conversation_bot_resumed",

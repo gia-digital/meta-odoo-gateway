@@ -131,6 +131,54 @@ async def test_catalog_without_key_uses_fallback():
     assert "llave" in anthropic_err.lower()
 
 
+def test_agent_behavior_overlay_and_reset(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    monkeypatch.setenv("CHATWOOT_REPLY_MIN_SECONDS", "8")
+    monkeypatch.setenv("CHATWOOT_REPLY_MAX_DELAY_SECONDS", "16")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.core.agent_behavior import (
+        merge_agent_behavior,
+        parse_behavior_form,
+        public_behavior_view,
+    )
+
+    env_only = merge_agent_behavior(None)
+    assert env_only.reply_min_seconds == 8.0
+    assert env_only.reply_max_delay_seconds == 16.0
+    assert env_only.sources["reply_min_seconds"] == "env"
+
+    row = SimpleNamespace(
+        debounce_seconds=6,
+        reply_max_bubbles=3,
+        reply_bubble_delay_ms=None,
+        reply_min_seconds=10,
+        reply_think_seconds="",
+        reply_chars_per_sec=20,
+        reply_max_delay_seconds=14,
+    )
+    overlay = merge_agent_behavior(row)
+    assert overlay.debounce_seconds == 6
+    assert overlay.reply_min_seconds == 10
+    assert overlay.reply_max_delay_seconds == 14
+    assert overlay.sources["reply_min_seconds"] == "dashboard"
+    assert overlay.sources["reply_think_seconds"] == "env"
+    view = public_behavior_view(overlay)
+    assert view["using_dashboard"] is True
+    assert view["source_labels"]["reply_min_seconds"] == "esta pantalla"
+    assert view["source_labels"]["reply_think_seconds"] == "servidor"
+
+    reset = parse_behavior_form({}, reset=True)
+    assert reset["reply_min_seconds"] is None
+    parsed = parse_behavior_form({"reply_min_seconds": "12,5", "reply_max_bubbles": "2"}, reset=False)
+    assert parsed["reply_min_seconds"] == 12.5
+    assert parsed["reply_max_bubbles"] == 2
+    assert parsed["debounce_seconds"] is None
+    get_settings.cache_clear()
+
+
 def test_public_view_never_includes_raw_key(monkeypatch):
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")

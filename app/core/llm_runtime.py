@@ -179,11 +179,15 @@ async def upsert_runtime_settings(db: AsyncSession, **fields) -> RuntimeSettings
         row = RuntimeSettings()
         db.add(row)
     for key, val in fields.items():
-        setattr(row, key, val if val is not None else "")
+        setattr(row, key, val)
     await db.commit()
     await db.refresh(row)
     invalidate_llm_runtime()
+    from app.core.agent_behavior import invalidate_agent_behavior, load_agent_behavior
+
+    invalidate_agent_behavior()
     await load_llm_runtime(db)
+    await load_agent_behavior(db)
     logger.info(
         "llm_runtime_updated",
         provider=(row.llm_provider or "").strip() or "env",
