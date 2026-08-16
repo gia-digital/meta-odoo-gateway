@@ -11,6 +11,7 @@ from typing import Any, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.business_hours import client_handoff_guidance, hours_prompt_block
 from app.core.config import get_settings
 from app.core.llm_runtime import LlmRuntime, get_llm_runtime
 from app.core.logging import get_logger
@@ -161,6 +162,11 @@ def _build_tools():
             conversation_id=conv.id,
             handed_off=handed_off,
         )
+        if handed_off:
+            return (
+                f"Lead registrado (id interno {conv.id}, status={conv.status.value}). "
+                f"{client_handoff_guidance()} No menciones IDs internos."
+            )
         return (
             f"Lead registrado (id interno {conv.id}, status={conv.status.value}). "
             "Confirma al cliente que un asesor le contactará; no menciones IDs internos."
@@ -173,6 +179,7 @@ def _build_tools():
     ) -> str:
         """
         Escala la conversación a un asesor humano en Chatwoot (abre el ticket).
+        Tú sigues contestando hasta que un humano escriba al cliente.
         Usa cuando hace falta cotización formal, datos bancarios, reclamación,
         cliente con vendedor, o el cliente pide hablar con una persona.
         """
@@ -194,18 +201,14 @@ def _build_tools():
             )
             return (
                 f"Conversación marcada como escalada en el gateway, pero Chatwoot "
-                f"falló al abrir el ticket: {exc}. Indica al cliente que un asesor "
-                "le contactará en breve."
+                f"falló al abrir el ticket: {exc}. {client_handoff_guidance()}"
             )
         logger.info(
             "agent_tool_escalate",
             conversation_id=bot.conversation.id,
             reason=reason,
         )
-        return (
-            "Conversación entregada a un asesor humano en Chatwoot. "
-            "Di al cliente que en breve le atenderá un asesor de GIA."
-        )
+        return client_handoff_guidance()
 
     @function_tool
     async def search_knowledge(
@@ -308,6 +311,7 @@ async def run_gia_agent(
     from agents import Runner
 
     instructions = await build_agent_instructions(ctx.db)
+    instructions = f"{instructions}\n\n---\n\n{hours_prompt_block()}"
     hits = await retrieve_knowledge(ctx.db, user_message)
     retrieved = format_hits(hits)
     runtime = await get_llm_runtime(ctx.db)

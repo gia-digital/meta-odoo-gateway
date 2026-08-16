@@ -313,13 +313,45 @@ class ConversationService:
         )
         return conversation
 
-    async def resume_bot(self, conversation: Conversation) -> Conversation:
-        """Vuelve a status active para que el Agent Bot pueda atender de nuevo."""
-        if conversation.status == ConversationStatus.active:
+    async def mark_human_replied(self, conversation: Conversation) -> Conversation:
+        """Mute: un asesor ya escribió en público al cliente."""
+        if getattr(conversation, "human_replied_at", None):
             return conversation
+        conversation.human_replied_at = datetime.now(timezone.utc)
+        await commit_with_retry(self.db)
+        await self.db.refresh(conversation)
+        logger.info(
+            "conversation_human_replied",
+            conversation_id=conversation.id,
+        )
+        return conversation
+
+    async def clear_human_reply(self, conversation: Conversation) -> Conversation:
+        """Unmute: Chatwoot volvió a pending (el equipo le regresa el hilo al bot)."""
+        if getattr(conversation, "human_replied_at", None) is None:
+            return conversation
+        conversation.human_replied_at = None
+        await commit_with_retry(self.db)
+        await self.db.refresh(conversation)
+        logger.info(
+            "conversation_human_reply_cleared",
+            conversation_id=conversation.id,
+        )
+        return conversation
+
+    async def resume_bot(self, conversation: Conversation) -> Conversation:
+        """Vuelve a status active y quita el mute humano."""
         previous = conversation.status.value
-        conversation.status = ConversationStatus.active
-        conversation.handed_off_at = None
+        changed = False
+        if conversation.status != ConversationStatus.active:
+            conversation.status = ConversationStatus.active
+            conversation.handed_off_at = None
+            changed = True
+        if getattr(conversation, "human_replied_at", None) is not None:
+            conversation.human_replied_at = None
+            changed = True
+        if not changed:
+            return conversation
         await commit_with_retry(self.db)
         await self.db.refresh(conversation)
         logger.info(

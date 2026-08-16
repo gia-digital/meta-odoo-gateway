@@ -18,7 +18,10 @@ from app.models.conversation import Channel
 from app.models.db import SessionLocal
 from app.models.schemas import NormalizedMessage
 from app.services.chatwoot_client import ChatwootClient, ChatwootError
-from app.services.chatwoot_payload import has_attachments, human_assignee_name
+from app.services.chatwoot_payload import (
+    has_attachments,
+    is_human_public_outgoing,
+)
 from app.services.conversation import ConversationService
 from app.services.reply_bubbles import (
     first_send_wait_seconds,
@@ -26,12 +29,13 @@ from app.services.reply_bubbles import (
     split_reply_bubbles,
 )
 from app.services.turn_guard import (
+    clear_human_reply_guard,
     debounce_payloads,
     has_newer_inbound,
-    is_agent_error_reason,
-    is_stale_handoff,
+    human_has_replied,
     record_agent_failure,
     record_agent_success,
+    record_human_reply,
 )
 
 ATTACHMENT_REPLY = (
@@ -43,7 +47,8 @@ AGENT_RETRY_REPLY = (
 )
 AGENT_HANDOFF_REPLY = (
     "Disculpe, tengo un problema técnico. "
-    "En breve un asesor de GIA le atenderá."
+    "Un asesor de GIA puede tomar este chat; "
+    "si prefiere, ¿puede repetir su mensaje?"
 )
 
 router = APIRouter(prefix="/webhook", tags=["chatwoot"])
@@ -195,36 +200,35 @@ def _merge_incoming_texts(batch: list) -> str:
     return "\n".join(texts)
 
 
-async def _maybe_resume_open_unassigned(
-    payload: Dict[str, Any], cw_conv_id: int, status_conv: str
-) -> bool:
-    """
-    True = no atender (humano tiene el hilo o handoff reciente).
-    False = seguir; puede haber vuelto Chatwoot a pending.
-    """
-    if not status_conv or status_conv in ("pending", ""):
+def _is_inactive_status(status_conv: str) -> bool:
+    return status_conv in ("resolved", "snoozed")
+
+
+async def _history_has_human_reply(cw_conv_id: int) -> bool:
+    """Red de seguridad: el Agent Bot a veces no recibe outgoing humanos."""
+    try:
+        async with ChatwootClient() as cw:
+            messages = await cw.list_messages(cw_conv_id)
+    except Exception as exc:
+        logger.error(
+            "chatwoot_list_messages_failed",
+            conversation_id=cw_conv_id,
+            error=str(exc),
+        )
         return False
+    return any(is_human_public_outgoing(item) for item in messages)
 
-    assignee = human_assignee_name(payload)
-    if status_conv != "open":
-        logger.info(
-            "chatwoot_skip_not_pending",
-            conversation_id=cw_conv_id,
-            status=status_conv,
-            reason="not_pending",
-            assignee=assignee,
-        )
-        return True
-    if assignee:
-        logger.info(
-            "chatwoot_skip_not_pending",
-            conversation_id=cw_conv_id,
-            status=status_conv,
-            reason="human_assigned",
-            assignee=assignee,
-        )
-        return True
 
+async def _process_human_outgoing(payload: Dict[str, Any]) -> None:
+    """Mute persistente cuando un asesor escribe en público al cliente."""
+    settings = get_settings()
+    if not settings.chatwoot_enabled:
+        return
+    cw_conv_id = _conversation_id(payload)
+    if not cw_conv_id:
+        logger.warning("chatwoot_human_outgoing_missing_conversation_id")
+        return
+    record_human_reply(cw_conv_id)
     external_user_id, user_name, _, _ = _contact_identity(payload)
     async with SessionLocal() as db:
         service = ConversationService(db)
@@ -233,38 +237,11 @@ async def _maybe_resume_open_unassigned(
             external_user_id=external_user_id,
             user_name=user_name,
         )
-        our_handed = conv.status.value == "handed_off"
-        stale = is_stale_handoff(conv.handed_off_at)
-        agent_err = is_agent_error_reason(conv.qualification_reason)
-        if our_handed and not stale and not agent_err:
-            logger.info(
-                "chatwoot_skip_not_pending",
-                conversation_id=cw_conv_id,
-                status=status_conv,
-                reason="awaiting_human",
-                handed_off_at=str(conv.handed_off_at) if conv.handed_off_at else None,
-            )
-            return True
-        if our_handed:
-            await service.resume_bot(conv)
-        resume_reason = (
-            "stale_handoff" if stale else ("agent_error" if agent_err else "unassigned_open")
-        )
-    try:
-        async with ChatwootClient() as cw:
-            await cw.set_status(cw_conv_id, "pending")
-    except Exception as exc:
-        logger.error(
-            "chatwoot_resume_status_failed",
-            conversation_id=cw_conv_id,
-            error=str(exc),
-        )
+        await service.mark_human_replied(conv)
     logger.info(
-        "chatwoot_auto_resumed",
+        "chatwoot_human_replied",
         conversation_id=cw_conv_id,
-        reason=resume_reason,
     )
-    return False
 
 
 async def _process_incoming_message(payload: Dict[str, Any]) -> None:
@@ -293,14 +270,23 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
     started_at = time.monotonic()
 
     status_conv = _conversation_status(payload)
-    if await _maybe_resume_open_unassigned(payload, cw_conv_id, status_conv):
+    if _is_inactive_status(status_conv):
+        logger.info(
+            "chatwoot_skip_inactive",
+            conversation_id=cw_conv_id,
+            status=status_conv,
+        )
         return
-    # Tras auto-resume el payload puede seguir diciendo open; el bot ya retomó.
-    if status_conv == "open":
-        status_conv = "pending"
 
     if not content:
         if attached:
+            if human_has_replied(cw_conv_id) and status_conv != "pending":
+                logger.info(
+                    "chatwoot_skip_human_replied",
+                    conversation_id=cw_conv_id,
+                    reason="attachment",
+                )
+                return
             content = ATTACHMENT_REPLY
             await _reply_without_agent(
                 payload, cw_conv_id, content, started_at=started_at
@@ -334,14 +320,26 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
         await service.add_inbound_message(conv, nm)
         await service.process_after_message(conv)
 
-        # Chatwoot pending = el bot vuelve a tener el hilo.
-        if status_conv == "pending" and conv.status.value == "handed_off":
-            await service.resume_bot(conv)
-        elif conv.status.value == "handed_off":
+        if status_conv == "pending":
+            clear_human_reply_guard(cw_conv_id)
+            if getattr(conv, "human_replied_at", None):
+                await service.clear_human_reply(conv)
+        elif getattr(conv, "human_replied_at", None) or human_has_replied(cw_conv_id):
+            record_human_reply(cw_conv_id)
             logger.info(
-                "chatwoot_skip_already_handed_off",
+                "chatwoot_skip_human_replied",
                 conversation_id=conv.id,
                 chatwoot_conversation_id=cw_conv_id,
+            )
+            return
+        elif status_conv == "open" and await _history_has_human_reply(cw_conv_id):
+            record_human_reply(cw_conv_id)
+            await service.mark_human_replied(conv)
+            logger.info(
+                "chatwoot_skip_human_replied",
+                conversation_id=conv.id,
+                chatwoot_conversation_id=cw_conv_id,
+                source="history",
             )
             return
 
@@ -438,6 +436,9 @@ async def _deliver_reply(
     )
     if first_wait:
         await asyncio.sleep(first_wait)
+    if human_has_replied(cw_conv_id):
+        logger.info("chatwoot_reply_aborted_human", conversation_id=cw_conv_id)
+        return
     if has_newer_inbound(cw_conv_id):
         logger.info("chatwoot_reply_superseded", conversation_id=cw_conv_id)
         return
@@ -445,6 +446,13 @@ async def _deliver_reply(
     min_gap = max(0, int(behavior.reply_bubble_delay_ms)) / 1000.0
     async with ChatwootClient() as cw:
         for i, bubble in enumerate(bubbles):
+            if human_has_replied(cw_conv_id):
+                logger.info(
+                    "chatwoot_reply_aborted_human",
+                    conversation_id=cw_conv_id,
+                    sent=i,
+                )
+                return
             if has_newer_inbound(cw_conv_id):
                 logger.info(
                     "chatwoot_reply_superseded",
@@ -461,6 +469,13 @@ async def _deliver_reply(
                 )
                 if gap:
                     await asyncio.sleep(gap)
+                if human_has_replied(cw_conv_id):
+                    logger.info(
+                        "chatwoot_reply_aborted_human",
+                        conversation_id=cw_conv_id,
+                        sent=i,
+                    )
+                    return
                 if has_newer_inbound(cw_conv_id):
                     logger.info(
                         "chatwoot_reply_superseded",
@@ -577,8 +592,14 @@ async def chatwoot_agent_webhook(
         if event == "message_updated":
             logger.info("chatwoot_ignored_event", chatwoot_event=event)
             return {"status": "ignored", "reason": "message_updated"}
-        background_tasks.add_task(_process_incoming_message, payload)
-        return {"status": "ok", "queued": "true"}
+        if is_human_public_outgoing(payload):
+            background_tasks.add_task(_process_human_outgoing, payload)
+            return {"status": "ok", "queued": "true", "kind": "human_outgoing"}
+        if _is_incoming_event(payload) or event == "":
+            background_tasks.add_task(_process_incoming_message, payload)
+            return {"status": "ok", "queued": "true"}
+        logger.info("chatwoot_ignored_event", chatwoot_event=event or "unknown")
+        return {"status": "ignored", "reason": "non_incoming"}
 
     logger.info("chatwoot_ignored_event", chatwoot_event=event or "unknown")
     return {"status": "ignored", "event": event or "unknown"}

@@ -2,8 +2,6 @@
 import asyncio
 import hashlib
 import hmac
-from datetime import datetime, timedelta, timezone
-
 import pytest
 
 from app.models.db import is_deadlock
@@ -16,11 +14,14 @@ from app.routers.chatwoot_webhook import (
     _message_type_is_incoming,
     _verify_chatwoot_signature,
 )
-from app.services.chatwoot_payload import has_attachments, human_assignee_name
+from app.services.chatwoot_payload import (
+    has_attachments,
+    human_assignee_name,
+    is_human_public_outgoing,
+)
 from app.services.turn_guard import (
     debounce_payloads,
     is_agent_error_reason,
-    is_stale_handoff,
     record_agent_failure,
     record_agent_success,
     reset_for_tests,
@@ -242,20 +243,95 @@ def test_merge_incoming_and_agent_error_reason():
     assert is_agent_error_reason("Qualified by Chatwoot Agent Bot") is False
 
 
-def test_stale_handoff_window(monkeypatch):
-    monkeypatch.setenv("CHATWOOT_HANDOFF_RESUME_MINUTES", "15")
-    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
-    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
-    from app.core.config import get_settings
+def test_human_public_outgoing_detection():
+    assert (
+        is_human_public_outgoing(
+            {
+                "message_type": "outgoing",
+                "private": False,
+                "sender": {"type": "user", "name": "Luis"},
+                "content": "Hola, soy Luis",
+            }
+        )
+        is True
+    )
+    assert (
+        is_human_public_outgoing(
+            {
+                "message": {
+                    "message_type": 1,
+                    "private": True,
+                    "sender": {"type": "user", "name": "Luis"},
+                    "content": "nota interna",
+                }
+            }
+        )
+        is False
+    )
+    assert (
+        is_human_public_outgoing(
+            {
+                "message_type": "outgoing",
+                "private": False,
+                "sender": {"type": "agent_bot", "name": "GIA"},
+                "content": "bot",
+            }
+        )
+        is False
+    )
+    assert (
+        is_human_public_outgoing(
+            {"message": {"message_type": 0, "content": "Hola del cliente"}}
+        )
+        is False
+    )
 
-    get_settings.cache_clear()
-    now = datetime(2026, 8, 15, 19, 20, tzinfo=timezone.utc)
-    recent = now - timedelta(minutes=5)
-    old = now - timedelta(minutes=16)
-    assert is_stale_handoff(recent, now=now) is False
-    assert is_stale_handoff(old, now=now) is True
-    assert is_stale_handoff(None, now=now) is True
-    get_settings.cache_clear()
+
+@pytest.mark.asyncio
+async def test_list_messages_unwraps_payload():
+    from app.services.chatwoot_client import ChatwootClient
+
+    class FakeResp:
+        status_code = 200
+        content = b"{}"
+        text = "{}"
+
+        def json(self):
+            return {
+                "payload": [
+                    {
+                        "message_type": 1,
+                        "private": False,
+                        "sender": {"type": "user", "name": "Luis"},
+                        "content": "Hola, soy Luis",
+                    },
+                    {
+                        "message_type": 1,
+                        "private": True,
+                        "sender": {"type": "user", "name": "Luis"},
+                        "content": "nota",
+                    },
+                    {
+                        "message_type": 1,
+                        "private": False,
+                        "sender": {"type": "agent_bot", "name": "GIA"},
+                        "content": "bot",
+                    },
+                ]
+            }
+
+    class FakeHTTP:
+        async def get(self, url):
+            return FakeResp()
+
+    cw = ChatwootClient.__new__(ChatwootClient)
+    cw._client = FakeHTTP()
+    cw.settings = type("S", (), {"chatwoot_account_id": 1})()
+    msgs = await cw.list_messages(9)
+    assert len(msgs) == 3
+    assert is_human_public_outgoing(msgs[0]) is True
+    assert is_human_public_outgoing(msgs[1]) is False
+    assert is_human_public_outgoing(msgs[2]) is False
 
 
 def test_is_deadlock_helper():

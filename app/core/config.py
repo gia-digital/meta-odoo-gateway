@@ -51,8 +51,6 @@ class Settings(BaseSettings):
     chatwoot_debounce_seconds: float = 4.0
     # Fallos seguidos del agente antes de abrir el ticket (0 = nunca por error).
     agent_error_handoff_threshold: int = 3
-    # Si el handoff sigue sin asignar, el bot retoma el hilo (0 = no auto-retomar).
-    chatwoot_handoff_resume_minutes: int = 15
     # Tope de burbujas si el LLM las marca con ---.
     chatwoot_reply_max_bubbles: int = 4
     # Piso entre burbujas; el delay real simula escritura.

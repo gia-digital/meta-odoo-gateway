@@ -137,6 +137,7 @@ async def _ensure_qualification_columns(conn) -> None:
         ("qualification_reason", "ADD COLUMN qualification_reason TEXT"),
         ("qualified_at", "ADD COLUMN qualified_at TIMESTAMPTZ"),
         ("handed_off_at", "ADD COLUMN handed_off_at TIMESTAMPTZ"),
+        ("human_replied_at", "ADD COLUMN human_replied_at TIMESTAMPTZ"),
         ("product_interest", "ADD COLUMN product_interest VARCHAR(255)"),
         ("lead_summary", "ADD COLUMN lead_summary TEXT"),
         ("budget", "ADD COLUMN budget VARCHAR(255)"),

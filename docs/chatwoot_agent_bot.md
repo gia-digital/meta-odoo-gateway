@@ -79,7 +79,7 @@ Por cada mensaje: retrieval híbrido (cosine `<=>` + keywords) e inyección de t
 ## 5. Tools del agente
 
 - **create_lead** — registra prospecto calificado (`qualification_source=chatwoot_agent`); visible en `/dashboard/leads`.
-- **escalate_to_human** — marca handoff en DB + `toggle_status` → `open` en Chatwoot.
+- **escalate_to_human** — marca handoff en DB + `toggle_status` → `open` en Chatwoot. El bot **sigue contestando** hasta que un humano escriba al cliente.
 - **search_knowledge** — RAG sobre FAQs/skills/files en pgvector.
 - **send_catalog** — adjunta `Carta Presentación GIA.pdf` al hilo (WhatsApp) cuando piden catálogo o carta de presentación. No es la lista de precios ni la presentación corporativa 2027. Cada conversación sube el PDF de nuevo (WhatsApp no reutiliza el archivo entre clientes); en el mismo hilo no se reenvía.
 
@@ -88,13 +88,16 @@ Por cada mensaje: retrieval híbrido (cosine `<=>` + keywords) e inyección de t
 1. Escribe al WhatsApp Business conectado a Chatwoot.
 2. Debe aparecer reply del bot en el hilo (1 mensaje, o 2–3 si el agente decide partir), con una pausa de 8–16 s.
 3. Pide cotización con toneladas → debe crear lead.
-4. Pide “hablar con un asesor” → conversación pasa a **open**.
+4. Pide “hablar con un asesor” → conversación pasa a **open**; el bot **sigue** hasta que un asesor escriba.
 5. Pide el catálogo / carta de presentación → el bot adjunta el PDF.
 
-El bot deja una **nota privada** en el hilo. Si nadie asigna el ticket en
-`CHATWOOT_HANDOFF_RESUME_MINUTES` (15 por defecto), vuelve a **pending**.
-Un error puntual del LLM **no** abre el ticket; solo tras
+El bot deja una **nota privada** en el hilo. **Mirar o asignar no calla al bot;
+escribir al cliente sí.** Para devolverle el hilo al bot, pon el ticket en
+**Pending**. Un error puntual del LLM **no** abre el ticket; solo tras
 `AGENT_ERROR_HANDOFF_THRESHOLD` fallos seguidos.
+
+Horario laboral (orientativo, no es promesa): L–V 8:00–19:00 y sábados
+9:00–13:00, Ciudad de México. Fuera de horario el agente no dice “en breve”.
 
 En droplets de 1 GB el API corre con **1 worker** uvicorn. No subir
 `--workers` sin una cola externa (Redis): debounce y contadores van en memoria.
@@ -105,8 +108,8 @@ En droplets de 1 GB el API corre con **1 worker** uvicorn. No subir
 |---------|----------------|
 | Chatwoot: *error with the agent bot* + logs `401` en `/webhook/chatwoot` | Firma HMAC inválida. Chatwoot firma `HMAC(secret, "{timestamp}.{body}")` con `X-Chatwoot-Signature` + `X-Chatwoot-Timestamp`. Confirma que `CHATWOOT_WEBHOOK_SECRET` sea el **secret del bot** (no el access token). |
 | Desbloqueo rápido | Vacía `CHATWOOT_WEBHOOK_SECRET=` en `.env`, recrea el contenedor `api`, vuelve a probar. Luego restaura el secret con un deploy que tenga la verificación correcta. |
-| Bot no responde pero HTTP 200 | Conversación `open` **y** asignada a un humano, o handoff reciente sin asignar (ventana de resume). Logs: `chatwoot_skip_not_pending` con `reason` y `conversation_id`. Falta de API key. |
-| Hilo `open` sin respuesta humana | Esperar la ventana de resume, o poner status **Pending** a mano. No abrir tickets `pending` solo para mirarlos (pasa a `open`). |
+| Bot no responde pero HTTP 200 | Un humano ya escribió en público (`chatwoot_skip_human_replied`), o el hilo está `resolved`/`snoozed`. Falta de API key. |
+| Hilo `open` y el bot sigue hablando | Esperado hasta que un asesor escriba al cliente. Para callarlo: responder en público. Para devolverlo al bot: status **Pending**. |
 | Adjunto / audio sin texto | El bot pide descripción por texto (`chatwoot_skip_empty_content` solo si no hay attachments). |
 | RAG vacío / no respeta catálogo | Ver `/dashboard/knowledge` (FAQs activas, chunks > 0). Seed corre al arrancar si las tablas están vacías. Sin `OPENAI_API_KEY` no hay embeddings (solo keyword). |
 

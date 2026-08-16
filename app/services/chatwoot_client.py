@@ -1,6 +1,6 @@
 """Cliente HTTP async para la API de Chatwoot (Agent Bot)."""
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -192,30 +192,38 @@ class ChatwootClient:
             return data["payload"]
         return data if isinstance(data, dict) else {}
 
-    async def return_to_pending_if_unassigned(self, conversation_id: int) -> bool:
-        """Vuelve a pending solo si sigue open y sin agente humano."""
-        from app.services.chatwoot_payload import human_assignee_name
-
-        data = await self.fetch_conversation(conversation_id)
-        status = str(data.get("status") or "").lower()
-        if status != "open":
-            return False
-        if human_assignee_name(data):
-            logger.info(
-                "chatwoot_resume_skipped_assigned",
-                conversation_id=conversation_id,
+    async def list_messages(self, conversation_id: int) -> List[Dict[str, Any]]:
+        """Últimos mensajes del hilo (red de seguridad si no llega outgoing al bot)."""
+        assert self._client is not None
+        url = self._account_path(f"/conversations/{conversation_id}/messages")
+        r = await self._client.get(url)
+        if r.status_code >= 400:
+            raise ChatwootError(
+                f"list_messages failed: {r.status_code} {r.text[:300]}"
             )
-            return False
-        await self.set_status(conversation_id, "pending")
-        logger.info("chatwoot_returned_to_pending", conversation_id=conversation_id)
-        return True
+        data = r.json() if r.content else {}
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+        if not isinstance(data, dict):
+            return []
+        payload = data.get("payload")
+        if isinstance(payload, list):
+            return [item for item in payload if isinstance(item, dict)]
+        if isinstance(payload, dict):
+            nested = payload.get("payload") or payload.get("messages")
+            if isinstance(nested, list):
+                return [item for item in nested if isinstance(item, dict)]
+        messages = data.get("messages")
+        if isinstance(messages, list):
+            return [item for item in messages if isinstance(item, dict)]
+        return []
 
     async def handoff_to_human(
         self, conversation_id: int, *, note: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Cambia status a open para que un agente humano tome la conversación.
-        (Conversaciones con Agent Bot nacen en pending.)
+        Cambia status a open para que un asesor pueda tomar la conversación.
+        El bot sigue contestando hasta que un humano escriba en público.
         """
         data = await self.set_status(conversation_id, "open")
         logger.info("chatwoot_handed_off", conversation_id=conversation_id)
@@ -228,7 +236,4 @@ class ChatwootClient:
                     conversation_id=conversation_id,
                     error=str(exc),
                 )
-        from app.services.turn_guard import schedule_handoff_resume
-
-        schedule_handoff_resume(conversation_id)
         return data

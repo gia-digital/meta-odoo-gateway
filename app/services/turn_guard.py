@@ -3,10 +3,8 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
-from app.core.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -15,7 +13,7 @@ _fail_counts: Dict[int, int] = defaultdict(int)
 _buffers: Dict[int, List[dict]] = defaultdict(list)
 _tokens: Dict[int, int] = defaultdict(int)
 _lock = asyncio.Lock()
-_resume_tasks: Dict[int, asyncio.Task] = {}
+_human_replied: Set[int] = set()
 
 
 def record_agent_success(cw_id: int) -> None:
@@ -35,25 +33,17 @@ def is_agent_error_reason(reason: Optional[str]) -> bool:
     return bool(reason) and str(reason).startswith("agent_error:")
 
 
-def is_stale_handoff(
-    handed_off_at: Optional[datetime],
-    *,
-    now: Optional[datetime] = None,
-    minutes: Optional[int] = None,
-) -> bool:
-    """True si el handoff ya superó la ventana para que un humano tome el hilo."""
-    settings = get_settings()
-    window = settings.chatwoot_handoff_resume_minutes if minutes is None else minutes
-    if window <= 0:
-        return False
-    # Sin timestamp (hilos viejos): tratar como vencido para no dejarlos mudos.
-    if handed_off_at is None:
-        return True
-    current = now or datetime.now(timezone.utc)
-    ts = handed_off_at
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
-    return current - ts >= timedelta(minutes=window)
+def record_human_reply(cw_id: int) -> None:
+    """Mute in-process: un humano ya escribió al cliente."""
+    _human_replied.add(cw_id)
+
+
+def clear_human_reply_guard(cw_id: int) -> None:
+    _human_replied.discard(cw_id)
+
+
+def human_has_replied(cw_id: int) -> bool:
+    return cw_id in _human_replied
 
 
 async def debounce_payloads(cw_id: int, payload: dict) -> Optional[List[dict]]:
@@ -81,66 +71,8 @@ def has_newer_inbound(cw_id: int) -> bool:
     return cw_id in _tokens
 
 
-def schedule_handoff_resume(cw_id: int) -> None:
-    """Best-effort: si nadie asigna el hilo, volver a pending. Muere con el proceso."""
-    settings = get_settings()
-    minutes = int(settings.chatwoot_handoff_resume_minutes)
-    if minutes <= 0:
-        return
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return
-    old = _resume_tasks.pop(cw_id, None)
-    if old and not old.done():
-        old.cancel()
-    _resume_tasks[cw_id] = loop.create_task(
-        _resume_if_unassigned(cw_id, minutes),
-        name=f"chatwoot-resume-{cw_id}",
-    )
-
-
-async def _resume_if_unassigned(cw_id: int, minutes: int) -> None:
-    try:
-        await asyncio.sleep(max(1, minutes) * 60)
-        from app.services.chatwoot_client import ChatwootClient
-
-        async with ChatwootClient() as cw:
-            changed = await cw.return_to_pending_if_unassigned(cw_id)
-            if changed:
-                try:
-                    await cw.send_message(
-                        cw_id,
-                        (
-                            "Bot retomó el hilo: nadie lo asignó a tiempo. "
-                            "El siguiente mensaje del cliente lo atiende el agente."
-                        ),
-                        private=True,
-                    )
-                except Exception as note_exc:
-                    logger.error(
-                        "chatwoot_resume_note_failed",
-                        conversation_id=cw_id,
-                        error=str(note_exc),
-                    )
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        logger.error(
-            "chatwoot_auto_resume_failed",
-            conversation_id=cw_id,
-            error=str(exc),
-        )
-    finally:
-        current = _resume_tasks.get(cw_id)
-        if current is asyncio.current_task():
-            _resume_tasks.pop(cw_id, None)
-
-
 def reset_for_tests() -> None:
     _fail_counts.clear()
     _buffers.clear()
     _tokens.clear()
-    for task in list(_resume_tasks.values()):
-        task.cancel()
-    _resume_tasks.clear()
+    _human_replied.clear()

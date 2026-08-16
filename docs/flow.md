@@ -41,9 +41,9 @@ Cliente            Chatwoot         FastAPI           Postgres
    |                  | toggle_status  | handed_off      |
    |                  | open + nota    |                 |
    |                  |<---------------|                 |
-   |                  |                | si nadie asigna |
-   |                  | pending otra   | (N minutos)     |
-   |                  | vez            |                 |
+   |                  |                | bot SIGUE       |
+   |                  |                | hasta que un    |
+   |                  |                | humano escriba  |
 ```
 
 ## Decisiones de diseño

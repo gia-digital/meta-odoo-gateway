@@ -253,6 +253,9 @@ def _webhook_fakes(monkeypatch, *, conv, service, boom=True):
             statuses.append(status)
             return {}
 
+        async def list_messages(self, cid):
+            return []
+
     class FakeSession:
         async def __aenter__(self):
             return MagicMock()
@@ -339,21 +342,67 @@ async def test_third_agent_error_handoffs(monkeypatch):
     assert handoffs == [89]
     service.mark_handed_off.assert_awaited()
     assert sent == [AGENT_RETRY_REPLY, AGENT_RETRY_REPLY, AGENT_HANDOFF_REPLY]
+    assert "en breve" not in AGENT_HANDOFF_REPLY.lower()
     reset_for_tests()
     invalidate_agent_behavior()
     get_settings.cache_clear()
 
 
 @pytest.mark.asyncio
-async def test_open_assigned_stays_skipped(monkeypatch):
+async def test_deliver_reply_skips_when_human_replied(monkeypatch):
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     from app.core.config import get_settings
 
     get_settings.cache_clear()
-    from app.routers.chatwoot_webhook import _maybe_resume_open_unassigned
+    from app.services.turn_guard import record_human_reply, reset_for_tests
+
+    reset_for_tests()
+    record_human_reply(7)
+
+    class FakeCW:
+        async def __aenter__(self):
+            raise AssertionError("no debe abrir Chatwoot si un humano ya contestó")
+
+        async def __aexit__(self, *args):
+            return None
+
+    service = MagicMock()
+    service.add_outbound_message = AsyncMock()
+    monkeypatch.setattr(
+        "app.routers.chatwoot_webhook.get_agent_behavior",
+        AsyncMock(return_value=_fast_behavior()),
+    )
+    monkeypatch.setattr("app.routers.chatwoot_webhook.ChatwootClient", FakeCW)
+    monkeypatch.setattr("app.routers.chatwoot_webhook.has_newer_inbound", lambda _id: False)
+
+    from app.routers.chatwoot_webhook import _deliver_reply
+
+    await _deliver_reply(service, MagicMock(), 7, "Hola", started_at=time.monotonic())
+    service.add_outbound_message.assert_not_awaited()
+    reset_for_tests()
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_open_assigned_bot_still_answers(monkeypatch):
+    monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    monkeypatch.setenv("CHATWOOT_DEBOUNCE_SECONDS", "0")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.core.agent_behavior import invalidate_agent_behavior
+    from app.services.turn_guard import reset_for_tests
+
+    invalidate_agent_behavior()
+    reset_for_tests()
 
     payload = {
+        "event": "message_created",
+        "message_type": "incoming",
+        "content": "¿Siguen ahí?",
         "conversation": {
             "id": 10,
             "status": "open",
@@ -361,64 +410,204 @@ async def test_open_assigned_stays_skipped(monkeypatch):
         },
         "contact": {"name": "Ana", "phone_number": "5215512345678"},
     }
-    assert await _maybe_resume_open_unassigned(payload, 10, "open") is True
+    conv = SimpleNamespace(
+        id=2,
+        status=SimpleNamespace(value="handed_off"),
+        user_name="Ana",
+        user_phone="5215512345678",
+        user_email=None,
+        messages=[],
+        handed_off_at=None,
+        human_replied_at=None,
+        qualification_reason=None,
+    )
+    service = MagicMock()
+    service.get_or_create = AsyncMock(return_value=conv)
+    service.add_inbound_message = AsyncMock()
+    service.process_after_message = AsyncMock()
+    service.add_outbound_message = AsyncMock()
+    service.mark_handed_off = AsyncMock()
+    service.resume_bot = AsyncMock()
+    service.mark_human_replied = AsyncMock()
+    service.clear_human_reply = AsyncMock()
+
+    sent, handoffs, statuses = _webhook_fakes(
+        monkeypatch, conv=conv, service=service, boom=False
+    )
+    monkeypatch.setattr(
+        "app.services.gia_agent.run_gia_agent",
+        AsyncMock(return_value="Sí, aquí sigo. ¿Qué material busca?"),
+    )
+
+    from app.routers.chatwoot_webhook import _process_incoming_message
+
+    await _process_incoming_message(payload)
+    assert handoffs == []
+    assert statuses == []
+    assert sent == ["Sí, aquí sigo. ¿Qué material busca?"]
+    service.resume_bot.assert_not_awaited()
+    reset_for_tests()
+    invalidate_agent_behavior()
     get_settings.cache_clear()
 
 
 @pytest.mark.asyncio
-async def test_open_unassigned_stale_resumes(monkeypatch):
+async def test_open_unassigned_does_not_return_to_pending(monkeypatch):
+    monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    monkeypatch.setenv("CHATWOOT_DEBOUNCE_SECONDS", "0")
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
-    monkeypatch.setenv("CHATWOOT_HANDOFF_RESUME_MINUTES", "15")
     from app.core.config import get_settings
 
     get_settings.cache_clear()
+    from app.core.agent_behavior import invalidate_agent_behavior
+    from app.services.turn_guard import reset_for_tests
+
+    invalidate_agent_behavior()
+    reset_for_tests()
+
+    payload = {
+        "event": "message_created",
+        "message_type": "incoming",
+        "content": "Hola de nuevo",
+        "conversation": {"id": 11, "status": "open"},
+        "contact": {"name": "Ana", "phone_number": "5215512345678"},
+    }
     conv = SimpleNamespace(
         id=3,
         status=SimpleNamespace(value="handed_off"),
         user_name="Ana",
         user_phone="5215512345678",
+        user_email=None,
+        messages=[],
         handed_off_at=None,
+        human_replied_at=None,
         qualification_reason=None,
     )
     service = MagicMock()
     service.get_or_create = AsyncMock(return_value=conv)
+    service.add_inbound_message = AsyncMock()
+    service.process_after_message = AsyncMock()
+    service.add_outbound_message = AsyncMock()
+    service.mark_handed_off = AsyncMock()
     service.resume_bot = AsyncMock()
-    statuses: list[str] = []
+    service.mark_human_replied = AsyncMock()
+    service.clear_human_reply = AsyncMock()
 
-    class FakeCW:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return None
-
-        async def set_status(self, cid, status):
-            statuses.append(status)
-            return {}
-
-    class FakeSession:
-        async def __aenter__(self):
-            return MagicMock()
-
-        async def __aexit__(self, *args):
-            return None
-
-    monkeypatch.setattr("app.routers.chatwoot_webhook.SessionLocal", FakeSession)
-    monkeypatch.setattr(
-        "app.routers.chatwoot_webhook.ConversationService", lambda db: service
+    sent, _, statuses = _webhook_fakes(
+        monkeypatch, conv=conv, service=service, boom=False
     )
-    monkeypatch.setattr("app.routers.chatwoot_webhook.ChatwootClient", FakeCW)
+    monkeypatch.setattr(
+        "app.services.gia_agent.run_gia_agent",
+        AsyncMock(return_value="Buen día. ¿En qué le ayudo?"),
+    )
 
-    from app.routers.chatwoot_webhook import _maybe_resume_open_unassigned
+    from app.routers.chatwoot_webhook import _process_incoming_message
 
-    payload = {
-        "conversation": {"id": 11, "status": "open"},
-        "contact": {"name": "Ana", "phone_number": "5215512345678"},
-    }
-    assert await _maybe_resume_open_unassigned(payload, 11, "open") is False
-    service.resume_bot.assert_awaited()
-    assert statuses == ["pending"]
+    await _process_incoming_message(payload)
+    assert statuses == []
+    assert sent == ["Buen día. ¿En qué le ayudo?"]
+    service.resume_bot.assert_not_awaited()
+    reset_for_tests()
+    invalidate_agent_behavior()
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_human_outgoing_mutes_and_pending_unmutes(monkeypatch):
+    monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    monkeypatch.setenv("CHATWOOT_DEBOUNCE_SECONDS", "0")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.core.agent_behavior import invalidate_agent_behavior
+    from app.services.turn_guard import human_has_replied, reset_for_tests
+
+    invalidate_agent_behavior()
+    reset_for_tests()
+
+    conv = SimpleNamespace(
+        id=5,
+        status=SimpleNamespace(value="handed_off"),
+        user_name="Ana",
+        user_phone="5215512345678",
+        user_email=None,
+        messages=[],
+        handed_off_at=None,
+        human_replied_at=None,
+        qualification_reason=None,
+    )
+    service = MagicMock()
+    service.get_or_create = AsyncMock(return_value=conv)
+    service.add_inbound_message = AsyncMock()
+    service.process_after_message = AsyncMock()
+    service.add_outbound_message = AsyncMock()
+    service.mark_handed_off = AsyncMock()
+    service.resume_bot = AsyncMock()
+
+    async def mark_replied(c):
+        c.human_replied_at = object()
+        return c
+
+    async def clear_replied(c):
+        c.human_replied_at = None
+        return c
+
+    service.mark_human_replied = AsyncMock(side_effect=mark_replied)
+    service.clear_human_reply = AsyncMock(side_effect=clear_replied)
+
+    sent, _, _ = _webhook_fakes(monkeypatch, conv=conv, service=service, boom=False)
+    monkeypatch.setattr(
+        "app.services.gia_agent.run_gia_agent",
+        AsyncMock(return_value="Bot no debería hablar"),
+    )
+
+    from app.routers.chatwoot_webhook import (
+        _process_human_outgoing,
+        _process_incoming_message,
+    )
+
+    await _process_human_outgoing(
+        {
+            "event": "message_created",
+            "message_type": "outgoing",
+            "private": False,
+            "content": "Hola, soy Luis de GIA",
+            "sender": {"type": "user", "name": "Luis"},
+            "conversation": {"id": 12, "status": "open"},
+            "contact": {"name": "Ana", "phone_number": "5215512345678"},
+        }
+    )
+    assert human_has_replied(12) is True
+    service.mark_human_replied.assert_awaited()
+
+    await _process_incoming_message(
+        {
+            "event": "message_created",
+            "message_type": "incoming",
+            "content": "Gracias",
+            "conversation": {"id": 12, "status": "open"},
+            "contact": {"name": "Ana", "phone_number": "5215512345678"},
+        }
+    )
+    assert sent == []
+
+    await _process_incoming_message(
+        {
+            "event": "message_created",
+            "message_type": "incoming",
+            "content": "¿Siguen ahí?",
+            "conversation": {"id": 12, "status": "pending"},
+            "contact": {"name": "Ana", "phone_number": "5215512345678"},
+        }
+    )
+    assert human_has_replied(12) is False
+    service.clear_human_reply.assert_awaited()
+    assert sent == ["Bot no debería hablar"]
+    reset_for_tests()
+    invalidate_agent_behavior()
     get_settings.cache_clear()
 
 
@@ -474,6 +663,160 @@ async def test_attachment_without_text_skips_agent(monkeypatch):
     await _process_incoming_message(payload)
     assert handoffs == []
     assert sent == [ATTACHMENT_REPLY]
+    reset_for_tests()
+    invalidate_agent_behavior()
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_resolved_conversation_skips_bot(monkeypatch):
+    monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    monkeypatch.setenv("CHATWOOT_DEBOUNCE_SECONDS", "0")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.core.agent_behavior import invalidate_agent_behavior
+    from app.services.turn_guard import reset_for_tests
+
+    invalidate_agent_behavior()
+    reset_for_tests()
+
+    payload = {
+        "event": "message_created",
+        "message_type": "incoming",
+        "content": "Hola",
+        "conversation": {"id": 13, "status": "resolved"},
+        "contact": {"name": "Ana", "phone_number": "5215512345678"},
+    }
+    conv = SimpleNamespace(
+        id=6,
+        status=SimpleNamespace(value="handed_off"),
+        user_name="Ana",
+        user_phone="5215512345678",
+        user_email=None,
+        messages=[],
+        handed_off_at=None,
+        human_replied_at=None,
+        qualification_reason=None,
+    )
+    service = MagicMock()
+    service.get_or_create = AsyncMock(return_value=conv)
+    service.add_inbound_message = AsyncMock()
+    service.process_after_message = AsyncMock()
+    service.add_outbound_message = AsyncMock()
+    service.mark_handed_off = AsyncMock()
+    service.resume_bot = AsyncMock()
+    service.mark_human_replied = AsyncMock()
+    service.clear_human_reply = AsyncMock()
+
+    sent, _, _ = _webhook_fakes(monkeypatch, conv=conv, service=service, boom=False)
+
+    async def must_not_run(**kwargs):
+        raise AssertionError("resolved no debe llamar al LLM")
+
+    monkeypatch.setattr("app.services.gia_agent.run_gia_agent", must_not_run)
+
+    from app.routers.chatwoot_webhook import _process_incoming_message
+
+    await _process_incoming_message(payload)
+    assert sent == []
+    service.add_inbound_message.assert_not_awaited()
+    reset_for_tests()
+    invalidate_agent_behavior()
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_open_history_human_reply_mutes_bot(monkeypatch):
+    monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    monkeypatch.setenv("CHATWOOT_DEBOUNCE_SECONDS", "0")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.core.agent_behavior import invalidate_agent_behavior
+    from app.services.turn_guard import human_has_replied, reset_for_tests
+
+    invalidate_agent_behavior()
+    reset_for_tests()
+
+    payload = {
+        "event": "message_created",
+        "message_type": "incoming",
+        "content": "¿Sigue mi cotización?",
+        "conversation": {"id": 14, "status": "open"},
+        "contact": {"name": "Ana", "phone_number": "5215512345678"},
+    }
+    conv = SimpleNamespace(
+        id=7,
+        status=SimpleNamespace(value="handed_off"),
+        user_name="Ana",
+        user_phone="5215512345678",
+        user_email=None,
+        messages=[],
+        handed_off_at=None,
+        human_replied_at=None,
+        qualification_reason=None,
+    )
+    service = MagicMock()
+    service.get_or_create = AsyncMock(return_value=conv)
+    service.add_inbound_message = AsyncMock()
+    service.process_after_message = AsyncMock()
+    service.add_outbound_message = AsyncMock()
+    service.mark_handed_off = AsyncMock()
+    service.resume_bot = AsyncMock()
+
+    async def mark_replied(c):
+        c.human_replied_at = object()
+        return c
+
+    service.mark_human_replied = AsyncMock(side_effect=mark_replied)
+    service.clear_human_reply = AsyncMock()
+
+    sent, _, _ = _webhook_fakes(monkeypatch, conv=conv, service=service, boom=False)
+
+    class HistoryCW:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def send_message(self, cid, content, private=False):
+            sent.append(content)
+            return {"id": len(sent)}
+
+        async def handoff_to_human(self, cid, note=None):
+            return {}
+
+        async def set_status(self, cid, status):
+            return {}
+
+        async def list_messages(self, cid):
+            return [
+                {
+                    "message_type": 1,
+                    "private": False,
+                    "sender": {"type": "user", "name": "Luis"},
+                    "content": "Hola, soy Luis de GIA",
+                }
+            ]
+
+    monkeypatch.setattr("app.routers.chatwoot_webhook.ChatwootClient", HistoryCW)
+    monkeypatch.setattr(
+        "app.services.gia_agent.run_gia_agent",
+        AsyncMock(return_value="el bot no debería hablar"),
+    )
+
+    from app.routers.chatwoot_webhook import _process_incoming_message
+
+    await _process_incoming_message(payload)
+    assert sent == []
+    assert human_has_replied(14) is True
+    service.mark_human_replied.assert_awaited()
     reset_for_tests()
     invalidate_agent_behavior()
     get_settings.cache_clear()

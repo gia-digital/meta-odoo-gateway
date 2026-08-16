@@ -63,6 +63,9 @@ class Conversation(Base):
     handed_off_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    human_replied_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Datos estructurados del lead (tool create_lead / POST /leads)
     product_interest: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
