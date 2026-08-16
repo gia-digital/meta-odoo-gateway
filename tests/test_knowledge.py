@@ -74,7 +74,13 @@ def test_format_hits_includes_product():
 
 def test_registered_tools_include_search_knowledge():
     names = {t["name"] for t in REGISTERED_TOOLS}
-    assert names == {"create_lead", "escalate_to_human", "search_knowledge", "send_catalog"}
+    assert names == {
+        "create_lead",
+        "escalate_to_human",
+        "search_knowledge",
+        "send_catalog",
+        "check_sales_hours",
+    }
 
 
 def test_resolve_agent_instructions_uses_store_or_default():
@@ -88,6 +94,7 @@ def test_resolve_agent_instructions_uses_store_or_default():
     assert "HERRAMIENTAS" in TOOL_RULES
     assert "create_lead" in TOOL_RULES
     assert "send_catalog" in TOOL_RULES
+    assert "check_sales_hours" in TOOL_RULES
 
 
 def test_catalog_filename_is_carta_not_corporate():

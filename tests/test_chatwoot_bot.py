@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import hmac
 import pytest
+from unittest.mock import AsyncMock
 
 from app.models.db import is_deadlock
 from app.routers.chatwoot_webhook import (
@@ -347,10 +348,24 @@ async def test_debounce_keeps_latest_batch(monkeypatch):
     from app.core.config import get_settings
 
     get_settings.cache_clear()
-    from app.core.agent_behavior import invalidate_agent_behavior
+    from app.core.agent_behavior import AgentBehavior, invalidate_agent_behavior
 
     invalidate_agent_behavior()
     reset_for_tests()
+    behavior = AgentBehavior(
+        debounce_seconds=0.05,
+        reply_max_bubbles=4,
+        reply_bubble_delay_ms=0,
+        reply_min_seconds=0.0,
+        reply_think_seconds=0.0,
+        reply_chars_per_sec=100.0,
+        reply_max_delay_seconds=0.0,
+        sources={},
+    )
+    monkeypatch.setattr(
+        "app.core.agent_behavior.get_agent_behavior",
+        AsyncMock(return_value=behavior),
+    )
     first_task = asyncio.create_task(debounce_payloads(99, {"content": "a"}))
     await asyncio.sleep(0.01)
     second_task = asyncio.create_task(debounce_payloads(99, {"content": "b"}))

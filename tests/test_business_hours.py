@@ -6,7 +6,9 @@ import pytest
 
 from app.core.business_hours import (
     HOURS_LABEL,
+    check_proposed_slot,
     client_handoff_guidance,
+    format_next_open,
     hours_prompt_block,
     is_within_hours,
 )
@@ -64,3 +66,28 @@ def test_handoff_guidance_never_promises_en_breve(settings_env):
         assert "le contactará en breve" not in lower
         assert "SIGUES atendiendo" in text
     assert HOURS_LABEL.split("(")[0].strip() in outside
+
+
+def test_sunday_next_window_is_monday_morning(settings_env):
+    now = datetime(2026, 8, 16, 11, 18, tzinfo=TZ)
+    nxt = format_next_open(now)
+    assert "lunes" in nxt
+    assert "8:00" in nxt
+    snap = hours_prompt_block(now)
+    assert "CERRADA" in snap
+    assert "domingo" in snap
+    assert "planta" in snap.lower()
+
+
+def test_proposed_sunday_afternoon_is_closed(settings_env):
+    now = datetime(2026, 8, 16, 11, 18, tzinfo=TZ)
+    text = check_proposed_slot(weekday="domingo", hour=15, minute=0, now=now)
+    assert "FUERA" in text
+    assert "lunes" in text
+    assert "8:00" in text
+
+
+def test_proposed_saturday_morning_is_open(settings_env):
+    now = datetime(2026, 8, 16, 11, 18, tzinfo=TZ)
+    text = check_proposed_slot(weekday="sábado", hour=10, minute=0, now=now)
+    assert "DENTRO" in text

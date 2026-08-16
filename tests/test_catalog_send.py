@@ -84,6 +84,7 @@ def test_build_tools_registers_send_catalog():
         "escalate_to_human",
         "search_knowledge",
         "send_catalog",
+        "check_sales_hours",
     ]
 
 

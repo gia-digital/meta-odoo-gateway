@@ -11,7 +11,11 @@ from typing import Any, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.business_hours import client_handoff_guidance, hours_prompt_block
+from app.core.business_hours import (
+    check_proposed_slot,
+    client_handoff_guidance,
+    hours_prompt_block,
+)
 from app.core.config import get_settings
 from app.core.llm_runtime import LlmRuntime, get_llm_runtime
 from app.core.logging import get_logger
@@ -169,7 +173,8 @@ def _build_tools():
             )
         return (
             f"Lead registrado (id interno {conv.id}, status={conv.status.value}). "
-            "Confirma al cliente que un asesor le contactará; no menciones IDs internos."
+            f"{client_handoff_guidance()} No menciones IDs internos. "
+            "Si aún no llamaste check_sales_hours, úsala antes de hablar de horarios."
         )
 
     @function_tool
@@ -244,7 +249,28 @@ def _build_tools():
         """
         return await deliver_catalog(ctx.context)
 
-    return [create_lead, escalate_to_human, search_knowledge, send_catalog]
+    @function_tool
+    async def check_sales_hours(
+        ctx: RunContextWrapper[BotContext],
+        weekday: str = "",
+        hour: int = -1,
+        minute: int = 0,
+    ) -> str:
+        """
+        Reloj y horario de asesores de GIA (Ciudad de México).
+        Úsala SIEMPRE antes de decir cuándo un asesor puede contactar.
+        Si el cliente propone un momento, pasa weekday (lunes…domingo) y hour (0–23).
+        No inventes franjas. El horario de planta (L-V 9–16) NO es el de ventas.
+        """
+        return check_proposed_slot(weekday=weekday, hour=hour, minute=minute)
+
+    return [
+        create_lead,
+        escalate_to_human,
+        search_knowledge,
+        send_catalog,
+        check_sales_hours,
+    ]
 
 
 def _model_settings_for_openai(model_id: str):

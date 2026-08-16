@@ -11,7 +11,7 @@ WhatsApp → Chatwoot inbox (Agent Bot)
               ↓ POST /webhook/chatwoot
          FastAPI gateway
               ├─ Postgres knowledge (FAQs, negocio, skills, files + pgvector)
-              ├─ tools: create_lead, escalate_to_human, search_knowledge, send_catalog
+              ├─ tools: create_lead, escalate_to_human, search_knowledge, send_catalog, check_sales_hours
               └─ Chatwoot API (mensaje outgoing / adjunto PDF / status open)
 ```
 
@@ -69,7 +69,7 @@ El bot **no** mete todas las FAQs en el system prompt. El conocimiento vive en P
 | Instrucciones / políticas | pestaña Instrucciones (tono, catálogo, mínimos; van al system prompt) |
 | Negocio | pestaña Negocio |
 | FAQs / Skills / Archivos | CRUD + indexado (embeddings) |
-| Tools | solo lectura (`create_lead`, `escalate_to_human`, `search_knowledge`, `send_catalog`) |
+| Tools | solo lectura (`create_lead`, `escalate_to_human`, `search_knowledge`, `send_catalog`, `check_sales_hours`) |
 | Agente | pausas, burbujas y espera por más mensajes (defaults del `.env`) |
 
 Seed inicial al primer boot desde `agent_info/*.json` y PDFs de presentación (no se ingiere `conversaciones_whatsapp.txt`). Cambios en el dashboard aplican **sin redeploy**.
@@ -82,6 +82,7 @@ Por cada mensaje: retrieval híbrido (cosine `<=>` + keywords) e inyección de t
 - **escalate_to_human** — marca handoff en DB + `toggle_status` → `open` en Chatwoot. El bot **sigue contestando** hasta que un humano escriba al cliente.
 - **search_knowledge** — RAG sobre FAQs/skills/files en pgvector.
 - **send_catalog** — adjunta `Carta Presentación GIA.pdf` al hilo (WhatsApp) cuando piden catálogo o carta de presentación. No es la lista de precios ni la presentación corporativa 2027. Cada conversación sube el PDF de nuevo (WhatsApp no reutiliza el archivo entre clientes); en el mismo hilo no se reenvía.
+- **check_sales_hours** — reloj y horario de asesores (L–V 8:00–19:00, sáb 9:00–13:00, CDMX). Úsala antes de decir cuándo contactará un humano; no inventa franjas ni usa el horario de planta.
 
 ## 6. Prueba rápida
 

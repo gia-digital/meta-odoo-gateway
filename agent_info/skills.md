@@ -84,7 +84,7 @@ Cuándo SÍ registrar (cualquiera aplica, y el material es de catálogo):
 
 Antes de registrar:
 1) Confirma los datos de contacto con el cliente
-2) Indica que un asesor de GIA le contactará en el horario acordado
+2) Llama check_sales_hours y di que un asesor de GIA puede contactarle en el próximo horario laboral (no inventes una franja; no uses el horario de planta 9–16). No es una promesa.
 3) Registra UNA vez con el mejor resumen disponible (no esperes datos perfectos si ya hay intención clara)
 
 Datos a incluir:

@@ -37,4 +37,13 @@ REGISTERED_TOOLS = [
             "No usar para lista de precios mensual ni para la presentación corporativa 2027."
         ),
     },
+    {
+        "name": "check_sales_hours",
+        "label": "Consultar horario de ventas",
+        "source": "sistema",
+        "when": (
+            "Antes de decir cuándo un asesor puede contactar, o si el cliente "
+            "propone un día/hora. No inventar franjas ni usar el horario de planta."
+        ),
+    },
 ]
