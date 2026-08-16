@@ -9,7 +9,7 @@ Payloads versionados para el seed de Postgres + pgvector. El Agent Bot de Chatwo
 | `products.json` | Catálogo y servicios → `knowledge_products` |
 | `skills.json` | Skills del agente → `knowledge_skills` |
 | `websites.json` | URLs de referencia |
-| `*.pdf` | Presentaciones indexadas como files |
+| `*.pdf` | Presentaciones indexadas como files. `Carta Presentación GIA.pdf` también se envía al cliente con el tool `send_catalog`. |
 
 **No se ingiere** `conversaciones_whatsapp.txt`. Ver [`docs/chatwoot_agent_bot.md`](../docs/chatwoot_agent_bot.md).
 

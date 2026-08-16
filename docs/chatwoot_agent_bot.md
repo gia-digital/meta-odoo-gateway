@@ -11,8 +11,8 @@ WhatsApp → Chatwoot inbox (Agent Bot)
               ↓ POST /webhook/chatwoot
          FastAPI gateway
               ├─ Postgres knowledge (FAQs, negocio, skills, files + pgvector)
-              ├─ tools: create_lead, escalate_to_human, search_knowledge
-              └─ Chatwoot API (mensaje outgoing / status open)
+              ├─ tools: create_lead, escalate_to_human, search_knowledge, send_catalog
+              └─ Chatwoot API (mensaje outgoing / adjunto PDF / status open)
 ```
 
 ## 1. Crear el bot en Chatwoot
@@ -69,7 +69,7 @@ El bot **no** mete todas las FAQs en el system prompt. El conocimiento vive en P
 | Instrucciones / políticas | pestaña Instrucciones (tono, catálogo, mínimos; van al system prompt) |
 | Negocio | pestaña Negocio |
 | FAQs / Skills / Archivos | CRUD + indexado (embeddings) |
-| Tools | solo lectura (`create_lead`, `escalate_to_human`, `search_knowledge`) |
+| Tools | solo lectura (`create_lead`, `escalate_to_human`, `search_knowledge`, `send_catalog`) |
 | Agente | pausas, burbujas y espera por más mensajes (defaults del `.env`) |
 
 Seed inicial al primer boot desde `agent_info/*.json` y PDFs de presentación (no se ingiere `conversaciones_whatsapp.txt`). Cambios en el dashboard aplican **sin redeploy**.
@@ -81,6 +81,7 @@ Por cada mensaje: retrieval híbrido (cosine `<=>` + keywords) e inyección de t
 - **create_lead** — registra prospecto calificado (`qualification_source=chatwoot_agent`); visible en `/dashboard/leads`.
 - **escalate_to_human** — marca handoff en DB + `toggle_status` → `open` en Chatwoot.
 - **search_knowledge** — RAG sobre FAQs/skills/files en pgvector.
+- **send_catalog** — adjunta `Carta Presentación GIA.pdf` al hilo (WhatsApp) cuando piden catálogo o carta de presentación. No es la lista de precios ni la presentación corporativa 2027. Cada conversación sube el PDF de nuevo (WhatsApp no reutiliza el archivo entre clientes); en el mismo hilo no se reenvía.
 
 ## 6. Prueba rápida
 
@@ -88,6 +89,7 @@ Por cada mensaje: retrieval híbrido (cosine `<=>` + keywords) e inyección de t
 2. Debe aparecer reply del bot en el hilo (1 mensaje, o 2–3 si el agente decide partir), con una pausa de 8–16 s.
 3. Pide cotización con toneladas → debe crear lead.
 4. Pide “hablar con un asesor” → conversación pasa a **open**.
+5. Pide el catálogo / carta de presentación → el bot adjunta el PDF.
 
 El bot deja una **nota privada** en el hilo. Si nadie asigna el ticket en
 `CHATWOOT_HANDOFF_RESUME_MINUTES` (15 por defecto), vuelve a **pending**.

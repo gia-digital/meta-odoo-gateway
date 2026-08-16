@@ -27,4 +27,13 @@ REGISTERED_TOOLS = [
             "Si necesita más detalle de productos, FAQs, skills o archivos para responder bien."
         ),
     },
+    {
+        "name": "send_catalog",
+        "label": "Enviar catálogo",
+        "source": "sistema",
+        "when": (
+            "Si piden catálogo, carta de presentación, brochure o el PDF de líneas GIA. "
+            "No usar para lista de precios mensual ni para la presentación corporativa 2027."
+        ),
+    },
 ]

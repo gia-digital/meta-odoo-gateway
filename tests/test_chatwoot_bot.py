@@ -356,3 +356,52 @@ def test_first_send_wait_counts_llm_time():
         max_wait=5.0,
     )
     assert 0.7 <= gap <= 3.0
+
+
+@pytest.mark.asyncio
+async def test_send_attachment_posts_multipart(monkeypatch, tmp_path):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    monkeypatch.setenv("CHATWOOT_ACCOUNT_ID", "1")
+    monkeypatch.setenv("CHATWOOT_BASE_URL", "https://chat.example")
+    monkeypatch.setenv("CHATWOOT_BOT_TOKEN", "tok")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 x")
+    posted: dict = {}
+
+    class FakeHttp:
+        async def post(self, url, **kwargs):
+            posted["url"] = url
+            posted["data"] = kwargs.get("data")
+            posted["files"] = kwargs.get("files")
+            posted["timeout"] = kwargs.get("timeout")
+
+            class R:
+                status_code = 200
+                content = b'{"id": 3}'
+                text = '{"id": 3}'
+
+                def json(self):
+                    return {"id": 3}
+
+            return R()
+
+    from app.services.chatwoot_client import ChatwootClient
+
+    cw = ChatwootClient()
+    cw._client = FakeHttp()
+    data = await cw.send_attachment(
+        9,
+        pdf,
+        content="Carta de presentación GIA",
+        filename="Carta Presentación GIA.pdf",
+    )
+    assert data["id"] == 3
+    assert posted["url"].endswith("/conversations/9/messages")
+    assert posted["data"]["message_type"] == "outgoing"
+    assert posted["files"]["attachments[]"][0] == "Carta Presentación GIA.pdf"
+    assert posted["timeout"] == 120.0
+    get_settings.cache_clear()

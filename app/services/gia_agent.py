@@ -16,6 +16,7 @@ from app.core.llm_runtime import LlmRuntime, get_llm_runtime
 from app.core.logging import get_logger
 from app.models.conversation import Channel, Conversation, QualificationSource
 from app.services.agent_knowledge import build_agent_instructions
+from app.services.catalog_document import deliver_catalog
 from app.services.chatwoot_client import ChatwootClient
 from app.services.conversation import ConversationService
 from app.services.knowledge.retriever import format_hits, retrieve_knowledge
@@ -226,7 +227,21 @@ def _build_tools():
             )
         return format_hits(hits)
 
-    return [create_lead, escalate_to_human, search_knowledge]
+    @function_tool
+    async def send_catalog(
+        ctx: RunContextWrapper[BotContext],
+    ) -> str:
+        """
+        Envía al cliente el PDF de la Carta de Presentación GIA (catálogo de
+        líneas: aceros planos, acanalados, tubería industrial, varilla, alambre).
+        Usa cuando pidan catálogo, carta de presentación, brochure o el PDF de
+        productos GIA. NO la uses para la lista de precios mensual ni para la
+        presentación corporativa / planes 2027. Después confirma en texto y
+        pregunta qué material y tonelaje buscan.
+        """
+        return await deliver_catalog(ctx.context)
+
+    return [create_lead, escalate_to_human, search_knowledge, send_catalog]
 
 
 def _model_settings_for_openai(model_id: str):

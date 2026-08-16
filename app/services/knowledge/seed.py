@@ -109,6 +109,31 @@ async def seed_from_agent_info(db: AsyncSession, *, agent_info: Path | None = No
                     await db.flush()
                     await store.index_faq(faq)
                     result["faqs"] += 1
+        else:
+            faqs_path = base / "faqs.json"
+            if faqs_path.exists():
+                existing = await store.list_faqs(include_inactive=True)
+                seen = {(f.question or "").strip().casefold() for f in existing}
+                data = json.loads(faqs_path.read_text(encoding="utf-8"))
+                for item in data.get("faqs") or []:
+                    question = faq_question(item)
+                    answer = (item.get("answer") or "").strip()
+                    if not question or not answer or question.casefold() in seen:
+                        continue
+                    meta = item.get("metadata") or {}
+                    faq = KnowledgeFaq(
+                        question=question,
+                        answer=answer,
+                        category=str(meta.get("category") or ""),
+                        active=True,
+                        source="seed",
+                    )
+                    db.add(faq)
+                    await db.flush()
+                    await store.index_faq(faq)
+                    seen.add(question.casefold())
+                    result["faqs"] += 1
+                    logger.info("knowledge_seed_faq_added", question=question[:80])
 
         skill_count = (
             await db.execute(select(func.count()).select_from(KnowledgeSkill))
@@ -139,8 +164,23 @@ async def seed_from_agent_info(db: AsyncSession, *, agent_info: Path | None = No
                 for item in items:
                     title = (item.get("title") or "").strip()
                     legacy = (item.get("legacy_title") or "").strip()
+                    if not title:
+                        continue
                     row = by_title.get(legacy) or by_title.get(title)
-                    if row is None or not title:
+                    if row is None:
+                        skill = KnowledgeSkill(
+                            title=title,
+                            when_to_apply=(item.get("description") or "").strip(),
+                            body=(item.get("skill") or "").strip(),
+                            active=True,
+                            source="seed",
+                        )
+                        db.add(skill)
+                        await db.flush()
+                        await store.index_skill(skill)
+                        by_title[title] = skill
+                        result["skills"] += 1
+                        logger.info("knowledge_seed_skill_added", title=title)
                         continue
                     if (
                         row.title == legacy

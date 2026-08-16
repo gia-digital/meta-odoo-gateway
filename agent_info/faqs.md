@@ -1,6 +1,6 @@
 # FAQs — agente GIA (Chatwoot)
 
-Total: **45** entradas.
+Total: **46** entradas.
 
 Fuente principal: `Guia_Respuesta_GIA.docx` §25, validada con temas frecuentes de `conversaciones_whatsapp.txt`.
 
@@ -44,43 +44,47 @@ No manejamos efectivo ni venta de mostrador; el pago es por transferencia o dep�
 
 Aceros planos en bobina, hoja y cinta: caliente (HR), decapada (HRPO), fría (CR), galvanizada G60/G90, Galvanneal, electrogalvanizada, Ecogal/zintroalum y Pintro. Fabricamos lámina acanalada (R-101, R-72, O-100, O-30, RN-100/35, KR-18 y Deck 25), tubería industrial, y distribuimos varilla y alambre.
 
-### 2. ¿Tienen PTR?
+### 2. ¿Me puede enviar el catálogo / carta de presentación?
+
+Sí. Con gusto le enviamos la carta de presentación de GIA con nuestras líneas de acero al carbono (aceros planos, acanalados, tubería industrial, varilla y alambre). Es mayoreo: 1 tonelada por partida y 3 toneladas en total. ¿Qué material busca?
+
+### 3. ¿Tienen PTR?
 
 No fabricamos PTR ni perfil estructural. Nuestra tubería es industrial de acero negro comercial con costura interna, no estructural. Si su uso lo permite, con gusto se la cotizamos.
 
-### 3. ¿Manejan inoxidable o aluminio?
+### 4. ¿Manejan inoxidable o aluminio?
 
 No, únicamente acero al carbono en las líneas de nuestro catálogo.
 
-### 4. ¿El tubo es galvanizado?
+### 5. ¿El tubo es galvanizado?
 
 Nuestra tubería es de acero negro comercial, de momento en un futuro si manejaremos lo invitamos a preguntar por nuestros planes de expansión con su asesor, debemos tener en piso algo galvaneel pregunte por el inventario a su asesor.
 
-### 5. ¿Venden material de segunda?
+### 6. ¿Venden material de segunda?
 
 No, todo nuestro material es de primera, con número de lote y certificado de calidad.
 
-### 6. ¿Fabrican medidas especiales?
+### 7. ¿Fabrican medidas especiales?
 
 Sí: hojas, cintas y largos a la medida. Le calculamos el peso teórico y su asesor le confirma tiempo de fabricación.
 
-### 7. ¿Cuántas piezas trae un atado de tubo?
+### 8. ¿Cuántas piezas trae un atado de tubo?
 
 Depende de la medida; por ejemplo, 3" trae 86 pzas, 2" trae 61 y 1" trae 169 (tabla completa en catálogo). Vendemos por atados completos.
 
-### 8. ¿Qué ancho tiene la R-101 / R-72 / KR-18?
+### 9. ¿Qué ancho tiene la R-101 / R-72 / KR-18?
 
 R-101: 107 cm. R-72: 81 cm. KR-18: 45.7 cm con peralte de 6.35 cm. Largos de 6.10 a 12 m.
 
-### 9. ¿Cuánto pesa la lámina cal. [X] de [medida]?
+### 10. ¿Cuánto pesa la lámina cal. [X] de [medida]?
 
 Se responde con el Anexo A o con la fórmula (espesor mm × ancho m × largo m × 7.85), siempre aclarando: es peso teórico; rige el peso de nuestra báscula.
 
-### 10. ¿De dónde es el material?
+### 11. ¿De dónde es el material?
 
 De origen [japonés / coreano / NAFTA / nacional], de primera y con certificado. (No se da más detalle de abasto.)
 
-### 11. ¿Me pueden dar certificados o propiedades mecánicas?
+### 12. ¿Me pueden dar certificados o propiedades mecánicas?
 
 Sí. Todo el material tiene número de lote y certificado de calidad; se los compartimos vía su vendedor.
 

@@ -74,7 +74,7 @@ def test_format_hits_includes_product():
 
 def test_registered_tools_include_search_knowledge():
     names = {t["name"] for t in REGISTERED_TOOLS}
-    assert names == {"create_lead", "escalate_to_human", "search_knowledge"}
+    assert names == {"create_lead", "escalate_to_human", "search_knowledge", "send_catalog"}
 
 
 def test_resolve_agent_instructions_uses_store_or_default():
@@ -87,6 +87,88 @@ def test_resolve_agent_instructions_uses_store_or_default():
     assert resolve_agent_instructions(filled) == "Habla de tú y sé breve."
     assert "HERRAMIENTAS" in TOOL_RULES
     assert "create_lead" in TOOL_RULES
+    assert "send_catalog" in TOOL_RULES
+
+
+def test_catalog_filename_is_carta_not_corporate():
+    from app.services.catalog_document import is_catalog_filename, resolve_catalog_path
+
+    assert is_catalog_filename("Carta Presentación GIA.pdf") is True
+    assert is_catalog_filename("carta presentacion gia.PDF") is True
+    assert is_catalog_filename("Presentación GIA.pdf") is False
+    assert is_catalog_filename("Presentacion GIA.pdf") is False
+    path = resolve_catalog_path()
+    assert path is not None
+    assert path.is_file()
+    assert is_catalog_filename(path.name)
+
+
+@pytest.mark.asyncio
+async def test_deliver_catalog_sends_once(monkeypatch, tmp_path):
+    from unittest.mock import AsyncMock
+    from types import SimpleNamespace
+
+    from app.services.catalog_document import CATALOG_FILENAME, deliver_catalog
+    from app.services.chatwoot_client import ChatwootError
+
+    pdf = tmp_path / CATALOG_FILENAME
+    pdf.write_bytes(b"%PDF-1.4 test")
+    monkeypatch.setattr(
+        "app.services.catalog_document.find_catalog_pdf",
+        AsyncMock(return_value=pdf),
+    )
+    sent: list[dict] = []
+
+    class FakeCW:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def send_attachment(self, cid, path, content="", filename=None, mime="application/pdf"):
+            sent.append(
+                {"cid": cid, "path": path, "content": content, "filename": filename}
+            )
+            return {"id": 11}
+
+    monkeypatch.setattr("app.services.chatwoot_client.ChatwootClient", FakeCW)
+    bot = SimpleNamespace(db=MagicMock(), chatwoot_conversation_id=42, extra={})
+    msg = await deliver_catalog(bot)
+    assert "enviado" in msg.lower()
+    assert sent == [
+        {
+            "cid": 42,
+            "path": pdf,
+            "content": "Carta de presentación GIA",
+            "filename": CATALOG_FILENAME,
+        }
+    ]
+    again = await deliver_catalog(bot)
+    assert "ya se envió" in again.lower()
+    assert len(sent) == 1
+
+    monkeypatch.setattr(
+        "app.services.catalog_document.find_catalog_pdf",
+        AsyncMock(return_value=None),
+    )
+    missing = await deliver_catalog(SimpleNamespace(db=MagicMock(), extra={}))
+    assert "no se encontró" in missing.lower()
+
+    monkeypatch.setattr(
+        "app.services.catalog_document.find_catalog_pdf",
+        AsyncMock(return_value=pdf),
+    )
+
+    async def boom(*args, **kwargs):
+        raise ChatwootError("upload failed")
+
+    FakeCW.send_attachment = boom
+    failed = await deliver_catalog(
+        SimpleNamespace(db=MagicMock(), chatwoot_conversation_id=1, extra={})
+    )
+    assert "no se pudo adjuntar" in failed.lower()
+    assert "send_catalog" in TOOL_RULES
 
 
 def test_seed_source_has_catalog_limits():
@@ -97,9 +179,11 @@ def test_seed_source_has_catalog_limits():
     faqs = json.loads((root / "agent_info" / "faqs.json").read_text(encoding="utf-8"))
     questions = [faq_question(item).lower() for item in faqs.get("faqs") or []]
     assert any("inoxidable" in q for q in questions)
+    assert any("carta de presentación" in q for q in questions)
     skills = json.loads((root / "agent_info" / "skills.json").read_text(encoding="utf-8"))
     titles = [s.get("title") for s in skills.get("skills") or []]
     assert "Límites de catálogo y transparencia" in titles
+    assert "Enviar catálogo / carta de presentación" in titles
     products = json.loads((root / "agent_info" / "products.json").read_text(encoding="utf-8"))
     names = [p.get("name", "").lower() for p in products.get("products") or []]
     kinds = {p.get("kind") for p in products.get("products") or []}

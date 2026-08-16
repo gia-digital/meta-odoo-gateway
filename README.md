@@ -54,7 +54,7 @@ docker compose up -d
 ## Flujo de leads
 
 1. WhatsApp llega al inbox de Chatwoot; el Agent Bot llama a `POST /webhook/chatwoot`.
-2. El agente GIA atiende con knowledge RAG y, cuando el prospecto está listo, usa el tool `create_lead`.
+2. El agente GIA atiende con knowledge RAG y, cuando el prospecto está listo, usa el tool `create_lead`. Si piden el catálogo o la carta de presentación, usa `send_catalog` y adjunta el PDF.
 3. El gateway marca la conversación como `qualified` / `handed_off` con `qualification_source=chatwoot_agent`.
 4. Revisas el lead en `/dashboard/leads` antes de conectar Odoo.
 

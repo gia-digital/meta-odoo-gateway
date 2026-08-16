@@ -87,6 +87,15 @@
       }
     },
     {
+      "question": "¿Me puede enviar el catálogo / carta de presentación?",
+      "answer": "Sí. Con gusto le enviamos la carta de presentación de GIA con nuestras líneas de acero al carbono (aceros planos, acanalados, tubería industrial, varilla y alambre). Es mayoreo: 1 tonelada por partida y 3 toneladas en total. ¿Qué material busca?",
+      "metadata": {
+        "category": "producto",
+        "category_label": "Producto",
+        "source": "Carta Presentación GIA.pdf"
+      }
+    },
+    {
       "question": "¿Tienen PTR?",
       "answer": "No fabricamos PTR ni perfil estructural. Nuestra tubería es industrial de acero negro comercial con costura interna, no estructural. Si su uso lo permite, con gusto se la cotizamos.",
       "metadata": {

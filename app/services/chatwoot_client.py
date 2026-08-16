@@ -1,8 +1,9 @@
 """Cliente HTTP async para la API de Chatwoot (Agent Bot)."""
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -11,6 +12,12 @@ logger = get_logger(__name__)
 
 
 class ChatwootError(Exception):
+    pass
+
+
+class ChatwootRetryableError(ChatwootError):
+    """5xx / 429 / red: tiene sentido reintentar."""
+
     pass
 
 
@@ -28,7 +35,6 @@ class ChatwootClient:
             base_url=self.settings.chatwoot_base_url.rstrip("/"),
             timeout=30.0,
             headers={
-                "Content-Type": "application/json",
                 "api_access_token": self.settings.chatwoot_bot_token,
             },
         )
@@ -76,6 +82,86 @@ class ChatwootClient:
             message_id=data.get("id"),
         )
         return data
+
+    async def send_attachment(
+        self,
+        conversation_id: int,
+        file_path: Path,
+        *,
+        content: str = "",
+        filename: Optional[str] = None,
+        mime: str = "application/pdf",
+    ) -> Dict[str, Any]:
+        """POST outgoing message with a file (WhatsApp document via Chatwoot).
+
+        Cada envío vuelve a subir el archivo: Chatwoot no reutiliza el media_id
+        de WhatsApp entre conversaciones. Un 4xx no se reintenta (evitar subir
+        de nuevo un PDF grande si el request está mal).
+        """
+        path = Path(file_path)
+        if not path.is_file():
+            raise ChatwootError(f"attachment missing: {path}")
+        name = filename or path.name
+        file_bytes = path.read_bytes()
+        return await self._post_attachment(
+            conversation_id,
+            file_bytes=file_bytes,
+            filename=name,
+            content=content,
+            mime=mime,
+        )
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(min=1, max=8),
+        retry=retry_if_exception_type((httpx.RequestError, ChatwootRetryableError)),
+        reraise=True,
+    )
+    async def _post_attachment(
+        self,
+        conversation_id: int,
+        *,
+        file_bytes: bytes,
+        filename: str,
+        content: str,
+        mime: str,
+    ) -> Dict[str, Any]:
+        assert self._client is not None
+        url = self._account_path(f"/conversations/{conversation_id}/messages")
+        data = {
+            "content": content,
+            "message_type": "outgoing",
+            "private": "false",
+        }
+        r = await self._client.post(
+            url,
+            data=data,
+            files={"attachments[]": (filename, file_bytes, mime)},
+            timeout=120.0,
+        )
+        if r.status_code >= 400:
+            logger.error(
+                "chatwoot_send_attachment_failed",
+                status=r.status_code,
+                body=r.text[:500],
+                conversation_id=conversation_id,
+                filename=filename,
+            )
+            err_cls = (
+                ChatwootRetryableError
+                if r.status_code == 429 or r.status_code >= 500
+                else ChatwootError
+            )
+            raise err_cls(f"send_attachment failed: {r.status_code} {r.text[:300]}")
+        payload = r.json() if r.content else {}
+        logger.info(
+            "chatwoot_attachment_sent",
+            conversation_id=conversation_id,
+            message_id=payload.get("id"),
+            filename=filename,
+            bytes=len(file_bytes),
+        )
+        return payload
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
     async def set_status(self, conversation_id: int, status: str) -> Dict[str, Any]:
