@@ -46,6 +46,11 @@ CHATWOOT_ACCOUNT_ID=1
 CHATWOOT_BOT_TOKEN=...
 CHATWOOT_WEBHOOK_SECRET=   # opcional
 
+# WhatsApp read receipts (palomitas azules en mensajes del cliente; mismos datos del inbox WA)
+WHATSAPP_CLOUD_ACCESS_TOKEN=...
+WHATSAPP_CLOUD_PHONE_NUMBER_ID=...
+# WHATSAPP_CLOUD_API_VERSION=v26.0
+
 # OpenAI usa Responses API (no chat/completions). Anthropic vía LiteLLM.
 AGENT_MODEL=openai/gpt-5.6-luna
 OPENAI_API_KEY=sk-...
@@ -110,6 +115,7 @@ En droplets de 1 GB el API corre con **1 worker** uvicorn. No subir
 | Chatwoot: *error with the agent bot* + logs `401` en `/webhook/chatwoot` | Firma HMAC inválida. Chatwoot firma `HMAC(secret, "{timestamp}.{body}")` con `X-Chatwoot-Signature` + `X-Chatwoot-Timestamp`. Confirma que `CHATWOOT_WEBHOOK_SECRET` sea el **secret del bot** (no el access token). |
 | Desbloqueo rápido | Vacía `CHATWOOT_WEBHOOK_SECRET=` en `.env`, recrea el contenedor `api`, vuelve a probar. Luego restaura el secret con un deploy que tenga la verificación correcta. |
 | Bot no responde pero HTTP 200 | Un humano ya escribió en público (`chatwoot_skip_human_replied`), o el hilo está `resolved`/`snoozed`. Falta de API key. |
+| Cliente no ve palomitas azules / «escribiendo…» | Chatwoot no lo hace nativo. Configura `WHATSAPP_CLOUD_ACCESS_TOKEN` y `WHATSAPP_CLOUD_PHONE_NUMBER_ID` (mismos del inbox WA). El gateway envía read + typing vía Meta v26 al preparar la respuesta del bot; read al escribir un humano. |
 | Hilo `open` y el bot sigue hablando | Esperado hasta que un asesor escriba al cliente. Para callarlo: responder en público. Para devolverlo al bot: status **Pending**. |
 | Adjunto / audio sin texto | El bot pide descripción por texto (`chatwoot_skip_empty_content` solo si no hay attachments). |
 | RAG vacío / no respeta catálogo | Ver `/dashboard/knowledge` (FAQs activas, chunks > 0). Seed corre al arrancar si las tablas están vacías. Sin `OPENAI_API_KEY` no hay embeddings (solo keyword). |

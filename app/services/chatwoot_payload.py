@@ -35,6 +35,18 @@ def is_outgoing_message(payload: Dict[str, Any]) -> bool:
     return str(raw).lower() in ("outgoing", "1")
 
 
+def is_incoming_message(payload: Dict[str, Any]) -> bool:
+    msg = _as_message(payload)
+    raw = msg.get("message_type")
+    if raw is None:
+        raw = payload.get("message_type")
+    if raw is None:
+        return False
+    if isinstance(raw, int):
+        return raw == 0
+    return str(raw).lower() in ("incoming", "0")
+
+
 def is_private_message(payload: Dict[str, Any]) -> bool:
     msg = _as_message(payload)
     if msg.get("private") is True:
@@ -93,3 +105,30 @@ def attachments_of(payload: Dict[str, Any]) -> List[Any]:
 
 def has_attachments(payload: Dict[str, Any]) -> bool:
     return bool(attachments_of(payload))
+
+
+def incoming_message_source_id(payload: Dict[str, Any]) -> Optional[str]:
+    """ID del mensaje en el canal (WhatsApp Cloud → wamid… en ``source_id``)."""
+    msg = _as_message(payload)
+    for source in (msg.get("source_id"), payload.get("source_id")):
+        if source:
+            return str(source)
+    return None
+
+
+def latest_incoming_source_id(payloads: List[Dict[str, Any]]) -> Optional[str]:
+    """Último source_id entrante; marcar uno basta (Meta propaga a anteriores)."""
+    for payload in reversed(payloads):
+        if not is_incoming_message(payload):
+            continue
+        source_id = incoming_message_source_id(payload)
+        if source_id:
+            return source_id
+    return None
+
+
+def latest_incoming_source_id_from_messages(
+    messages: List[Dict[str, Any]],
+) -> Optional[str]:
+    """Último wamid entrante en el historial de Chatwoot (p. ej. reply humano)."""
+    return latest_incoming_source_id(messages)

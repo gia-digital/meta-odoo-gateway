@@ -163,6 +163,23 @@ class ChatwootClient:
         )
         return payload
 
+    async def update_last_seen(self, conversation_id: int) -> None:
+        """Marca el hilo como visto en Chatwoot (unread interno; no WhatsApp)."""
+        assert self._client is not None
+        url = self._account_path(f"/conversations/{conversation_id}/update_last_seen")
+        r = await self._client.post(url)
+        if r.status_code >= 400:
+            logger.warning(
+                "chatwoot_update_last_seen_failed",
+                status=r.status_code,
+                body=r.text[:300],
+                conversation_id=conversation_id,
+            )
+            raise ChatwootError(
+                f"update_last_seen failed: {r.status_code} {r.text[:300]}"
+            )
+        logger.info("chatwoot_update_last_seen", conversation_id=conversation_id)
+
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
     async def set_status(self, conversation_id: int, status: str) -> Dict[str, Any]:
         assert self._client is not None

@@ -73,14 +73,22 @@ async def test_deliver_reply_sends_marked_bubbles(monkeypatch):
             sent.append(content)
             return {"id": len(sent)}
 
+        async def update_last_seen(self, cid):
+            return None
+
     service = MagicMock()
     service.add_outbound_message = AsyncMock()
+    mark_read = AsyncMock(return_value=True)
     monkeypatch.setattr(
         "app.routers.chatwoot_webhook.get_agent_behavior",
         AsyncMock(return_value=_fast_behavior()),
     )
     monkeypatch.setattr("app.routers.chatwoot_webhook.ChatwootClient", FakeCW)
     monkeypatch.setattr("app.routers.chatwoot_webhook.has_newer_inbound", lambda _id: False)
+    monkeypatch.setattr(
+        "app.routers.chatwoot_webhook._signal_inbound_whatsapp",
+        mark_read,
+    )
 
     from app.routers.chatwoot_webhook import _deliver_reply
 
@@ -90,9 +98,11 @@ async def test_deliver_reply_sends_marked_bubbles(monkeypatch):
         42,
         "Buen día.\n---\n¿Qué calibre busca?",
         started_at=time.monotonic(),
+        inbound_source_id="wamid.inbound123",
     )
     assert sent == ["Buen día.", "¿Qué calibre busca?"]
     assert service.add_outbound_message.await_count == 2
+    mark_read.assert_awaited_once_with(42, "wamid.inbound123", typing=True)
     get_settings.cache_clear()
 
 

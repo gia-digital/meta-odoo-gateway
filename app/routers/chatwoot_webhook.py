@@ -21,6 +21,8 @@ from app.services.chatwoot_client import ChatwootClient, ChatwootError
 from app.services.chatwoot_payload import (
     has_attachments,
     is_human_public_outgoing,
+    latest_incoming_source_id,
+    latest_incoming_source_id_from_messages,
 )
 from app.services.conversation import ConversationService
 from app.services.reply_bubbles import (
@@ -28,6 +30,7 @@ from app.services.reply_bubbles import (
     next_bubble_wait_seconds,
     split_reply_bubbles,
 )
+from app.services.whatsapp_read_receipt import signal_whatsapp_inbound
 from app.services.turn_guard import (
     clear_human_reply_guard,
     debounce_payloads,
@@ -238,6 +241,12 @@ async def _process_human_outgoing(payload: Dict[str, Any]) -> None:
             user_name=user_name,
         )
         await service.mark_human_replied(conv)
+    await _signal_inbound_whatsapp(
+        cw_conv_id,
+        None,
+        typing=False,
+        fetch_source_from_history=True,
+    )
     logger.info(
         "chatwoot_human_replied",
         conversation_id=cw_conv_id,
@@ -289,7 +298,11 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
                 return
             content = ATTACHMENT_REPLY
             await _reply_without_agent(
-                payload, cw_conv_id, content, started_at=started_at
+                payload,
+                cw_conv_id,
+                content,
+                started_at=started_at,
+                inbound_source_id=latest_incoming_source_id(incoming_batch),
             )
             return
         logger.info("chatwoot_skip_empty_content", conversation_id=cw_conv_id)
@@ -343,6 +356,9 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
             )
             return
 
+        inbound_wa_id = latest_incoming_source_id(incoming_batch)
+        await _signal_inbound_whatsapp(cw_conv_id, inbound_wa_id, typing=True)
+
         from app.services.gia_agent import BotContext, run_gia_agent
 
         ctx = BotContext(
@@ -394,7 +410,12 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
 
         try:
             await _deliver_reply(
-                service, conv, cw_conv_id, reply, started_at=started_at
+                service,
+                conv,
+                cw_conv_id,
+                reply,
+                started_at=started_at,
+                inbound_source_id=latest_incoming_source_id(incoming_batch),
             )
         except ChatwootError as exc:
             logger.error(
@@ -404,6 +425,55 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
             )
 
 
+async def _signal_inbound_whatsapp(
+    conversation_id: int,
+    source_id: Optional[str],
+    *,
+    typing: bool = False,
+    fetch_source_from_history: bool = False,
+) -> None:
+    """Read receipt (+ opcional «escribiendo…») vía Meta; last_seen en Chatwoot."""
+    resolved_id = source_id
+    try:
+        async with ChatwootClient() as cw:
+            try:
+                await cw.update_last_seen(conversation_id)
+            except Exception as exc:
+                logger.warning(
+                    "chatwoot_update_last_seen_skipped",
+                    conversation_id=conversation_id,
+                    error=str(exc),
+                )
+            if not resolved_id and fetch_source_from_history:
+                messages = await cw.list_messages(conversation_id)
+                resolved_id = latest_incoming_source_id_from_messages(messages)
+    except Exception as exc:
+        logger.warning(
+            "chatwoot_signal_context_failed",
+            conversation_id=conversation_id,
+            error=str(exc),
+        )
+        if not resolved_id:
+            return
+
+    if not resolved_id:
+        return
+    try:
+        await signal_whatsapp_inbound(
+            resolved_id,
+            mark_read=True,
+            typing_indicator=typing,
+        )
+    except Exception as exc:
+        logger.warning(
+            "whatsapp_signal_skipped",
+            conversation_id=conversation_id,
+            message_id=resolved_id,
+            typing=typing,
+            error=str(exc),
+        )
+
+
 async def _deliver_reply(
     service,
     conv,
@@ -411,6 +481,7 @@ async def _deliver_reply(
     reply: str,
     *,
     started_at: Optional[float] = None,
+    inbound_source_id: Optional[str] = None,
 ) -> None:
     """Envía 1..N burbujas con pausa de escritura; aborta si llegó otro inbound."""
     behavior = await get_agent_behavior()
@@ -433,6 +504,12 @@ async def _deliver_reply(
         min_total=behavior.reply_min_seconds,
         max_wait=behavior.reply_max_delay_seconds,
         jitter=jitter,
+    )
+    # Read + «escribiendo…» antes de la pausa visible (Meta dura ~25 s).
+    await _signal_inbound_whatsapp(
+        cw_conv_id,
+        inbound_source_id,
+        typing=True,
     )
     if first_wait:
         await asyncio.sleep(first_wait)
@@ -505,6 +582,7 @@ async def _reply_without_agent(
     reply: str,
     *,
     started_at: Optional[float] = None,
+    inbound_source_id: Optional[str] = None,
 ) -> None:
     """Respuesta fija (p. ej. adjunto sin texto) sin llamar al LLM."""
     external_user_id, user_name, user_phone, _ = _contact_identity(payload)
@@ -532,7 +610,13 @@ async def _reply_without_agent(
         )
         try:
             await _deliver_reply(
-                service, conv, cw_conv_id, reply, started_at=started_at
+                service,
+                conv,
+                cw_conv_id,
+                reply,
+                started_at=started_at,
+                inbound_source_id=inbound_source_id
+                or latest_incoming_source_id([payload]),
             )
         except ChatwootError as exc:
             logger.error(

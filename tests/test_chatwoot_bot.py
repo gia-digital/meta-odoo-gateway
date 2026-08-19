@@ -18,7 +18,9 @@ from app.routers.chatwoot_webhook import (
 from app.services.chatwoot_payload import (
     has_attachments,
     human_assignee_name,
+    incoming_message_source_id,
     is_human_public_outgoing,
+    latest_incoming_source_id,
 )
 from app.services.turn_guard import (
     debounce_payloads,
@@ -77,6 +79,18 @@ def test_conversation_id_and_contact():
     assert name == "Carlos"
     assert email == "c@ex.com"
     assert phone is not None
+
+
+def test_incoming_message_source_id():
+    nested = {
+        "message": {
+            "message_type": 0,
+            "content": "Hola",
+            "source_id": "wamid.ABC123",
+        }
+    }
+    assert incoming_message_source_id(nested) == "wamid.ABC123"
+    assert latest_incoming_source_id([{"content": "x"}, nested]) == "wamid.ABC123"
 
 
 def test_chatwoot_signature():
@@ -495,4 +509,125 @@ async def test_send_attachment_posts_multipart(monkeypatch, tmp_path):
     assert posted["data"]["message_type"] == "outgoing"
     assert posted["files"]["attachments[]"][0] == "Carta Presentación GIA.pdf"
     assert posted["timeout"] == 120.0
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_signal_whatsapp_inbound_read_and_typing(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    monkeypatch.setenv("WHATSAPP_CLOUD_ACCESS_TOKEN", "wa-token")
+    monkeypatch.setenv("WHATSAPP_CLOUD_PHONE_NUMBER_ID", "123456789")
+    monkeypatch.setenv("WHATSAPP_CLOUD_API_VERSION", "v26.0")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    posted: dict = {}
+
+    class FakeHttp:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, headers=None, json=None):
+            posted["url"] = url
+            posted["json"] = json
+
+            class R:
+                status_code = 200
+                text = "ok"
+
+            return R()
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: FakeHttp())
+
+    from app.services.whatsapp_read_receipt import signal_whatsapp_inbound
+
+    ok = await signal_whatsapp_inbound(
+        "wamid.test123", mark_read=True, typing_indicator=True
+    )
+    assert ok is True
+    assert posted["url"] == "https://graph.facebook.com/v26.0/123456789/messages"
+    assert posted["json"] == {
+        "messaging_product": "whatsapp",
+        "message_id": "wamid.test123",
+        "status": "read",
+        "typing_indicator": {"type": "text"},
+    }
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_mark_whatsapp_message_read_posts_to_graph(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    monkeypatch.setenv("WHATSAPP_CLOUD_ACCESS_TOKEN", "wa-token")
+    monkeypatch.setenv("WHATSAPP_CLOUD_PHONE_NUMBER_ID", "123456789")
+    monkeypatch.setenv("WHATSAPP_CLOUD_API_VERSION", "v26.0")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    posted: dict = {}
+
+    class FakeHttp:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, headers=None, json=None):
+            posted["url"] = url
+            posted["headers"] = headers
+            posted["json"] = json
+
+            class R:
+                status_code = 200
+                text = "ok"
+
+            return R()
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: FakeHttp())
+
+    from app.services.whatsapp_read_receipt import mark_whatsapp_message_read
+
+    ok = await mark_whatsapp_message_read("wamid.test123")
+    assert ok is True
+    assert posted["url"] == "https://graph.facebook.com/v26.0/123456789/messages"
+    assert posted["json"] == {
+        "messaging_product": "whatsapp",
+        "message_id": "wamid.test123",
+        "status": "read",
+    }
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_mark_whatsapp_message_read_skips_without_config(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    import httpx
+
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("no http")),
+    )
+
+    from app.services.whatsapp_read_receipt import mark_whatsapp_message_read
+
+    assert await mark_whatsapp_message_read("wamid.test123") is False
     get_settings.cache_clear()

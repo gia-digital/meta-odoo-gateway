@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     chatwoot_reply_think_seconds: float = 1.2
     chatwoot_reply_chars_per_sec: float = 16.0
     chatwoot_reply_max_delay_seconds: float = 16.0
+    # WhatsApp Cloud API (mismos valores que el inbox en Chatwoot → Settings → Inbox)
+    whatsapp_cloud_access_token: str = ""
+    whatsapp_cloud_phone_number_id: str = ""
+    whatsapp_cloud_api_version: str = "v26.0"
 
     # LLM (OpenAI Agents SDK): openai/* → Responses API; anthropic/* → LiteLLM
     # Examples: openai/gpt-5.6-luna | openai/gpt-4.1-mini | anthropic/claude-sonnet-4-20250514
