@@ -156,9 +156,12 @@ jobs:
             export GATEWAY_IMAGE="$IMAGE_REF"
             echo "GATEWAY_IMAGE=$GATEWAY_IMAGE" > .deploy.env
 
+            # Liberar disco antes del pull (evita "no space left" con imágenes viejas acumuladas)
+            docker image prune -af || true
+
             docker compose -f docker-compose.prod.yml --env-file .deploy.env pull api caddy
             docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d
-            docker image prune -f
+            docker image prune -af || true
 
             echo "Waiting for health (API localhost)..."
             for i in $(seq 1 30); do
