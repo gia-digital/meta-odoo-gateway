@@ -169,6 +169,10 @@ def test_agent_behavior_overlay_and_reset(monkeypatch):
     assert view["using_dashboard"] is True
     assert view["source_labels"]["reply_min_seconds"] == "esta pantalla"
     assert view["source_labels"]["reply_think_seconds"] == "servidor"
+    assert view["form_values"]["debounce_seconds"] == 6
+    assert view["form_values"]["reply_min_seconds"] == 10
+    assert view["form_values"]["reply_think_seconds"] == ""
+    assert view["form_values"]["reply_bubble_delay_ms"] == ""
 
     reset = parse_behavior_form({}, reset=True)
     assert reset["reply_min_seconds"] is None
@@ -177,6 +181,33 @@ def test_agent_behavior_overlay_and_reset(monkeypatch):
     assert parsed["reply_max_bubbles"] == 2
     assert parsed["debounce_seconds"] is None
     get_settings.cache_clear()
+
+
+def test_agent_form_renders_saved_values_in_jinja(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from jinja2 import Environment
+
+    from app.core.agent_behavior import merge_agent_behavior, public_behavior_view
+
+    row = SimpleNamespace(
+        debounce_seconds=8,
+        reply_max_bubbles=None,
+        reply_bubble_delay_ms=None,
+        reply_min_seconds=10,
+        reply_think_seconds=None,
+        reply_chars_per_sec=None,
+        reply_max_delay_seconds=None,
+    )
+    agent = public_behavior_view(merge_agent_behavior(row))
+    html = Environment().from_string(
+        '<input name="debounce_seconds" value="{{ agent.form_values.debounce_seconds }}" />'
+        '<input name="reply_min_seconds" value="{{ agent.form_values.reply_min_seconds }}" />'
+        '<input name="reply_max_bubbles" value="{{ agent.form_values.reply_max_bubbles }}" />'
+    ).render(agent=agent)
+    assert 'name="debounce_seconds" value="8.0"' in html
+    assert 'name="reply_min_seconds" value="10.0"' in html
+    assert 'name="reply_max_bubbles" value=""' in html
 
 
 def test_public_view_never_includes_raw_key(monkeypatch):

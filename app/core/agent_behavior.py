@@ -85,16 +85,14 @@ def merge_agent_behavior(row: Optional[RuntimeSettings]) -> AgentBehavior:
 def public_behavior_view(behavior: AgentBehavior) -> dict:
     defaults = env_defaults()
     using_dashboard = any(src == "dashboard" for src in behavior.sources.values())
+    # Vacío en el form = usar default del .env. Evitar clave "values": Jinja2 la
+    # confunde con dict.values() y deja los inputs en blanco.
+    form_values = {
+        name: getattr(behavior, name) if behavior.sources[name] == "dashboard" else ""
+        for name, _, _ in _FIELDS
+    }
     return {
-        "values": {
-            "debounce_seconds": behavior.debounce_seconds,
-            "reply_max_bubbles": behavior.reply_max_bubbles,
-            "reply_bubble_delay_ms": behavior.reply_bubble_delay_ms,
-            "reply_min_seconds": behavior.reply_min_seconds,
-            "reply_think_seconds": behavior.reply_think_seconds,
-            "reply_chars_per_sec": behavior.reply_chars_per_sec,
-            "reply_max_delay_seconds": behavior.reply_max_delay_seconds,
-        },
+        "form_values": form_values,
         "defaults": defaults,
         "sources": behavior.sources,
         "source_labels": {
