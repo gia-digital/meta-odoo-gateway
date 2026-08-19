@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import hmac
 import pytest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from app.models.db import is_deadlock
@@ -20,8 +21,11 @@ from app.services.chatwoot_payload import (
     human_assignee_name,
     incoming_message_source_id,
     is_human_public_outgoing,
+    latest_inbound_wamid_from_db_messages,
     latest_incoming_source_id,
+    resolve_inbound_wamid_for_human_reply,
 )
+from app.services.turn_guard import last_inbound_wamid, record_inbound_wamid, reset_for_tests
 from app.services.turn_guard import (
     debounce_payloads,
     is_agent_error_reason,
@@ -91,6 +95,34 @@ def test_incoming_message_source_id():
     }
     assert incoming_message_source_id(nested) == "wamid.ABC123"
     assert latest_incoming_source_id([{"content": "x"}, nested]) == "wamid.ABC123"
+
+
+def test_resolve_inbound_wamid_for_human_reply():
+    reset_for_tests()
+    record_inbound_wamid(12, "wamid.cached")
+    assert (
+        resolve_inbound_wamid_for_human_reply(12, {}, db_messages=[])
+        == "wamid.cached"
+    )
+
+    reset_for_tests()
+    msg = SimpleNamespace(
+        direction=SimpleNamespace(value="inbound"),
+        raw_payload={
+            "message_type": "incoming",
+            "source_id": "wamid.fromdb",
+        },
+    )
+    assert (
+        resolve_inbound_wamid_for_human_reply(
+            99,
+            {},
+            db_messages=[msg],
+        )
+        == "wamid.fromdb"
+    )
+    assert latest_inbound_wamid_from_db_messages([msg]) == "wamid.fromdb"
+    reset_for_tests()
 
 
 def test_chatwoot_signature():

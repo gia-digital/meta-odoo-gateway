@@ -23,6 +23,7 @@ from app.services.chatwoot_payload import (
     is_human_public_outgoing,
     latest_incoming_source_id,
     latest_incoming_source_id_from_messages,
+    resolve_inbound_wamid_for_human_reply,
 )
 from app.services.conversation import ConversationService
 from app.services.reply_bubbles import (
@@ -39,6 +40,7 @@ from app.services.turn_guard import (
     record_agent_failure,
     record_agent_success,
     record_human_reply,
+    record_inbound_wamid,
 )
 
 ATTACHMENT_REPLY = (
@@ -241,15 +243,24 @@ async def _process_human_outgoing(payload: Dict[str, Any]) -> None:
             user_name=user_name,
         )
         await service.mark_human_replied(conv)
+        inbound_wamid = resolve_inbound_wamid_for_human_reply(
+            cw_conv_id, payload, conv.messages
+        )
     await _signal_inbound_whatsapp(
         cw_conv_id,
-        None,
+        inbound_wamid,
         typing=False,
-        fetch_source_from_history=True,
+        fetch_source_from_history=not inbound_wamid,
     )
+    if not inbound_wamid:
+        logger.warning(
+            "whatsapp_human_read_no_wamid",
+            conversation_id=cw_conv_id,
+        )
     logger.info(
         "chatwoot_human_replied",
         conversation_id=cw_conv_id,
+        whatsapp_wamid=bool(inbound_wamid),
     )
 
 
@@ -277,6 +288,7 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
     content = _merge_incoming_texts(incoming_batch)
     attached = any(has_attachments(item) for item in incoming_batch)
     started_at = time.monotonic()
+    record_inbound_wamid(cw_conv_id, latest_incoming_source_id(incoming_batch))
 
     status_conv = _conversation_status(payload)
     if _is_inactive_status(status_conv):
@@ -457,6 +469,11 @@ async def _signal_inbound_whatsapp(
             return
 
     if not resolved_id:
+        logger.warning(
+            "whatsapp_signal_no_wamid",
+            conversation_id=conversation_id,
+            fetch_source_from_history=fetch_source_from_history,
+        )
         return
     try:
         await signal_whatsapp_inbound(
@@ -471,6 +488,13 @@ async def _signal_inbound_whatsapp(
             message_id=resolved_id,
             typing=typing,
             error=str(exc),
+        )
+    else:
+        logger.info(
+            "whatsapp_signal_ok",
+            conversation_id=conversation_id,
+            message_id=resolved_id,
+            typing=typing,
         )
 
 

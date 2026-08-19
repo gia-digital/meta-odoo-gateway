@@ -14,6 +14,17 @@ _buffers: Dict[int, List[dict]] = defaultdict(list)
 _tokens: Dict[int, int] = defaultdict(int)
 _lock = asyncio.Lock()
 _human_replied: Set[int] = set()
+_last_inbound_wamid: Dict[int, str] = {}
+
+
+def record_inbound_wamid(cw_id: int, wamid: Optional[str]) -> None:
+    """Último wamid entrante por hilo (read receipt cuando responde un humano)."""
+    if wamid:
+        _last_inbound_wamid[cw_id] = wamid
+
+
+def last_inbound_wamid(cw_id: int) -> Optional[str]:
+    return _last_inbound_wamid.get(cw_id)
 
 
 def record_agent_success(cw_id: int) -> None:
@@ -76,3 +87,4 @@ def reset_for_tests() -> None:
     _buffers.clear()
     _tokens.clear()
     _human_replied.clear()
+    _last_inbound_wamid.clear()

@@ -127,8 +127,58 @@ def latest_incoming_source_id(payloads: List[Dict[str, Any]]) -> Optional[str]:
     return None
 
 
+def latest_incoming_wamid_from_conversation_payload(
+    payload: Dict[str, Any],
+) -> Optional[str]:
+    """Busca wamid entrante embebido en ``conversation.messages`` del webhook."""
+    conv = payload.get("conversation")
+    if not isinstance(conv, dict):
+        return None
+    messages = conv.get("messages")
+    if isinstance(messages, list):
+        return latest_incoming_source_id(messages)
+    return None
+
+
+def latest_inbound_wamid_from_db_messages(messages: List[Any]) -> Optional[str]:
+    """Último wamid entrante persistido en Postgres (``raw_payload`` del webhook)."""
+    for msg in reversed(messages):
+        direction = getattr(msg, "direction", None)
+        if direction is None and isinstance(msg, dict):
+            direction = msg.get("direction")
+        dir_val = getattr(direction, "value", direction)
+        if str(dir_val or "").lower() != "inbound":
+            continue
+        raw = getattr(msg, "raw_payload", None)
+        if raw is None and isinstance(msg, dict):
+            raw = msg.get("raw_payload")
+        if isinstance(raw, dict):
+            source_id = incoming_message_source_id(raw)
+            if source_id:
+                return source_id
+    return None
+
+
 def latest_incoming_source_id_from_messages(
     messages: List[Dict[str, Any]],
 ) -> Optional[str]:
     """Último wamid entrante en el historial de Chatwoot (p. ej. reply humano)."""
     return latest_incoming_source_id(messages)
+
+
+def resolve_inbound_wamid_for_human_reply(
+    cw_conv_id: int,
+    payload: Dict[str, Any],
+    db_messages: Optional[List[Any]] = None,
+) -> Optional[str]:
+    """Orden: cache en memoria → DB → webhook → (caller usa API si sigue vacío)."""
+    from app.services.turn_guard import last_inbound_wamid
+
+    cached = last_inbound_wamid(cw_conv_id)
+    if cached:
+        return cached
+    if db_messages:
+        stored = latest_inbound_wamid_from_db_messages(db_messages)
+        if stored:
+            return stored
+    return latest_incoming_wamid_from_conversation_payload(payload)
