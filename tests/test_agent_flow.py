@@ -57,6 +57,7 @@ async def test_deliver_reply_sends_marked_bubbles(monkeypatch):
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     from app.core.config import get_settings
+    from app.models.conversation import Channel
 
     get_settings.cache_clear()
 
@@ -94,7 +95,7 @@ async def test_deliver_reply_sends_marked_bubbles(monkeypatch):
 
     await _deliver_reply(
         service,
-        MagicMock(),
+        SimpleNamespace(channel=Channel.whatsapp),
         42,
         "Buen día.\n---\n¿Qué calibre busca?",
         started_at=time.monotonic(),
@@ -103,6 +104,56 @@ async def test_deliver_reply_sends_marked_bubbles(monkeypatch):
     assert sent == ["Buen día.", "¿Qué calibre busca?"]
     assert service.add_outbound_message.await_count == 2
     mark_read.assert_awaited_once_with(42, "wamid.inbound123", typing=True)
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_deliver_reply_skips_whatsapp_signal_on_instagram(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+    from app.models.conversation import Channel
+
+    get_settings.cache_clear()
+    sent: list[str] = []
+
+    class FakeCW:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def send_message(self, cid, content, private=False):
+            sent.append(content)
+            return {"id": len(sent)}
+
+    service = MagicMock()
+    service.add_outbound_message = AsyncMock()
+    mark_read = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        "app.routers.chatwoot_webhook.get_agent_behavior",
+        AsyncMock(return_value=_fast_behavior()),
+    )
+    monkeypatch.setattr("app.routers.chatwoot_webhook.ChatwootClient", FakeCW)
+    monkeypatch.setattr("app.routers.chatwoot_webhook.has_newer_inbound", lambda _id: False)
+    monkeypatch.setattr(
+        "app.routers.chatwoot_webhook._signal_inbound_whatsapp",
+        mark_read,
+    )
+
+    from app.routers.chatwoot_webhook import _deliver_reply
+
+    await _deliver_reply(
+        service,
+        SimpleNamespace(channel=Channel.instagram),
+        42,
+        "Hola desde IG",
+        started_at=time.monotonic(),
+        inbound_source_id="aWdfZAG1faXRlbToxOk...",
+    )
+    assert sent == ["Hola desde IG"]
+    mark_read.assert_not_awaited()
     get_settings.cache_clear()
 
 

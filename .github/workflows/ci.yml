@@ -1,9 +1,7 @@
-# CI — tests en cada push/PR
+# CI — tests en cada PR (en main el gate de tests vive en Deploy)
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
