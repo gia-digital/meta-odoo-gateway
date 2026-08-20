@@ -155,10 +155,25 @@ def _is_incoming_event(payload: Dict[str, Any]) -> bool:
     return bool(_incoming_content(payload))
 
 
+def _looks_like_phone(value: Any) -> bool:
+    """True si el valor parece E.164 / teléfono (no un mid Instagram)."""
+    if value is None:
+        return False
+    s = str(value).strip()
+    if not s:
+        return False
+    digits = "".join(c for c in s if c.isdigit())
+    if not (8 <= len(digits) <= 15):
+        return False
+    # Solo +, espacios, guiones y paréntesis como ruido; letras ⇒ no es teléfono
+    return all(c.isdigit() or c in "+()- ." for c in s)
+
+
 def _contact_identity(payload: Dict[str, Any]) -> Tuple[str, Optional[str], Optional[str], Optional[str]]:
     """
     Returns (external_user_id, user_name, user_phone, user_email).
-    Prefer WhatsApp phone / source_id.
+    Prefer WhatsApp phone; Instagram/Messenger usan identifier del contacto
+    (no el source_id del mensaje, que es un mid distinto en cada envío).
     """
     contact = payload.get("contact") or {}
     sender = payload.get("sender") or {}
@@ -171,29 +186,72 @@ def _contact_identity(payload: Dict[str, Any]) -> Tuple[str, Optional[str], Opti
         or sender_meta.get("name")
     )
     email = contact.get("email") or sender.get("email")
-    phone = (
+    # No usar identifier como teléfono: en Instagram es un mid/PSID largo
+    raw_phone = (
         contact.get("phone_number")
-        or contact.get("identifier")
         or sender.get("phone_number")
         or sender_meta.get("phone_number")
     )
-    source_id = (
+    phone = str(raw_phone) if _looks_like_phone(raw_phone) else None
+    # Identidad estable del contacto (IGSID / PSID), no mid del mensaje
+    contact_id = (
+        contact.get("identifier")
+        or sender_meta.get("identifier")
+        or sender_meta.get("source_id")
+        or sender.get("identifier")
+        or contact.get("source_id")
+    )
+    message_source = (
         payload.get("source_id")
         or (payload.get("message") or {}).get("source_id")
-        or contact.get("identifier")
-        or sender_meta.get("identifier")
     )
 
-    external = str(phone or source_id or contact.get("id") or sender.get("id") or "unknown")
-    # Normalizar teléfono sin +
     if phone:
-        digits = "".join(c for c in str(phone) if c.isdigit())
-        if digits:
-            external = digits
+        external = "".join(c for c in phone if c.isdigit()) or phone
+    else:
+        external = str(
+            contact_id
+            or contact.get("id")
+            or sender.get("id")
+            or message_source
+            or "unknown"
+        )
 
-    return external, (str(name) if name else None), (str(phone) if phone else None), (
+    return external, (str(name) if name else None), phone, (
         str(email) if email else None
     )
+
+
+def _resolve_channel(payload: Dict[str, Any]) -> Channel:
+    """Detecta canal desde inbox / meta de Chatwoot (WA, Messenger, Instagram)."""
+    inbox = payload.get("inbox") or {}
+    conv = payload.get("conversation") or {}
+    meta = conv.get("meta") or {}
+    additional = conv.get("additional_attributes") or {}
+    candidates = [
+        inbox.get("channel_type"),
+        inbox.get("medium"),
+        inbox.get("name"),
+        meta.get("channel"),
+        conv.get("channel"),
+        additional.get("channel"),
+    ]
+    blob = " ".join(str(c).lower() for c in candidates if c)
+    if "instagram" in blob:
+        return Channel.instagram
+    if "facebook" in blob or "messenger" in blob:
+        return Channel.messenger
+    if "whatsapp" in blob or "twilio" in blob or "api::whatsapp" in blob:
+        return Channel.whatsapp
+
+    # Heurística: mid Instagram vía Chatwoot suele ser base64 que decodifica a "ig_..."
+    external, _, phone, _ = _contact_identity(payload)
+    if not phone and (
+        external.startswith("aWdf")
+        or (len(external) > 64 and not external.startswith("wamid."))
+    ):
+        return Channel.instagram
+    return Channel.whatsapp
 
 
 def _merge_incoming_texts(batch: list) -> str:
@@ -235,10 +293,11 @@ async def _process_human_outgoing(payload: Dict[str, Any]) -> None:
         return
     record_human_reply(cw_conv_id)
     external_user_id, user_name, _, _ = _contact_identity(payload)
+    channel = _resolve_channel(payload)
     async with SessionLocal() as db:
         service = ConversationService(db)
         conv = await service.get_or_create(
-            channel=Channel.whatsapp,
+            channel=channel,
             external_user_id=external_user_id,
             user_name=user_name,
         )
@@ -246,21 +305,23 @@ async def _process_human_outgoing(payload: Dict[str, Any]) -> None:
         inbound_wamid = resolve_inbound_wamid_for_human_reply(
             cw_conv_id, payload, conv.messages
         )
-    await _signal_inbound_whatsapp(
-        cw_conv_id,
-        inbound_wamid,
-        typing=False,
-        fetch_source_from_history=not inbound_wamid,
-    )
-    if not inbound_wamid:
-        logger.warning(
-            "whatsapp_human_read_no_wamid",
-            conversation_id=cw_conv_id,
+    if channel == Channel.whatsapp:
+        await _signal_inbound_whatsapp(
+            cw_conv_id,
+            inbound_wamid,
+            typing=False,
+            fetch_source_from_history=not inbound_wamid,
         )
+        if not inbound_wamid:
+            logger.warning(
+                "whatsapp_human_read_no_wamid",
+                conversation_id=cw_conv_id,
+            )
     logger.info(
         "chatwoot_human_replied",
         conversation_id=cw_conv_id,
-        whatsapp_wamid=bool(inbound_wamid),
+        channel=channel.value,
+        whatsapp_wamid=bool(inbound_wamid) if channel == Channel.whatsapp else False,
     )
 
 
@@ -321,7 +382,7 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
         return
 
     external_user_id, user_name, user_phone, user_email = _contact_identity(payload)
-    channel = Channel.whatsapp  # inbox WA vía Chatwoot
+    channel = _resolve_channel(payload)
 
     async with SessionLocal() as db:
         service = ConversationService(db)
@@ -369,7 +430,8 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
             return
 
         inbound_wa_id = latest_incoming_source_id(incoming_batch)
-        await _signal_inbound_whatsapp(cw_conv_id, inbound_wa_id, typing=True)
+        if channel == Channel.whatsapp:
+            await _signal_inbound_whatsapp(cw_conv_id, inbound_wa_id, typing=True)
 
         from app.services.gia_agent import BotContext, run_gia_agent
 
@@ -529,12 +591,13 @@ async def _deliver_reply(
         max_wait=behavior.reply_max_delay_seconds,
         jitter=jitter,
     )
-    # Read + «escribiendo…» antes de la pausa visible (Meta dura ~25 s).
-    await _signal_inbound_whatsapp(
-        cw_conv_id,
-        inbound_source_id,
-        typing=True,
-    )
+    # Read + «escribiendo…» solo en WhatsApp (Meta Cloud API).
+    if getattr(conv, "channel", None) == Channel.whatsapp:
+        await _signal_inbound_whatsapp(
+            cw_conv_id,
+            inbound_source_id,
+            typing=True,
+        )
     if first_wait:
         await asyncio.sleep(first_wait)
     if human_has_replied(cw_conv_id):
@@ -610,17 +673,18 @@ async def _reply_without_agent(
 ) -> None:
     """Respuesta fija (p. ej. adjunto sin texto) sin llamar al LLM."""
     external_user_id, user_name, user_phone, _ = _contact_identity(payload)
+    channel = _resolve_channel(payload)
     async with SessionLocal() as db:
         service = ConversationService(db)
         conv = await service.get_or_create(
-            channel=Channel.whatsapp,
+            channel=channel,
             external_user_id=external_user_id,
             user_name=user_name,
         )
         await service.add_inbound_message(
             conv,
             NormalizedMessage(
-                channel=Channel.whatsapp.value,
+                channel=channel.value,
                 external_user_id=external_user_id,
                 text="[archivo adjunto]",
                 external_message_id=str(

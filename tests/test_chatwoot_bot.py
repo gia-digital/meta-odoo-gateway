@@ -14,8 +14,10 @@ from app.routers.chatwoot_webhook import (
     _is_incoming_event,
     _merge_incoming_texts,
     _message_type_is_incoming,
+    _resolve_channel,
     _verify_chatwoot_signature,
 )
+from app.models.conversation import Channel
 from app.services.chatwoot_payload import (
     has_attachments,
     human_assignee_name,
@@ -83,6 +85,62 @@ def test_conversation_id_and_contact():
     assert name == "Carlos"
     assert email == "c@ex.com"
     assert phone is not None
+
+
+def test_instagram_contact_identity_and_channel():
+    ig_user = "17841470088715728"
+    ig_mid = (
+        "aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDcwMDg4NzE1NzI4OjM0MDI4MjM2"
+        "Njg0MTcxMDMwMTI0NDI1OTc5MzEyMTQ3MDEwMjExNjozMjk2OTIzMTM0Njk1NjQ4OTk1"
+        "MTc5NzU4NjUxODA4MTUzNgZDZD"
+    )
+    payload = {
+        "conversation": {
+            "id": 99,
+            "status": "pending",
+            "meta": {
+                "channel": "Channel::Instagram",
+                "sender": {"name": "Iñaki Guerrero", "identifier": ig_user},
+            },
+        },
+        "inbox": {"channel_type": "Channel::Instagram", "name": "IG GIA"},
+        "contact": {"name": "Iñaki Guerrero", "identifier": ig_user},
+        "message": {"message_type": 0, "content": "Hola", "source_id": ig_mid},
+        "content": "Hola",
+        "message_type": "incoming",
+        "source_id": ig_mid,
+    }
+    external, name, phone, _ = _contact_identity(payload)
+    assert external == ig_user
+    assert name == "Iñaki Guerrero"
+    assert phone is None
+    assert _resolve_channel(payload) == Channel.instagram
+
+
+def test_instagram_falls_back_to_long_mid_when_no_contact_id():
+    ig_mid = (
+        "aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDcwMDg4NzE1NzI4OjM0MDI4MjM2"
+        "Njg0MTcxMDMwMTI0NDI1OTc5MzEyMTQ3MDEwMjExNjozMjk2OTIzMTM0Njk1NjQ4OTk1"
+        "MTc5NzU4NjUxODA4MTUzNgZDZD"
+    )
+    payload = {
+        "inbox": {"channel_type": "Channel::Instagram"},
+        "contact": {"name": "Anon"},
+        "source_id": ig_mid,
+    }
+    external, _, phone, _ = _contact_identity(payload)
+    assert external == ig_mid
+    assert len(external) > 128
+    assert phone is None
+    assert _resolve_channel(payload) == Channel.instagram
+
+
+def test_resolve_channel_whatsapp_inbox():
+    payload = {
+        "inbox": {"channel_type": "Channel::Whatsapp"},
+        "contact": {"phone_number": "+525512345678"},
+    }
+    assert _resolve_channel(payload) == Channel.whatsapp
 
 
 def test_incoming_message_source_id():

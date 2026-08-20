@@ -96,6 +96,39 @@ async def _add_column_if_missing(conn, table: str, column: str, ddl: str) -> Non
     logger.info("schema_column_added", table=table, column=column)
 
 
+async def _widen_varchar_if_needed(
+    conn, table: str, column: str, length: int
+) -> None:
+    """Amplía VARCHAR existente si character_maximum_length < length."""
+    result = await conn.execute(
+        text(
+            """
+            SELECT character_maximum_length
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = :table
+              AND column_name = :column
+            """
+        ),
+        {"table": table, "column": column},
+    )
+    current = result.scalar()
+    if current is None or int(current) >= length:
+        return
+    await conn.execute(
+        text(
+            f"ALTER TABLE {table} ALTER COLUMN {column} TYPE VARCHAR({length})"
+        )
+    )
+    logger.info(
+        "schema_column_widened",
+        table=table,
+        column=column,
+        from_length=int(current),
+        to_length=length,
+    )
+
+
 async def _ensure_qualification_columns(conn) -> None:
     """Añade columnas nuevas si la tabla ya existía (create_all no altera)."""
     await conn.execute(
@@ -145,6 +178,9 @@ async def _ensure_qualification_columns(conn) -> None:
         ("preferred_contact_time", "ADD COLUMN preferred_contact_time VARCHAR(255)"),
     ):
         await _add_column_if_missing(conn, "conversations", column, ddl)
+
+    # Instagram Chatwoot source_id ~160+ chars (antes VARCHAR(128))
+    await _widen_varchar_if_needed(conn, "conversations", "external_user_id", 512)
 
     if not await _index_exists(conn, "ix_conversations_qualification_source"):
         await conn.execute(

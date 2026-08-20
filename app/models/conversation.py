@@ -39,7 +39,8 @@ class Conversation(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     channel: Mapped[Channel] = mapped_column(Enum(Channel), index=True, nullable=False)
-    external_user_id: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    # Instagram/Chatwoot source_id puede superar 128 (mid base64 ~160+)
+    external_user_id: Mapped[str] = mapped_column(String(512), index=True, nullable=False)
     user_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     user_phone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     user_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
