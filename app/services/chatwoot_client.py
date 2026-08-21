@@ -235,15 +235,78 @@ class ChatwootClient:
             return [item for item in messages if isinstance(item, dict)]
         return []
 
+    async def assign_conversation(
+        self,
+        conversation_id: int,
+        *,
+        team_id: Optional[int] = None,
+        assignee_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Asigna el hilo a un equipo y/o agente (API Conversation Assignments)."""
+        assert self._client is not None
+        if team_id is None and assignee_id is None:
+            raise ChatwootError("assign_conversation requires team_id or assignee_id")
+        url = self._account_path(f"/conversations/{conversation_id}/assignments")
+        payload: Dict[str, Any] = {}
+        if assignee_id is not None:
+            payload["assignee_id"] = assignee_id
+        elif team_id is not None:
+            payload["team_id"] = team_id
+        r = await self._client.post(url, json=payload)
+        if r.status_code >= 400:
+            logger.error(
+                "chatwoot_assign_failed",
+                status=r.status_code,
+                body=r.text[:500],
+                conversation_id=conversation_id,
+                team_id=team_id,
+                assignee_id=assignee_id,
+            )
+            raise ChatwootError(f"assign failed: {r.status_code} {r.text[:300]}")
+        data = r.json() if r.content else {}
+        logger.info(
+            "chatwoot_assigned",
+            conversation_id=conversation_id,
+            team_id=team_id,
+            assignee_id=assignee_id,
+        )
+        return data if isinstance(data, dict) else {}
+
     async def handoff_to_human(
-        self, conversation_id: int, *, note: Optional[str] = None
+        self,
+        conversation_id: int,
+        *,
+        note: Optional[str] = None,
+        team_id: Optional[int] = None,
+        assignee_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
-        Cambia status a open para que un asesor pueda tomar la conversación.
-        El bot sigue contestando hasta que un humano escriba en público.
+        Cambia status a open y opcionalmente asigna equipo/agente.
+        El bot sigue contestando hasta que un humano escriba en público;
+        asignar equipo o mirar el hilo no lo calla.
         """
         data = await self.set_status(conversation_id, "open")
-        logger.info("chatwoot_handed_off", conversation_id=conversation_id)
+        if team_id is not None or assignee_id is not None:
+            try:
+                await self.assign_conversation(
+                    conversation_id,
+                    team_id=team_id,
+                    assignee_id=assignee_id,
+                )
+            except Exception as exc:
+                logger.error(
+                    "chatwoot_handoff_assign_failed",
+                    conversation_id=conversation_id,
+                    team_id=team_id,
+                    assignee_id=assignee_id,
+                    error=str(exc),
+                )
+        logger.info(
+            "chatwoot_handed_off",
+            conversation_id=conversation_id,
+            team_id=team_id,
+            assignee_id=assignee_id,
+        )
         if note:
             try:
                 await self.send_message(conversation_id, note, private=True)
@@ -254,3 +317,22 @@ class ChatwootClient:
                     error=str(exc),
                 )
         return data
+
+
+def resolve_handoff_queue(queue: str = "") -> tuple[int, str]:
+    """
+    Mapea el nombre semántico del agente a (team_id, etiqueta).
+    Default: recepción. Los IDs viven en env (CHATWOOT_TEAM_*_ID).
+    """
+    settings = get_settings()
+    q = (queue or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if q in (
+        "important",
+        "importante",
+        "prospectos_importantes",
+        "prospecto_importante",
+        "vip",
+        "hot",
+    ):
+        return settings.chatwoot_team_important_id, "prospectos importantes"
+    return settings.chatwoot_team_reception_id, "recepción"

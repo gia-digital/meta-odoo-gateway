@@ -267,6 +267,9 @@ async def knowledge_skill_save(
     row = await store.get_skill(sid) if sid else None
     if row is None:
         row = KnowledgeSkill(source="manual")
+    else:
+        # Deja de sobrescribirse en el seed del boot.
+        row.source = "manual"
     row.title = title.strip()
     row.when_to_apply = when_to_apply.strip()
     row.body = body.strip()

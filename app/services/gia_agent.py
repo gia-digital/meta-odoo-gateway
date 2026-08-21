@@ -22,7 +22,7 @@ from app.core.logging import get_logger
 from app.models.conversation import Channel, Conversation, QualificationSource
 from app.services.agent_knowledge import build_agent_instructions
 from app.services.catalog_document import deliver_catalog
-from app.services.chatwoot_client import ChatwootClient
+from app.services.chatwoot_client import ChatwootClient, resolve_handoff_queue
 from app.services.conversation import ConversationService
 from app.services.knowledge.retriever import format_hits, retrieve_knowledge
 
@@ -119,12 +119,16 @@ def _build_tools():
         user_phone: str = "",
         user_email: str = "",
         handed_off: bool = False,
+        queue: str = "reception",
     ) -> str:
         """
         Registra un prospecto calificado en el servidor de GIA para que ventas dé seguimiento.
         Usa SOLO si el material es del catálogo GIA (acero al carbono) y hay mayoreo
         (mín. ~1 ton/partida y 3 ton total) o el cliente pidió hablar con un asesor.
         NO uses para inoxidable, aluminio, ni pedidos de menudeo/pocas láminas bajo mínimo.
+        Si handed_off=true, queue elige el equipo Chatwoot: "reception" (default) o
+        "important" (prospectos de alto valor). Criterios en la skill de escalado.
+        Tú sigues contestando tras escalar hasta que un humano escriba al cliente.
         """
         bot = ctx.context
         service = ConversationService(bot.db)
@@ -146,13 +150,15 @@ def _build_tools():
         bot.conversation = conv
         if handed_off:
             bot.handed_off = True
+            team_id, team_label = resolve_handoff_queue(queue)
             try:
                 async with ChatwootClient() as cw:
                     await cw.handoff_to_human(
                         bot.chatwoot_conversation_id,
+                        team_id=team_id,
                         note=(
-                            f"Lead creado y escalado. Motivo: {reason}. "
-                            f"{summary}".strip()
+                            f"Lead creado y escalado → {team_label}. "
+                            f"Motivo: {reason}. {summary}".strip()
                         ),
                     )
             except Exception as exc:
@@ -160,16 +166,19 @@ def _build_tools():
                     "agent_create_lead_handoff_failed",
                     error=str(exc),
                     chatwoot_conversation_id=bot.chatwoot_conversation_id,
+                    queue=queue,
+                    team_id=team_id,
                 )
         logger.info(
             "agent_tool_create_lead",
             conversation_id=conv.id,
             handed_off=handed_off,
+            queue=(queue or "reception") if handed_off else None,
         )
         if handed_off:
             return (
                 f"Lead registrado (id interno {conv.id}, status={conv.status.value}). "
-                f"{client_handoff_guidance()} No menciones IDs internos."
+                f"{client_handoff_guidance()} No menciones IDs internos ni el equipo."
             )
         return (
             f"Lead registrado (id interno {conv.id}, status={conv.status.value}). "
@@ -181,10 +190,14 @@ def _build_tools():
     async def escalate_to_human(
         ctx: RunContextWrapper[BotContext],
         reason: str,
+        queue: str = "reception",
     ) -> str:
         """
-        Escala la conversación a un asesor humano en Chatwoot (abre el ticket).
-        Tú sigues contestando hasta que un humano escriba al cliente.
+        Escala la conversación a un asesor humano en Chatwoot (abre el ticket y
+        asigna equipo). Tú SIGUES contestando hasta que un humano escriba al
+        cliente; asignar equipo no te calla.
+        queue: "reception" (default, la mayoría) o "important" (alto valor).
+        Criterios de cuándo usar cada una: skill «Escalar a un asesor».
         Usa cuando hace falta cotización formal, datos bancarios, reclamación,
         cliente con vendedor, o el cliente pide hablar con una persona.
         """
@@ -192,17 +205,21 @@ def _build_tools():
         service = ConversationService(bot.db)
         await service.mark_handed_off(bot.conversation, reason=reason)
         bot.handed_off = True
+        team_id, team_label = resolve_handoff_queue(queue)
         try:
             async with ChatwootClient() as cw:
                 await cw.handoff_to_human(
                     bot.chatwoot_conversation_id,
-                    note=f"Escalado por el agente. Motivo: {reason}",
+                    team_id=team_id,
+                    note=f"Escalado → {team_label}. Motivo: {reason}",
                 )
         except Exception as exc:
             logger.error(
                 "agent_escalate_chatwoot_failed",
                 error=str(exc),
                 chatwoot_conversation_id=bot.chatwoot_conversation_id,
+                queue=queue,
+                team_id=team_id,
             )
             return (
                 f"Conversación marcada como escalada en el gateway, pero Chatwoot "
@@ -212,8 +229,14 @@ def _build_tools():
             "agent_tool_escalate",
             conversation_id=bot.conversation.id,
             reason=reason,
+            queue=queue or "reception",
+            team_id=team_id,
+            team_label=team_label,
         )
-        return client_handoff_guidance()
+        return (
+            f"{client_handoff_guidance()} "
+            "No menciones el equipo interno al cliente."
+        )
 
     @function_tool
     async def search_knowledge(

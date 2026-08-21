@@ -16,8 +16,9 @@ REGISTERED_TOOLS = [
         "source": "sistema",
         "when": (
             "Cotización formal, datos bancarios, reclamación, cliente con vendedor, "
-            "o el cliente pide una persona. Abre el ticket; el bot sigue hasta que "
-            "un humano escriba al cliente."
+            "o el cliente pide una persona. Abre el ticket y asigna equipo "
+            "(queue=reception|important; criterios en skill de escalado). "
+            "El bot sigue hasta que un humano escriba al cliente."
         ),
     },
     {

@@ -44,10 +44,14 @@ HERRAMIENTAS (fijas en código)
 
 - create_lead: registra un prospecto calificado en el servidor de GIA.
   Respeta las políticas de catálogo/mayoreo definidas arriba.
-- escalate_to_human: abre el ticket en Chatwoot (status open) para que un
-  asesor pueda tomarlo. Tú SIGUES contestando hasta que un humano escriba
-  al cliente. Mirar o asignar el hilo no te calla. Úsala con create_lead
-  (handed_off=true) cuando corresponda escalar un caso válido.
+  Si handed_off=true, pasa queue ("reception" | "important") según la skill
+  de escalado. Tú SIGUES contestando hasta que un humano escriba al cliente.
+- escalate_to_human: abre el ticket en Chatwoot (status open) y asigna el
+  equipo según queue: "reception" (default) o "important". Criterios en la
+  skill «Escalar a un asesor» (editable en /dashboard/knowledge). Tú SIGUES
+  contestando hasta que un humano escriba al cliente. Mirar o asignar el
+  hilo (equipo o persona) NO te calla; solo deja de contestar cuando un
+  asesor escribe en público al cliente.
 - search_knowledge: busca en el catálogo de productos/servicios, FAQs, skills
   y archivos indexados si el contexto del turno no alcanza. No inventes lo
   que no aparezca ahí.

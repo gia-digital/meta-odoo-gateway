@@ -45,6 +45,8 @@ CHATWOOT_BASE_URL=https://chat.tuempresa.com
 CHATWOOT_ACCOUNT_ID=1
 CHATWOOT_BOT_TOKEN=...
 CHATWOOT_WEBHOOK_SECRET=   # opcional
+CHATWOOT_TEAM_RECEPTION_ID=1
+CHATWOOT_TEAM_IMPORTANT_ID=3
 
 # WhatsApp read receipts (palomitas azules en mensajes del cliente; mismos datos del inbox WA)
 WHATSAPP_CLOUD_ACCESS_TOKEN=...
@@ -83,8 +85,8 @@ Por cada mensaje: retrieval híbrido (cosine `<=>` + keywords) e inyección de t
 
 ## 5. Tools del agente
 
-- **create_lead** — registra prospecto calificado (`qualification_source=chatwoot_agent`); visible en `/dashboard/leads`.
-- **escalate_to_human** — marca handoff en DB + `toggle_status` → `open` en Chatwoot. El bot **sigue contestando** hasta que un humano escriba al cliente.
+- **create_lead** — registra prospecto calificado (`qualification_source=chatwoot_agent`); visible en `/dashboard/leads`. Con `handed_off=true` abre el ticket y asigna equipo (`queue`).
+- **escalate_to_human** — marca handoff en DB + `toggle_status` → `open` + asignación a equipo Chatwoot. Parámetro `queue`: `reception` (default, team `CHATWOOT_TEAM_RECEPTION_ID`) o `important` (`CHATWOOT_TEAM_IMPORTANT_ID`). Criterios de cuándo usar cada cola: skill **Escalar a un asesor** en `/dashboard/knowledge` (editable sin redeploy). El bot **sigue contestando** hasta que un humano escriba al cliente; asignar equipo no lo calla.
 - **search_knowledge** — RAG sobre FAQs/skills/files en pgvector.
 - **send_catalog** — adjunta `Carta Presentación GIA.pdf` al hilo (WhatsApp) cuando piden catálogo o carta de presentación. No es la lista de precios ni la presentación corporativa 2027. Cada conversación sube el PDF de nuevo (WhatsApp no reutiliza el archivo entre clientes); en el mismo hilo no se reenvía.
 - **check_sales_hours** — reloj y horario de asesores (L–V 8:00–19:00, sáb 9:00–13:00, CDMX). Úsala antes de decir cuándo contactará un humano; no inventa franjas ni usa el horario de planta.
@@ -97,10 +99,11 @@ Por cada mensaje: retrieval híbrido (cosine `<=>` + keywords) e inyección de t
 4. Pide “hablar con un asesor” → conversación pasa a **open**; el bot **sigue** hasta que un asesor escriba.
 5. Pide el catálogo / carta de presentación → el bot adjunta el PDF.
 
-El bot deja una **nota privada** en el hilo. **Mirar o asignar no calla al bot;
-escribir al cliente sí.** Para devolverle el hilo al bot, pon el ticket en
-**Pending**. Un error puntual del LLM **no** abre el ticket; solo tras
-`AGENT_ERROR_HANDOFF_THRESHOLD` fallos seguidos.
+El bot deja una **nota privada** en el hilo y asigna el **equipo** (`reception` o
+`important`). **Mirar o asignar no calla al bot; escribir al cliente sí.** Para
+devolverle el hilo al bot, pon el ticket en **Pending**. Un error puntual del LLM
+**no** abre el ticket; solo tras `AGENT_ERROR_HANDOFF_THRESHOLD` fallos seguidos
+(ese handoff va a recepción).
 
 Horario laboral (orientativo, no es promesa): L–V 8:00–19:00 y sábados
 9:00–13:00, Ciudad de México. Fuera de horario el agente no dice “en breve”.

@@ -705,6 +705,8 @@ async def test_mark_whatsapp_message_read_skips_without_config(monkeypatch):
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    monkeypatch.setenv("WHATSAPP_CLOUD_ACCESS_TOKEN", "")
+    monkeypatch.setenv("WHATSAPP_CLOUD_PHONE_NUMBER_ID", "")
     from app.core.config import get_settings
 
     get_settings.cache_clear()
@@ -720,4 +722,69 @@ async def test_mark_whatsapp_message_read_skips_without_config(monkeypatch):
     from app.services.whatsapp_read_receipt import mark_whatsapp_message_read
 
     assert await mark_whatsapp_message_read("wamid.test123") is False
+    get_settings.cache_clear()
+
+
+def test_resolve_handoff_queue(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    monkeypatch.setenv("CHATWOOT_TEAM_RECEPTION_ID", "1")
+    monkeypatch.setenv("CHATWOOT_TEAM_IMPORTANT_ID", "3")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.services.chatwoot_client import resolve_handoff_queue
+
+    assert resolve_handoff_queue("") == (1, "recepción")
+    assert resolve_handoff_queue("reception") == (1, "recepción")
+    assert resolve_handoff_queue("important") == (3, "prospectos importantes")
+    assert resolve_handoff_queue("VIP") == (3, "prospectos importantes")
+    assert resolve_handoff_queue("prospectos_importantes") == (
+        3,
+        "prospectos importantes",
+    )
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_handoff_assigns_team(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    monkeypatch.setenv("CHATWOOT_ACCOUNT_ID", "1")
+    monkeypatch.setenv("CHATWOOT_BASE_URL", "https://chat.example")
+    monkeypatch.setenv("CHATWOOT_BOT_TOKEN", "tok")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.services.chatwoot_client import ChatwootClient
+
+    posts: list[tuple[str, dict]] = []
+
+    class FakeHttp:
+        async def post(self, url, **kwargs):
+            posts.append((url, kwargs.get("json") or {}))
+
+            class R:
+                status_code = 200
+                content = b"{}"
+                text = "{}"
+
+                def json(self):
+                    return {}
+
+            return R()
+
+        async def aclose(self):
+            return None
+
+    cw = ChatwootClient()
+    cw.settings = get_settings()
+    cw._client = FakeHttp()
+    await cw.handoff_to_human(42, note="Escalado → recepción", team_id=1)
+    assert posts[0][0].endswith("/conversations/42/toggle_status")
+    assert posts[0][1] == {"status": "open"}
+    assert posts[1][0].endswith("/conversations/42/assignments")
+    assert posts[1][1] == {"team_id": 1}
+    assert posts[2][0].endswith("/conversations/42/messages")
+    assert posts[2][1].get("private") is True
     get_settings.cache_clear()

@@ -18,5 +18,6 @@ Guía operativa / tono: `Guia_Respuesta_GIA.docx`
 ## Reglas al actualizar
 
 1. Edita el JSON (y el `.md` si el resumen cambia).
-2. En un entorno ya seeded, aplica los cambios en `/dashboard/knowledge` (el seed no sobrescribe).
-3. No commits de secretos.
+2. Skills con `source=seed`: al reiniciar el API se refrescan desde `skills.json`. Si las editas en `/dashboard/knowledge`, pasan a `source=manual` y ya no se sobrescriben.
+3. FAQs/productos en un entorno ya seeded: aplica cambios en el dashboard (el seed no los sobrescribe).
+4. No commits de secretos.

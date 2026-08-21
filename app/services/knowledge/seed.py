@@ -182,13 +182,29 @@ async def seed_from_agent_info(db: AsyncSession, *, agent_info: Path | None = No
                         result["skills"] += 1
                         logger.info("knowledge_seed_skill_added", title=title)
                         continue
+                    new_when = (item.get("description") or "").strip()
+                    new_body = (item.get("skill") or "").strip()
+                    # Skills aún "seed": refrescar desde JSON (editable en dashboard
+                    # pasa a source=manual y ya no se sobrescribe).
+                    if row.source == "seed" and (
+                        row.title != title
+                        or row.when_to_apply != new_when
+                        or row.body != new_body
+                    ):
+                        row.title = title
+                        row.when_to_apply = new_when
+                        row.body = new_body
+                        await store.save_skill(row)
+                        result["skills"] += 1
+                        logger.info("knowledge_seed_skill_refreshed", title=title)
+                        continue
                     if (
                         row.title == legacy
                         or row.when_to_apply.startswith("Apply ")
                     ):
                         row.title = title
-                        row.when_to_apply = (item.get("description") or "").strip()
-                        row.body = (item.get("skill") or "").strip()
+                        row.when_to_apply = new_when
+                        row.body = new_body
                         await store.save_skill(row)
                         result["skills"] += 1
                         logger.info("knowledge_seed_skill_translated", title=title)

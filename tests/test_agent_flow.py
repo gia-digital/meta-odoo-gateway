@@ -226,7 +226,7 @@ async def test_first_agent_error_stays_pending(monkeypatch):
             sent.append(content)
             return {"id": 1}
 
-        async def handoff_to_human(self, cid, note=None):
+        async def handoff_to_human(self, cid, note=None, **kwargs):
             handoffs.append(cid)
             return {}
 
@@ -306,7 +306,7 @@ def _webhook_fakes(monkeypatch, *, conv, service, boom=True):
             sent.append(content)
             return {"id": len(sent)}
 
-        async def handoff_to_human(self, cid, note=None):
+        async def handoff_to_human(self, cid, note=None, **kwargs):
             handoffs.append(cid)
             return {}
 
@@ -850,7 +850,7 @@ async def test_open_history_human_reply_mutes_bot(monkeypatch):
             sent.append(content)
             return {"id": len(sent)}
 
-        async def handoff_to_human(self, cid, note=None):
+        async def handoff_to_human(self, cid, note=None, **kwargs):
             return {}
 
         async def set_status(self, cid, status):

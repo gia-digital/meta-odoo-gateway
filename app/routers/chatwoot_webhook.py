@@ -465,11 +465,16 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
             if threshold > 0 and fails >= threshold:
                 reply = AGENT_HANDOFF_REPLY
                 try:
+                    from app.services.chatwoot_client import resolve_handoff_queue
+
+                    team_id, team_label = resolve_handoff_queue("reception")
                     async with ChatwootClient() as cw:
                         await cw.handoff_to_human(
                             cw_conv_id,
+                            team_id=team_id,
                             note=(
-                                f"Handoff por {fails} errores seguidos del agente: {exc}"
+                                f"Handoff → {team_label} por {fails} errores "
+                                f"seguidos del agente: {exc}"
                             ),
                         )
                     await service.mark_handed_off(conv, reason=f"agent_error: {exc}")

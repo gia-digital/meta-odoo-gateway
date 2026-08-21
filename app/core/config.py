@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     chatwoot_account_id: int = 0
     chatwoot_bot_token: str = ""
     chatwoot_webhook_secret: str = ""
+    # Equipos Chatwoot al escalar (POST .../assignments). IDs de Settings → Teams.
+    chatwoot_team_reception_id: int = 1
+    chatwoot_team_important_id: int = 3
     # Junta mensajes rápidos del mismo hilo antes de llamar al LLM (1 worker).
     chatwoot_debounce_seconds: float = 4.0
     # Fallos seguidos del agente antes de abrir el ticket (0 = nunca por error).
