@@ -1,6 +1,6 @@
 # FAQs — agente GIA (Chatwoot)
 
-Total: **46** entradas.
+Total: **47** entradas.
 
 Fuente principal: `Guia_Respuesta_GIA.docx` §25, validada con temas frecuentes de `conversaciones_whatsapp.txt`.
 
@@ -12,31 +12,36 @@ Desafortunadamente no vendemos por menudeo; nuestro pedido mínimo es de 1 tonel
 
 ### 2. ¿Cuál es el pedido mínimo?
 
-1 tonelada por partida y 3 toneladas en total. Varilla: 25 ton (1 camión, máximo 2 calibres). Ángulo camero: 15 ton bajo fabricación. Alambre: 3 ton. Idealmente buscamos enviar camiones completos de 15 tons o tráileres de 30 tons, si completa este volumen se considera para un mejor precio
+1 tonelada por partida y 3 toneladas en total. Varilla: 25 ton (1 camión, máximo 2 calibres). Ángulo camero: 15 ton bajo fabricación. Alambre: 3 ton. Idealmente buscamos llenar torton de 15 tons o tráiler de 30 tons; con ese volumen su asesor puede mejorar la cotización.
 
 ### 3. ¿Tienen lista de precios?
 
-Sí, y con gusto se la comparto. Se actualiza mes a mes según el mercado del acero; si su volumen es importante, podemos mejorar el precio unitario en su cotización.
+Sí existe lista de referencia y se actualiza mes a mes; se la confirma y envía un asesor. Yo no puedo dar precios ni cifras por este chat. ¿Qué material y tonelaje busca?
 
-### 4. ¿El precio es por pieza o por kilo?
+### 4. ¿Cuánto cuesta / me da el precio?
 
-Cotizamos por kilo más IVA, porque así se factura; el número de piezas es aproximado por el peso teórico del material.
+El precio se lo confirma directamente un asesor; yo no doy precios (ni por kilo, pieza, tonelada ni estimaciones). ¿Qué material y calibre ocupa?
 
-### 5. ¿Manejan precios en dólares?
+### 5. ¿El precio es por pieza o por kilo?
 
-Sí, cotizamos en pesos (MXN) o en dólares (USD), como le convenga.
+La cotización la arma el asesor por kilo más IVA (así se factura); las piezas se estiman por peso teórico. Yo no doy precios ni cifras. ¿Qué material y calibre ocupa?
 
-### 6. ¿Cuánto tiempo vale la cotización?
+### 6. ¿Manejan precios en dólares?
 
-La vigencia es de 1 día, salvo indicación contraria por escrito, por los movimientos del mercado. Si le interesa, hoy mismo lo dejamos amarrado.
+Sí, el asesor puede cotizarle en pesos (MXN) o en dólares (USD). Yo no doy precios. ¿Qué material busca?
 
-### 7. ¿Hacen descuento?
+### 7. ¿Cuánto tiempo vale la cotización?
 
-El precio mejora con el volumen: a mayor tonelaje, mejor precio unitario. Su asesor lo refleja en la cotización.
+La vigencia típica es de 1 día, salvo indicación por escrito; su asesor se lo confirma en la cotización formal. ¿Qué material y tonelaje le interesa?
 
-### 8. ¿Puedo pagar en efectivo?
+### 8. ¿Hacen descuento?
+
+Las mejoras por volumen las autoriza el asesor en la cotización formal. Yo no doy precios ni descuentos numéricos. ¿Qué material y tonelaje busca?
+
+### 9. ¿Puedo pagar en efectivo?
 
 No manejamos efectivo ni venta de mostrador; el pago es por transferencia o depósito a cuentas BBVA de GIA.
+
 
 ## Producto
 
@@ -50,7 +55,7 @@ Sí. Con gusto le enviamos la carta de presentación de GIA con nuestras líneas
 
 ### 3. ¿Tienen PTR?
 
-No fabricamos PTR ni perfil estructural. Nuestra tubería es industrial de acero negro comercial con costura interna, no estructural. Si su uso lo permite, con gusto se la cotizamos.
+No fabricamos PTR ni perfil estructural. Nuestra tubería es industrial de acero negro comercial con costura interna, no estructural. Si su uso lo permite, su asesor se la cotiza.
 
 ### 4. ¿Manejan inoxidable o aluminio?
 

@@ -6,7 +6,7 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.agent_behavior import (
@@ -32,7 +32,14 @@ from app.services.agent_knowledge import (
     PRODUCT_KIND_LABELS,
     invalidate_instructions_cache,
 )
+from app.services.knowledge.export import build_export_zip, collect_agent_info_export
+from app.services.knowledge.import_agent_info import (
+    import_agent_info_bundle,
+    load_bundle_from_dir,
+    load_bundle_from_zip,
+)
 from app.services.knowledge.ingest import ingest_file, uploads_dir
+from app.services.knowledge.seed import AGENT_INFO
 from app.services.knowledge.store import KnowledgeStore
 from app.services.knowledge.tools_registry import REGISTERED_TOOLS
 from app.services.llm_catalog import load_model_catalogs
@@ -44,9 +51,13 @@ ALLOWED_PRODUCT_KINDS = set(PRODUCT_KIND_LABELS)
 
 
 def _redirect(tab: str, notice: str = "") -> RedirectResponse:
-    url = f"/dashboard/knowledge/{tab}"
+    from urllib.parse import quote
+
+    url = f"/dashboard/knowledge/{tab}".rstrip("/") or "/dashboard/knowledge"
+    if tab == "":
+        url = "/dashboard/knowledge"
     if notice:
-        url += f"?notice={notice}"
+        url += f"?notice={quote(notice)}"
     return RedirectResponse(url=url, status_code=303)
 
 
@@ -73,6 +84,76 @@ async def knowledge_overview(
             "tools": REGISTERED_TOOLS,
         },
     )
+
+
+@router.get("/export", name="dashboard_knowledge_export")
+async def knowledge_export(
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+):
+    """ZIP con agent_info/*.json + PDFs para versionar en el repo."""
+    snapshot = await collect_agent_info_export(db)
+    payload = build_export_zip(snapshot)
+    stamp = (snapshot.get("exported_at") or "")[:10].replace("-", "") or "export"
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="gia-knowledge-{stamp}.zip"'
+        },
+    )
+
+
+@router.post("/import", name="dashboard_knowledge_import")
+async def knowledge_import(
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+    upload: Optional[UploadFile] = File(default=None),
+    from_agent_info: Optional[str] = Form(default=None),
+    include_files: Optional[str] = Form(default=None),
+    deactivate_missing: Optional[str] = Form(default=None),
+):
+    """Importa ZIP exportado o el agent_info/ del contenedor (sobrescribe Postgres)."""
+    do_files = include_files == "on"
+    do_deactivate = deactivate_missing == "on"
+    try:
+        if from_agent_info == "on":
+            if not AGENT_INFO.is_dir():
+                raise HTTPException(status_code=400, detail="agent_info/ no está en el contenedor")
+            bundle = load_bundle_from_dir(AGENT_INFO)
+        else:
+            if upload is None or not (upload.filename or "").strip():
+                raise HTTPException(status_code=400, detail="Sube un ZIP o elige importar agent_info/")
+            name = Path(upload.filename or "knowledge.zip").name.lower()
+            if not name.endswith(".zip"):
+                raise HTTPException(status_code=400, detail="Solo se acepta un archivo .zip")
+            data = await upload.read()
+            if not data:
+                raise HTTPException(status_code=400, detail="ZIP vacío")
+            bundle = load_bundle_from_zip(data)
+        counts = await import_agent_info_bundle(
+            db,
+            bundle,
+            include_files=do_files,
+            deactivate_missing=do_deactivate,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Import falló: {exc}") from exc
+
+    notice = (
+        f"Import OK — negocio={counts['business']} "
+        f"faqs={counts['faqs_upserted']} skills={counts['skills_upserted']} "
+        f"productos={counts['products_upserted']} archivos={counts['files_upserted']}"
+    )
+    if do_deactivate:
+        notice += (
+            f" (desactivados faqs={counts['faqs_deactivated']} "
+            f"skills={counts['skills_deactivated']} "
+            f"productos={counts['products_deactivated']})"
+        )
+    return _redirect("", notice)
 
 
 @router.get("/business", response_class=HTMLResponse, name="dashboard_knowledge_business")

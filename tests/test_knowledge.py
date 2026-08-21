@@ -292,7 +292,265 @@ async def test_knowledge_dashboard_requires_auth(monkeypatch):
         r = await client.get("/dashboard/knowledge", follow_redirects=False)
         p = await client.get("/dashboard/knowledge/products", follow_redirects=False)
         m = await client.get("/dashboard/knowledge/model", follow_redirects=False)
+        e = await client.get("/dashboard/knowledge/export", follow_redirects=False)
     assert r.status_code == 303
     assert p.status_code == 303
     assert m.status_code == 303
+    assert e.status_code == 303
+    get_settings.cache_clear()
+
+
+def test_export_serializers_match_agent_info_shape():
+    import io
+    import zipfile
+
+    from app.services.knowledge.export import (
+        business_to_agent_info,
+        build_export_zip,
+        faqs_to_agent_info,
+        products_to_agent_info,
+        skills_to_agent_info,
+    )
+
+    biz = MagicMock()
+    biz.business_description = "GIA"
+    biz.purchase_info = "Mayoreo"
+    biz.payment_method = "Transferencia"
+    biz.delivery_and_shipping = "3-4 días"
+    biz.return_policy = "Inspección"
+    biz.email = "a@b.com"
+    biz.hours_of_operation = "L-V"
+    biz.address = "Ecatepec"
+    biz.agent_instructions = "Habla de usted."
+
+    faq = MagicMock()
+    faq.question = "¿Pedido mínimo?"
+    faq.answer = "1 ton / 3 ton"
+    faq.category = "compra_precios"
+    faq.active = True
+    faq.source = "manual"
+
+    skill = MagicMock()
+    skill.title = "Política de precios"
+    skill.when_to_apply = "Cuando preguntan precio"
+    skill.body = "No inventes descuentos"
+    skill.active = True
+    skill.source = "seed"
+
+    product = MagicMock()
+    product.name = "Lámina HR"
+    product.kind = "product"
+    product.category = "aceros_planos"
+    product.sort_order = 10
+    product.aliases = "HR"
+    product.summary = "Caliente"
+    product.details = "Detalle"
+    product.active = True
+    product.source = "seed"
+
+    bi = business_to_agent_info(biz)
+    assert bi["payload"]["business_description"] == "GIA"
+    assert bi["agent_instructions"] == "Habla de usted."
+    assert bi["payload"]["contact_info"]["email"] == "a@b.com"
+
+    assert faqs_to_agent_info([faq])["faqs"][0]["question"] == "¿Pedido mínimo?"
+    assert skills_to_agent_info([skill])["skills"][0]["skill"] == "No inventes descuentos"
+    assert products_to_agent_info([product])["products"][0]["name"] == "Lámina HR"
+
+    zip_bytes = build_export_zip(
+        {
+            "exported_at": "2026-08-21T12:00:00+00:00",
+            "business_info": bi,
+            "faqs": faqs_to_agent_info([faq]),
+            "skills": skills_to_agent_info([skill]),
+            "products": products_to_agent_info([product]),
+            "files_manifest": {"files": []},
+            "file_rows": [],
+        }
+    )
+    assert zip_bytes[:2] == b"PK"
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        names = set(zf.namelist())
+        assert "faqs.json" in names
+        assert "skills.json" in names
+        assert "products.json" in names
+        assert "business_info.json" in names
+        assert "agent_instructions.md" in names
+
+
+def test_agent_info_forbids_agent_prices():
+    """Regresión: skills/FAQs no deben invitar al agente a cotizar."""
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "agent_info"
+    skills = json.loads((root / "skills.json").read_text(encoding="utf-8"))
+    pricing = next(s for s in skills["skills"] if s["title"] == "Política de precios")
+    body = pricing["skill"].lower()
+    assert "nunca des precios" in body or "prohibido absoluto" in body
+    assert "el precio se lo confirma directamente un asesor" in body
+
+    faqs = json.loads((root / "faqs.json").read_text(encoding="utf-8"))
+    by_q = {f["question"]: f["answer"].lower() for f in faqs["faqs"]}
+    assert "yo no doy precios" in by_q["¿Cuánto cuesta / me da el precio?"]
+    assert "asesor" in by_q["¿Tienen lista de precios?"]
+    assert "con gusto se la comparto" not in by_q["¿Tienen lista de precios?"]
+
+
+def test_load_bundle_from_dir_and_zip_roundtrip(tmp_path):
+    from pathlib import Path
+
+    from app.services.knowledge.export import build_export_zip
+    from app.services.knowledge.import_agent_info import (
+        load_bundle_from_dir,
+        load_bundle_from_zip,
+    )
+
+    root = Path(__file__).resolve().parents[1] / "agent_info"
+    bundle = load_bundle_from_dir(root)
+    assert bundle["faqs"]["faqs"]
+    assert bundle["skills"]["skills"]
+    assert (bundle["business_info"].get("payload") or {}).get("business_description")
+
+    zip_bytes = build_export_zip(
+        {
+            "exported_at": "2026-08-21T12:00:00+00:00",
+            "business_info": {
+                **bundle["business_info"],
+                "agent_instructions": "NUNCA des precios.",
+            },
+            "faqs": bundle["faqs"],
+            "skills": bundle["skills"],
+            "products": bundle["products"],
+            "files_manifest": {"files": []},
+            "file_rows": [],
+        }
+    )
+    loaded = load_bundle_from_zip(zip_bytes)
+    assert loaded["business_info"]["agent_instructions"] == "NUNCA des precios."
+    assert len(loaded["faqs"]["faqs"]) == len(bundle["faqs"]["faqs"])
+    assert any(
+        "nunca" in (s.get("skill") or "").lower()
+        for s in loaded["skills"]["skills"]
+        if s.get("title") == "Política de precios"
+    )
+
+
+@pytest.mark.asyncio
+async def test_import_bundle_upserts_without_db(monkeypatch):
+    from app.services.knowledge import import_agent_info as mod
+
+    saved_faqs = []
+    saved_skills = []
+    saved_products = []
+    business_fields = {}
+
+    class FakeStore:
+        def __init__(self, db):
+            self.db = db
+
+        async def upsert_business(self, **fields):
+            business_fields.update(fields)
+            return MagicMock()
+
+        async def list_faqs(self, include_inactive=True):
+            return []
+
+        async def save_faq(self, faq):
+            saved_faqs.append(faq)
+            return faq
+
+        async def list_skills(self, include_inactive=True):
+            return []
+
+        async def save_skill(self, skill):
+            saved_skills.append(skill)
+            return skill
+
+        async def list_products(self, include_inactive=True):
+            return []
+
+        async def save_product(self, product):
+            saved_products.append(product)
+            return product
+
+        async def list_files(self):
+            return []
+
+    monkeypatch.setattr(mod, "KnowledgeStore", FakeStore)
+    monkeypatch.setattr(mod, "invalidate_instructions_cache", lambda: None)
+
+    db = AsyncMock()
+    db.execute = AsyncMock()
+
+    bundle = {
+        "business_info": {
+            "payload": {
+                "business_description": "GIA",
+                "purchase_info": "Mayoreo",
+                "payment_method": "",
+                "delivery_and_shipping": "",
+                "return_policy": "",
+                "contact_info": {"email": "a@b.com", "hours_of_operation": "", "address": ""},
+            },
+            "agent_instructions": "NUNCA des precios.",
+        },
+        "faqs": {
+            "faqs": [
+                {
+                    "question": "¿Cuánto cuesta / me da el precio?",
+                    "answer": "El precio se lo confirma directamente un asesor.",
+                    "metadata": {"category": "compra_precios"},
+                }
+            ]
+        },
+        "skills": {
+            "skills": [
+                {
+                    "title": "Política de precios",
+                    "description": "Cuando preguntan precio",
+                    "skill": "PROHIBIDO ABSOLUTO — NUNCA des precios.",
+                }
+            ]
+        },
+        "products": {
+            "products": [
+                {
+                    "name": "Lámina HR",
+                    "kind": "product",
+                    "category": "aceros_planos",
+                    "summary": "Caliente",
+                    "details": "Detalle",
+                }
+            ]
+        },
+        "file_blobs": [],
+    }
+    result = await mod.import_agent_info_bundle(db, bundle)
+    assert result["business"] == 1
+    assert result["faqs_upserted"] == 1
+    assert result["skills_upserted"] == 1
+    assert result["products_upserted"] == 1
+    assert business_fields["agent_instructions"] == "NUNCA des precios."
+    assert "asesor" in saved_faqs[0].answer.lower()
+    assert "nunca des precios" in saved_skills[0].body.lower()
+    assert saved_products[0].name == "Lámina HR"
+
+
+@pytest.mark.asyncio
+async def test_knowledge_import_requires_auth(monkeypatch):
+    monkeypatch.setenv("CHATWOOT_ENABLED", "false")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import app
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post("/dashboard/knowledge/import", follow_redirects=False)
+    assert r.status_code == 303
     get_settings.cache_clear()

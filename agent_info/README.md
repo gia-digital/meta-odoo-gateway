@@ -15,9 +15,33 @@ Payloads versionados para el seed de Postgres + pgvector. El Agent Bot de Chatwo
 
 Guía operativa / tono: `Guia_Respuesta_GIA.docx`
 
+## Exportar (Postgres → repo)
+
+1. **Dashboard:** Knowledge → Resumen → **Descargar knowledge (ZIP)**.
+2. **CLI:**
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .deploy.env exec api \
+  python -m scripts.export_knowledge --out /tmp/agent_info_export
+```
+
+## Importar (repo → Postgres)
+
+Sobrescribe FAQs/skills/productos/negocio en vivo (no hace falta vaciar tablas).
+
+1. **Dashboard:** Resumen → subir ZIP **o** marcar «Importar el agent_info/ del contenedor».
+2. **CLI tras deploy:**
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .deploy.env exec api \
+  python -m scripts.import_knowledge --from-agent-info
+```
+
+Opciones útiles: `--include-files`, `--deactivate-missing`.
+
 ## Reglas al actualizar
 
 1. Edita el JSON (y el `.md` si el resumen cambia).
-2. Skills con `source=seed`: al reiniciar el API se refrescan desde `skills.json`. Si las editas en `/dashboard/knowledge`, pasan a `source=manual` y ya no se sobrescriben.
-3. FAQs/productos en un entorno ya seeded: aplica cambios en el dashboard (el seed no los sobrescribe).
+2. Skills con `source=seed`: al reiniciar el API se refrescan desde `skills.json`. Si las editas en `/dashboard/knowledge`, pasan a `source=manual` y ya no se sobrescriben — usa **import** para forzar el repo.
+3. FAQs/productos: el seed de boot no sobrescribe; tras cambiar el repo usa **import** (dashboard o CLI).
 4. No commits de secretos.

@@ -40,6 +40,26 @@
   <h2>Actualización</h2>
   <p class="muted">Última actualización: {{ stats.last_updated|format_dt }}</p>
 </section>
+<section class="card">
+  <h2>Exportar / importar al repo</h2>
+  <p class="muted">Descarga un ZIP con <code>business_info.json</code>, <code>faqs.json</code>, <code>skills.json</code>, <code>products.json</code> y PDFs en <code>files/</code>. El import sobrescribe el knowledge vivo en Postgres (útil tras editar <code>agent_info/</code> en el repo y desplegar).</p>
+  <p><a class="btn btn-primary" href="/dashboard/knowledge/export">Descargar knowledge (ZIP)</a></p>
+  <form class="stack-form" method="post" action="/dashboard/knowledge/import" enctype="multipart/form-data" style="margin-top:1rem">
+    <label>ZIP exportado
+      <input type="file" name="upload" accept=".zip,application/zip">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="from_agent_info"> Importar el <code>agent_info/</code> del contenedor (sin ZIP)
+    </label>
+    <label class="check">
+      <input type="checkbox" name="include_files"> Incluir PDFs / archivos del paquete
+    </label>
+    <label class="check">
+      <input type="checkbox" name="deactivate_missing"> Desactivar FAQs/skills/productos que no vengan en el import
+    </label>
+    <button class="btn btn-secondary" type="submit">Importar a Postgres</button>
+  </form>
+</section>
 {% endif %}
 
 {% if tab == 'instructions' %}

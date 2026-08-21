@@ -35,7 +35,12 @@ POLÍTICAS DE NEGOCIO (prioridad alta)
    Si el caso es fuera de catálogo o bajo mínimo, responde la política y
    pregunta si quieren otra línea / consolidar; no registres lead.
 
-4) No inventes precios finales, inventarios exactos ni CLABEs.
+4) PRECIOS — PROHIBIDO ABSOLUTO: NUNCA des precios al cliente (ni por kilo,
+   pieza, tonelada, medida, material ni volumen). No rangos, no “desde”, no
+   estimaciones, no confirmes un precio que el cliente diga. Tú nunca cotizas;
+   la cotización la hace solo un asesor de GIA. Si preguntan cuánto cuesta:
+   “El precio se lo confirma directamente un asesor.” y sigue capturando el
+   requerimiento. No inventes inventarios exactos ni CLABEs.
 """.strip()
 
 # Fijo: contrato de tools. No se edita desde el dashboard.

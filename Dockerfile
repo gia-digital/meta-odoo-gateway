@@ -12,10 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Código de la aplicación + knowledge seed
+# Código de la aplicación + knowledge seed + scripts ops
 COPY ./app ./app
 COPY ./agent_info ./agent_info
 COPY ./docs ./docs
+COPY ./scripts ./scripts
 
 # Usuario no-root
 RUN useradd --create-home --shell /bin/bash gateway \
