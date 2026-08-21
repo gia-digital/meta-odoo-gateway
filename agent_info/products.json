@@ -76,7 +76,7 @@
       "sort_order": 80,
       "aliases": "pintro, pintada, prepintada, painted",
       "summary": "Galvanizada con pintura horneada: más duradera frente a corrosión. También se usa en acanalados.",
-      "details": "Formatos planos: rollo, hoja y cinta. Acanalados se fabrican en galvanizado y pintro."
+      "details": "Formatos planos: rollo, hoja y cinta. Acanalados se fabrican en galvanizado y pintro. NO manejamos pintro en color negro, rojo ni verde."
     },
     {
       "name": "Formatos de aceros planos",
@@ -146,9 +146,9 @@
       "kind": "product",
       "category": "tuberia",
       "sort_order": 160,
-      "aliases": "tubo, tubería, pipe, cédula, tubo negro, industrial, atado",
-      "summary": "Tubería industrial de acero negro comercial con costura interna. Fabricamos largos especiales. No es grado estructural ni PTR.",
-      "details": "Hoy no es tubería galvanizada de línea (puede haber Galvanneal en piso; preguntar a asesor). Venta por atados completos. Ejemplos de piezas/atado: 3\" ≈ 86 pzas, 2\" ≈ 61, 1\" ≈ 169 (tabla completa con el asesor). No sirve como estructural: decírselo con transparencia. Corte a la medida en planta."
+      "aliases": "tubo, tubería, pipe, tubo negro, industrial, atado, tubular",
+      "summary": "Tubería industrial de acero negro comercial con costura interna, diámetro hasta 3\". Fabricamos largos especiales. No es grado estructural ni PTR ni cédula.",
+      "details": "Solo diámetros hasta 3\" inclusive. NO cédula (30/40/80), NO tubo >3\", NO cerquero, NO HSS. Hoy no es tubería galvanizada de línea. Venta por atados completos. Ejemplos piezas/atado: 3\" ≈ 86, 2\" ≈ 61, 1\" ≈ 169 (tabla con el asesor). No sirve como estructural: dilo con transparencia. Corte a la medida en planta."
     },
     {
       "name": "Varilla",
@@ -173,17 +173,26 @@
       "kind": "product",
       "category": "servicios",
       "sort_order": 190,
-      "aliases": "ángulo camero, angulo camero, ángulo",
+      "aliases": "ángulo camero, angulo camero",
       "summary": "Fabricación de ángulo camero bajo pedido.",
-      "details": "Pedido mínimo: 15 toneladas bajo fabricación. Medidas fuera de tabla: solicitar al vendedor."
+      "details": "Solo ángulo camero bajo fabricación (mín. 15 ton). NO es ángulo laminado/estructural genérico: ese no se vende. Si el cliente dice solo \"ángulo\" sin camero, aplica fuera de catálogo."
+    },
+    {
+      "name": "Monten",
+      "kind": "product",
+      "category": "tuberia",
+      "sort_order": 165,
+      "aliases": "monten, montén",
+      "summary": "Sí se maneja monten (no confundir con PTR estructural).",
+      "details": "Línea comercial de catálogo. No es PTR rojo/verde ni perfil estructural."
     },
     {
       "name": "Acero inoxidable",
       "kind": "out_of_catalog",
       "category": "limites",
       "sort_order": 200,
-      "aliases": "inoxidable, stainless, SS, 304, 316",
-      "summary": "NO se vende. Catálogo GIA: solo acero al carbono (planos, acanalados, tubo industrial, varilla, alambre).",
+      "aliases": "inoxidable, stainless, SS, 303, 304, 316, 430, acero 303, acero 304, acero 316, acero 430",
+      "summary": "NO se vende (ni 303, 304, 316, 430 ni otros). Catálogo GIA: solo acero al carbono.",
       "details": "Dilo de inmediato. No digas que sí se puede. Ofrece alternativa del catálogo (galvanizada, CR, HR, etc.) y pregunta si les sirve. NO registres lead solo por inoxidable."
     },
     {
@@ -196,13 +205,13 @@
       "details": "Misma regla que inoxidable: rechazar con claridad, ofrecer línea de acero al carbono y no registrar lead."
     },
     {
-      "name": "PTR / perfil estructural / viga",
+      "name": "PTR / HSS / perfil estructural",
       "kind": "out_of_catalog",
       "category": "limites",
       "sort_order": 220,
-      "aliases": "PTR, HSS, perfil estructural, viga IPS, viga IPR, monten, polín, cédula estructural",
-      "summary": "No fabricamos PTR ni perfil estructural. La tubería GIA es comercial, no grado estructural.",
-      "details": "Si el uso del cliente lo permite, se puede cotizar tubería industrial comercial con transparencia (no es estructural). No afirmes vigas IPS/IPR ni PTR como línea de catálogo."
+      "aliases": "PTR, PTR rojo, PTR verde, HSS, perfil estructural, viga IPS, viga IPR, polín, cédula estructural, tubo estructural",
+      "summary": "NO fabricamos PTR (ni rojo/verde), HSS ni perfil estructural. Tubería GIA es comercial negra, no estructural.",
+      "details": "Rechazar de una. Si el uso lo permite, se puede ofrecer tubería industrial comercial (hasta 3\", no estructural) con transparencia. Monten SÍ se maneja (no confundir con PTR). No registres lead solo por PTR/HSS."
     },
     {
       "name": "Material de segunda y menudeo",
@@ -210,8 +219,62 @@
       "category": "limites",
       "sort_order": 230,
       "aliases": "segunda, remanente, menudeo, por pieza, mostrador, 5 láminas",
-      "summary": "No hay material de segunda (todo es de primera con lote y certificado). No hay menudeo ni mostrador.",
-      "details": "Mínimo: 1 tonelada por partida y 3 toneladas en total. Piezas sueltas: explicar mínimo, ofrecer consolidar o distribuidor de menudeo. No registrar lead solo por menudeo bajo mínimo."
+      "summary": "No hay material de segunda. No hay menudeo ni mostrador (mín. 1 ton/partida y 3 ton total).",
+      "details": "Piezas sueltas / pocas láminas: dilo corto — puro mayoreo desde 3 toneladas. Puedes ofrecer consolidar partidas. PROHIBIDO recomendar distribuidores. PROHIBIDO mencionar que se asignará un asesor o pedir datos de contacto solo por menudeo. NO registres lead ni escales a cotización por menudeo bajo mínimo."
+    },
+    {
+      "name": "Tubo cerquero",
+      "kind": "out_of_catalog",
+      "category": "limites",
+      "sort_order": 221,
+      "aliases": "tubo cerquero, cerquero, tubular cerquero",
+      "summary": "NO se vende tubo cerquero.",
+      "details": "Dilo de inmediato. Ofrece tubería industrial comercial (hasta 3\") si aplica. No registres lead."
+    },
+    {
+      "name": "Tubería cédula",
+      "kind": "out_of_catalog",
+      "category": "limites",
+      "sort_order": 222,
+      "aliases": "cédula, cedula, cédula 30, cédula 40, cédula 80, schedule 40, sch 40, sch40",
+      "summary": "NO manejamos tubería cédula. Nuestra tubería es industrial comercial en calibres.",
+      "details": "Ejemplo: \"Nuestra tubería es industrial comercial, en calibres; si su uso lo permite se la cotiza el asesor.\" No registres lead solo por cédula."
+    },
+    {
+      "name": "Tubería mayor a 3\"",
+      "kind": "out_of_catalog",
+      "category": "limites",
+      "sort_order": 223,
+      "aliases": "tubo 4\", tubería 4, 4 pulgadas, 5\", 6\", mayor a 3, más de 3 pulgadas, tubo grande",
+      "summary": "NO manejamos tubería de más de 3\" de diámetro. Máximo 3\".",
+      "details": "Dilo corto. Si cabe en ≤3\", ofrece esa línea. No inventes disponibilidad de diámetros mayores."
+    },
+    {
+      "name": "Ángulo laminado / estructural",
+      "kind": "out_of_catalog",
+      "category": "limites",
+      "sort_order": 224,
+      "aliases": "ángulo, angulo, ángulo laminado, ángulo estructural, solera angular",
+      "summary": "NO fabricamos ángulo laminado/estructural genérico.",
+      "details": "Solo existe ángulo camero bajo fabricación (mín. 15 ton) si lo piden explícitamente como camero. Si dicen solo ángulo: rechazar. Ofrece lámina o tubería industrial si aplica."
+    },
+    {
+      "name": "Macizo redondo y cuadrado",
+      "kind": "out_of_catalog",
+      "category": "limites",
+      "sort_order": 225,
+      "aliases": "macizo, redondo macizo, cuadrado macizo, barra maciza, solera maciza, barreta",
+      "summary": "NO se vende macizo redondo ni cuadrado.",
+      "details": "Dilo de inmediato. Ofrece línea de catálogo (lámina, tubo industrial, etc.) si aplica. No registres lead."
+    },
+    {
+      "name": "Pintro negro / rojo / verde",
+      "kind": "out_of_catalog",
+      "category": "limites",
+      "sort_order": 226,
+      "aliases": "pintro negro, pintro rojo, pintro verde, pintro color negro, pintro color rojo, pintro color verde",
+      "summary": "NO manejamos pintro en negro, rojo ni verde.",
+      "details": "Puedes ofrecer pintro en otros colores disponibles o galvanizado. No digas que sí se puede en esos tres colores."
     }
   ]
 }

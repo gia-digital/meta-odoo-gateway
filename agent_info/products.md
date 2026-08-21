@@ -16,4 +16,4 @@ Se edita después en `/dashboard/knowledge/products`. El agente recibe este cat�
 
 ## No ofrecemos
 
-Inoxidable, aluminio, PTR/perfil estructural, material de segunda, menudeo/mostrador.
+Inoxidable (303/304/316/430), aluminio, tubo cerquero, PTR/HSS (incl. rojo/verde), cédula, tubería >3", ángulo laminado, macizo redondo/cuadrado, pintro negro/rojo/verde, material de segunda, menudeo/mostrador.

@@ -187,17 +187,40 @@ def test_seed_source_has_catalog_limits():
     questions = [faq_question(item).lower() for item in faqs.get("faqs") or []]
     assert any("inoxidable" in q for q in questions)
     assert any("carta de presentación" in q for q in questions)
+    assert any("cerquero" in q for q in questions)
+    assert any("cédula" in q or "cedula" in q for q in questions)
+    assert any("distribuidor" in q for q in questions)
+    menudeo = next(
+        f for f in faqs["faqs"] if "menudeo" in faq_question(f).lower()
+    )
+    assert "distribuidor" not in menudeo["answer"].lower()
+
     skills = json.loads((root / "agent_info" / "skills.json").read_text(encoding="utf-8"))
     titles = [s.get("title") for s in skills.get("skills") or []]
     assert "Límites de catálogo y transparencia" in titles
     assert "Enviar catálogo / carta de presentación" in titles
+    limits = next(s for s in skills["skills"] if s["title"] == "Límites de catálogo y transparencia")
+    body = limits["skill"].lower()
+    assert "prohibido recomendar distribuidores" in body
+    assert "cerquero" in body
+    assert "cédula" in body or "cedula" in body
+    assert '3"' in limits["skill"] or "3″" in limits["skill"] or "3 pulg" in body
+    assert "asesor" in body and "menudeo" in body
+
     products = json.loads((root / "agent_info" / "products.json").read_text(encoding="utf-8"))
     names = [p.get("name", "").lower() for p in products.get("products") or []]
     kinds = {p.get("kind") for p in products.get("products") or []}
     assert any("galvanizada" in n for n in names)
     assert any("kr-18" in n for n in names)
     assert any("inoxidable" in n for n in names)
+    assert any("cerquero" in n for n in names)
+    assert any("macizo" in n for n in names)
+    assert any("cédula" in n or "cedula" in n for n in names)
     assert "product" in kinds and "service" in kinds and "out_of_catalog" in kinds
+
+    tuberia = next(p for p in products["products"] if "tubería industrial" in p["name"].lower())
+    assert "cédula" not in (tuberia.get("aliases") or "").lower()
+    assert "3" in (tuberia.get("summary") or "")
 
 
 def test_format_catalog_marks_out_of_catalog():
@@ -388,7 +411,7 @@ def test_agent_info_forbids_agent_prices():
     pricing = next(s for s in skills["skills"] if s["title"] == "Política de precios")
     body = pricing["skill"].lower()
     assert "nunca des precios" in body or "prohibido absoluto" in body
-    assert "el precio se lo confirma directamente un asesor" in body
+    assert "el precio se lo confirma un asesor" in body
 
     faqs = json.loads((root / "faqs.json").read_text(encoding="utf-8"))
     by_q = {f["question"]: f["answer"].lower() for f in faqs["faqs"]}

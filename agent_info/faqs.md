@@ -1,6 +1,6 @@
 # FAQs — agente GIA (Chatwoot)
 
-Total: **47** entradas.
+Total: **54** entradas.
 
 Fuente principal: `Guia_Respuesta_GIA.docx` §25, validada con temas frecuentes de `conversaciones_whatsapp.txt`.
 
@@ -8,7 +8,7 @@ Fuente principal: `Guia_Respuesta_GIA.docx` §25, validada con temas frecuentes 
 
 ### 1. ¿Venden por pieza / menudeo?
 
-Desafortunadamente no vendemos por menudeo; nuestro pedido mínimo es de 1 tonelada por partida y 3 toneladas en total. Con gusto le recomendamos un distribuidor de menudeo, o consolidamos partidas para llegar al mínimo.
+Manejamos puro mayoreo, desde 1 tonelada por partida y 3 toneladas en total. Si consolida partidas con gusto lo vemos; no manejamos menudeo ni mostrador.
 
 ### 2. ¿Cuál es el pedido mínimo?
 
@@ -55,11 +55,11 @@ Sí. Con gusto le enviamos la carta de presentación de GIA con nuestras líneas
 
 ### 3. ¿Tienen PTR?
 
-No fabricamos PTR ni perfil estructural. Nuestra tubería es industrial de acero negro comercial con costura interna, no estructural. Si su uso lo permite, su asesor se la cotiza.
+No fabricamos PTR ni HSS ni perfil estructural. Nuestra tubería es industrial comercial de acero negro, hasta 3\".
 
 ### 4. ¿Manejan inoxidable o aluminio?
 
-No, únicamente acero al carbono en las líneas de nuestro catálogo.
+No, solo acero al carbono. Tampoco 303, 304, 316 ni 430. Si le sirve, le ofrezco galvanizada o CR.
 
 ### 5. ¿El tubo es galvanizado?
 
@@ -204,3 +204,34 @@ Le apoyamos con el dato del material: ancho efectivo y peso por m² del perfil. 
 ### 8. ¿Su tubería sirve como estructural?
 
 No; es tubería comercial, no grado estructural, y se lo decimos con transparencia para que su proyecto quede seguro.
+
+## Límites adicionales (ops)
+
+### ¿Manejan tubo cerquero?
+
+No manejamos tubo cerquero. Si le sirve, nuestra tubería industrial comercial va hasta 3".
+
+### ¿Tienen tubería cédula?
+
+No manejamos cédula. Nuestra tubería es industrial comercial, en calibres, hasta 3".
+
+### ¿Manejan tubo de más de 3 pulgadas?
+
+No; el máximo de diámetro que manejamos es 3".
+
+### ¿Fabrican ángulo?
+
+No fabricamos ángulo laminado. Solo ángulo camero bajo fabricación (pedido mínimo 15 ton) si lo ocupa así.
+
+### ¿Venden macizo redondo o cuadrado?
+
+No manejamos macizo redondo ni cuadrado.
+
+### ¿Tienen pintro negro, rojo o verde?
+
+Esos colores no los manejamos en pintro. ¿Le sirve otro color o galvanizado?
+
+### ¿Me puede pasar un distribuidor de menudeo?
+
+No manejamos menudeo ni recomendamos distribuidores. Nuestro mínimo es 3 toneladas; si consolida partidas con gusto lo vemos.
+

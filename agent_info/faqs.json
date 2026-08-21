@@ -7,7 +7,7 @@
   "faqs": [
     {
       "question": "¿Venden por pieza / menudeo?",
-      "answer": "Desafortunadamente no vendemos por menudeo; nuestro pedido mínimo es de 1 tonelada por partida y 3 toneladas en total. Con gusto le recomendamos un distribuidor de menudeo, o consolidamos partidas para llegar al mínimo.",
+      "answer": "Manejamos puro mayoreo, desde 1 tonelada por partida y 3 toneladas en total. Si consolida partidas con gusto lo vemos; no manejamos menudeo ni mostrador.",
       "metadata": {
         "category": "compra_precios",
         "category_label": "Compra y precios",
@@ -106,7 +106,7 @@
     },
     {
       "question": "¿Tienen PTR?",
-      "answer": "No fabricamos PTR ni perfil estructural. Nuestra tubería es industrial de acero negro comercial con costura interna, no estructural. Si su uso lo permite, su asesor se la cotiza.",
+      "answer": "No fabricamos PTR ni HSS ni perfil estructural. Nuestra tubería es industrial comercial de acero negro, hasta 3\".",
       "metadata": {
         "category": "producto",
         "category_label": "Producto",
@@ -115,7 +115,7 @@
     },
     {
       "question": "¿Manejan inoxidable o aluminio?",
-      "answer": "No, únicamente acero al carbono en las líneas de nuestro catálogo.",
+      "answer": "No, solo acero al carbono. Tampoco 303, 304, 316 ni 430. Si le sirve, le ofrezco galvanizada o CR.",
       "metadata": {
         "category": "producto",
         "category_label": "Producto",
@@ -426,6 +426,69 @@
         "category": "otros",
         "category_label": "Otros",
         "source": "Guia_Respuesta_GIA.docx §25 + conversaciones_whatsapp.txt"
+      }
+    },
+    {
+      "question": "¿Manejan tubo cerquero?",
+      "answer": "No manejamos tubo cerquero. Si le sirve, nuestra tubería industrial comercial va hasta 3\".",
+      "metadata": {
+        "category": "producto",
+        "category_label": "Producto",
+        "source": "feedback ops ago 2026"
+      }
+    },
+    {
+      "question": "¿Tienen tubería cédula?",
+      "answer": "No manejamos cédula. Nuestra tubería es industrial comercial, en calibres, hasta 3\".",
+      "metadata": {
+        "category": "producto",
+        "category_label": "Producto",
+        "source": "feedback ops ago 2026"
+      }
+    },
+    {
+      "question": "¿Manejan tubo de más de 3 pulgadas?",
+      "answer": "No; el máximo de diámetro que manejamos es 3\".",
+      "metadata": {
+        "category": "producto",
+        "category_label": "Producto",
+        "source": "feedback ops ago 2026"
+      }
+    },
+    {
+      "question": "¿Fabrican ángulo?",
+      "answer": "No fabricamos ángulo laminado. Solo ángulo camero bajo fabricación (pedido mínimo 15 ton) si lo ocupa así.",
+      "metadata": {
+        "category": "producto",
+        "category_label": "Producto",
+        "source": "feedback ops ago 2026"
+      }
+    },
+    {
+      "question": "¿Venden macizo redondo o cuadrado?",
+      "answer": "No manejamos macizo redondo ni cuadrado.",
+      "metadata": {
+        "category": "producto",
+        "category_label": "Producto",
+        "source": "feedback ops ago 2026"
+      }
+    },
+    {
+      "question": "¿Tienen pintro negro, rojo o verde?",
+      "answer": "Esos colores no los manejamos en pintro. ¿Le sirve otro color o galvanizado?",
+      "metadata": {
+        "category": "producto",
+        "category_label": "Producto",
+        "source": "feedback ops ago 2026"
+      }
+    },
+    {
+      "question": "¿Me puede pasar un distribuidor de menudeo?",
+      "answer": "No manejamos menudeo ni recomendamos distribuidores. Nuestro mínimo es 3 toneladas; si consolida partidas con gusto lo vemos.",
+      "metadata": {
+        "category": "compra_precios",
+        "category_label": "Compra y precios",
+        "source": "feedback ops ago 2026"
       }
     }
   ]
