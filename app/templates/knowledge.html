@@ -40,25 +40,52 @@
   <h2>Actualización</h2>
   <p class="muted">Última actualización: {{ stats.last_updated|format_dt }}</p>
 </section>
-<section class="card">
+<section class="card knowledge-sync">
   <h2>Exportar / importar al repo</h2>
-  <p class="muted">Descarga un ZIP con <code>business_info.json</code>, <code>faqs.json</code>, <code>skills.json</code>, <code>products.json</code> y PDFs en <code>files/</code>. El import sobrescribe el knowledge vivo en Postgres (útil tras editar <code>agent_info/</code> en el repo y desplegar).</p>
-  <p><a class="btn btn-primary" href="/dashboard/knowledge/export">Descargar knowledge (ZIP)</a></p>
-  <form class="stack-form" method="post" action="/dashboard/knowledge/import" enctype="multipart/form-data" style="margin-top:1rem">
-    <label>ZIP exportado
-      <input type="file" name="upload" accept=".zip,application/zip">
-    </label>
-    <label class="check">
-      <input type="checkbox" name="from_agent_info"> Importar el <code>agent_info/</code> del contenedor (sin ZIP)
-    </label>
-    <label class="check">
-      <input type="checkbox" name="include_files"> Incluir PDFs / archivos del paquete
-    </label>
-    <label class="check">
-      <input type="checkbox" name="deactivate_missing"> Desactivar FAQs/skills/productos que no vengan en el import
-    </label>
-    <button class="btn btn-secondary" type="submit">Importar a Postgres</button>
-  </form>
+  <p class="muted">Sincroniza el knowledge vivo (Postgres) con los archivos de <code>agent_info/</code> del repositorio.</p>
+
+  <div class="sync-block">
+    <h3 class="sync-title">1. Exportar</h3>
+    <p class="muted sync-help">Baja un ZIP con business, FAQs, skills, products y PDFs para editarlos en el repo.</p>
+    <a class="btn btn-primary" href="/dashboard/knowledge/export">Descargar knowledge (ZIP)</a>
+  </div>
+
+  <div class="sync-block">
+    <h3 class="sync-title">2. Importar</h3>
+    <p class="muted sync-help">Sobrescribe el knowledge en Postgres. Elige <strong>una</strong> fuente: un ZIP o el <code>agent_info/</code> ya desplegado en el contenedor.</p>
+    <form class="stack-form sync-import-form" method="post" action="/dashboard/knowledge/import" enctype="multipart/form-data">
+      <label class="file-field">ZIP exportado (opcional si usas la casilla de abajo)
+        <input type="file" name="upload" accept=".zip,application/zip">
+      </label>
+
+      <fieldset class="sync-options">
+        <legend>Opciones</legend>
+        <label class="check-row">
+          <input type="checkbox" name="from_agent_info" />
+          <span>
+            <span class="check-label">Usar <code>agent_info/</code> del contenedor</span>
+            <span class="check-hint">Ignora el ZIP y carga los JSON que vinieron con el deploy.</span>
+          </span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" name="include_files" />
+          <span>
+            <span class="check-label">Incluir PDFs / archivos</span>
+            <span class="check-hint">También importa y reindexa los documentos del paquete.</span>
+          </span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" name="deactivate_missing" />
+          <span>
+            <span class="check-label">Desactivar lo que no venga en el import</span>
+            <span class="check-hint">FAQs, skills o productos que estén en Postgres pero no en el paquete pasan a inactivos.</span>
+          </span>
+        </label>
+      </fieldset>
+
+      <button class="btn btn-primary" type="submit">Importar a Postgres</button>
+    </form>
+  </div>
 </section>
 {% endif %}
 

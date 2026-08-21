@@ -1657,7 +1657,7 @@ dd.mono {
 
 .check-row {
   flex-direction: row !important;
-  align-items: center !important;
+  align-items: flex-start !important;
   gap: 0.55rem !important;
   font-weight: 500 !important;
   color: var(--text) !important;
@@ -1668,9 +1668,82 @@ dd.mono {
 .check-row input[type="checkbox"] {
   width: 1.05rem;
   height: 1.05rem;
+  margin-top: 0.15rem;
   accent-color: var(--accent);
   flex-shrink: 0;
   cursor: pointer;
+}
+
+.check-row .check-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.check-row .check-hint {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.knowledge-sync .sync-block {
+  margin-top: 1.15rem;
+  padding-top: 1.05rem;
+  border-top: 1px solid var(--border);
+}
+
+.knowledge-sync .sync-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.knowledge-sync .sync-help {
+  margin: 0 0 0.75rem;
+  max-width: 42rem;
+}
+
+.sync-options {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, var(--bg));
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.sync-options legend {
+  padding: 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sync-import-form .file-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.sync-import-form input[type="file"] {
+  width: 100%;
+  font: inherit;
+  font-weight: 400;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.55rem;
+  background: var(--surface);
 }
 
 .file-drop {
