@@ -202,6 +202,11 @@ def mark_embed_auth_cookie(request: Request) -> None:
     request.state.set_dashboard_embed_cookie = True
 
 
+def _rel_path(request: Request, name: str, **path_params: Any) -> str:
+    """Ruta relativa para redirects (evita Location http:// detrás de Caddy → mixed content)."""
+    return request.url_for(name, **path_params).path
+
+
 async def require_dashboard_auth(request: Request) -> None:
     _check_admin_ip(request)
     token = request.cookies.get(COOKIE_NAME)
@@ -212,7 +217,7 @@ async def require_dashboard_auth(request: Request) -> None:
         return
     raise HTTPException(
         status_code=status.HTTP_303_SEE_OTHER,
-        headers={"Location": str(request.url_for("dashboard_login"))},
+        headers={"Location": _rel_path(request, "dashboard_login")},
     )
 
 
@@ -303,11 +308,11 @@ async def dashboard_login(request: Request):
     token = request.cookies.get(COOKIE_NAME)
     if _token_valid(token):
         return RedirectResponse(
-            url=str(request.url_for("dashboard_overview")), status_code=303
+            url=_rel_path(request, "dashboard_overview"), status_code=303
         )
     if is_dashboard_embed(request):
         response = RedirectResponse(
-            url=str(request.url_for("dashboard_overview")), status_code=303
+            url=_rel_path(request, "dashboard_overview"), status_code=303
         )
         set_dashboard_auth_cookie(
             response, get_settings().admin_api_token, embed=True
@@ -332,7 +337,7 @@ async def dashboard_login_post(
             status_code=401,
         )
     response = RedirectResponse(
-        url=str(request.url_for("dashboard_overview")), status_code=303
+        url=_rel_path(request, "dashboard_overview"), status_code=303
     )
     set_dashboard_auth_cookie(
         response, token, embed=is_dashboard_embed(request)
@@ -343,7 +348,7 @@ async def dashboard_login_post(
 @router.post("/logout")
 async def dashboard_logout(request: Request):
     response = RedirectResponse(
-        url=str(request.url_for("dashboard_login")), status_code=303
+        url=_rel_path(request, "dashboard_login"), status_code=303
     )
     clear_dashboard_auth_cookie(response)
     return response
@@ -505,7 +510,7 @@ async def dashboard_conversation_detail(
     # Si es un lead, preferir la ficha de lead
     if conv.status in LEAD_STATUSES:
         return RedirectResponse(
-            url=str(request.url_for("dashboard_lead_detail", lead_id=conv.id)),
+            url=_rel_path(request, "dashboard_lead_detail", lead_id=conv.id),
             status_code=303,
         )
 

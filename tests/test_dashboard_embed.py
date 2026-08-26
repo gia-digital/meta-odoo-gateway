@@ -126,7 +126,9 @@ async def test_login_from_chatwoot_skips_token_form(embed_settings):
             follow_redirects=False,
         )
     assert r.status_code == 303
-    assert "/dashboard/overview" in r.headers["location"]
+    location = r.headers["location"]
+    assert location == "/dashboard/overview" or location.endswith("/dashboard/overview")
+    assert not location.startswith("http://")
     assert COOKIE_NAME in r.cookies
     csp = r.headers.get("content-security-policy", "")
     assert "frame-ancestors" in csp
