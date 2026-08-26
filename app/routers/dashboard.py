@@ -4,6 +4,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
@@ -12,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from starlette.responses import Response as StarletteResponse
 
 from app.core.config import get_settings
 from app.models.conversation import Conversation, ConversationStatus
@@ -117,6 +119,7 @@ templates.env.filters["truncate_text"] = truncate
 router = APIRouter(prefix="/dashboard", tags=["dashboard"], include_in_schema=False)
 
 COOKIE_NAME = "dashboard_token"
+COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 LEAD_STATUSES = (ConversationStatus.qualified, ConversationStatus.handed_off)
 CHART_DAYS = 30
 
@@ -138,14 +141,79 @@ def _token_valid(token: Optional[str]) -> bool:
     return hmac.compare_digest(token, settings.admin_api_token)
 
 
+def _request_origin(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+
+def is_dashboard_embed(request: Request) -> bool:
+    """
+    True si la petición viene de un iframe de Chatwoot (orígenes allowlist).
+
+    Requiere Referer del origen permitido. Si el navegador envía Sec-Fetch-Dest,
+    debe ser ``iframe`` (evita abrir el panel en pestaña nueva sin token).
+    """
+    allowed = get_settings().dashboard_embed_origins_list
+    if not allowed:
+        return False
+
+    referer_origin = _request_origin(request.headers.get("referer"))
+    if not referer_origin or referer_origin not in allowed:
+        return False
+
+    dest = (request.headers.get("sec-fetch-dest") or "").strip().lower()
+    if dest and dest != "iframe":
+        return False
+    return True
+
+
+def set_dashboard_auth_cookie(
+    response: StarletteResponse, token: str, *, embed: bool
+) -> None:
+    """Cookie de sesión del dashboard. En iframe cross-origin hace falta SameSite=None."""
+    kwargs: Dict[str, Any] = {
+        "key": COOKIE_NAME,
+        "value": token,
+        "httponly": True,
+        "max_age": COOKIE_MAX_AGE,
+        "path": "/",
+    }
+    if embed:
+        kwargs["samesite"] = "none"
+        kwargs["secure"] = True
+    else:
+        kwargs["samesite"] = "lax"
+        kwargs["secure"] = get_settings().app_env == "production"
+    response.set_cookie(**kwargs)
+
+
+def clear_dashboard_auth_cookie(response: StarletteResponse) -> None:
+    response.delete_cookie(COOKIE_NAME, path="/")
+    # Por si la sesión se creó embebida (SameSite=None; Secure).
+    response.delete_cookie(COOKIE_NAME, path="/", samesite="none", secure=True)
+
+
+def mark_embed_auth_cookie(request: Request) -> None:
+    """Pide al middleware que fije la cookie tras la respuesta (navegación dentro del iframe)."""
+    request.state.set_dashboard_embed_cookie = True
+
+
 async def require_dashboard_auth(request: Request) -> None:
     _check_admin_ip(request)
     token = request.cookies.get(COOKIE_NAME)
-    if not _token_valid(token):
-        raise HTTPException(
-            status_code=status.HTTP_303_SEE_OTHER,
-            headers={"Location": str(request.url_for("dashboard_login"))},
-        )
+    if _token_valid(token):
+        return
+    if is_dashboard_embed(request):
+        mark_embed_auth_cookie(request)
+        return
+    raise HTTPException(
+        status_code=status.HTTP_303_SEE_OTHER,
+        headers={"Location": str(request.url_for("dashboard_login"))},
+    )
 
 
 def _as_utc_date(value: Optional[datetime]) -> Optional[date]:
@@ -237,6 +305,14 @@ async def dashboard_login(request: Request):
         return RedirectResponse(
             url=str(request.url_for("dashboard_overview")), status_code=303
         )
+    if is_dashboard_embed(request):
+        response = RedirectResponse(
+            url=str(request.url_for("dashboard_overview")), status_code=303
+        )
+        set_dashboard_auth_cookie(
+            response, get_settings().admin_api_token, embed=True
+        )
+        return response
     return templates.TemplateResponse(
         "login.html",
         {"request": request, "error": None},
@@ -258,12 +334,8 @@ async def dashboard_login_post(
     response = RedirectResponse(
         url=str(request.url_for("dashboard_overview")), status_code=303
     )
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=token,
-        httponly=True,
-        samesite="lax",
-        max_age=60 * 60 * 24 * 7,
+    set_dashboard_auth_cookie(
+        response, token, embed=is_dashboard_embed(request)
     )
     return response
 
@@ -273,7 +345,7 @@ async def dashboard_logout(request: Request):
     response = RedirectResponse(
         url=str(request.url_for("dashboard_login")), status_code=303
     )
-    response.delete_cookie(COOKIE_NAME)
+    clear_dashboard_auth_cookie(response)
     return response
 
 

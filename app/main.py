@@ -3,13 +3,14 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import get_settings
 from app.core.logging import get_logger, setup_logging
 from app.models.db import SessionLocal, init_db
 from app.routers import admin, chatwoot_webhook, dashboard, health, knowledge as knowledge_router, leads
+from app.routers.dashboard import set_dashboard_auth_cookie
 from app.services.knowledge.seed import seed_from_agent_info
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -54,6 +55,22 @@ app = FastAPI(
     debug=settings.app_debug,
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def dashboard_embed_middleware(request: Request, call_next):
+    """CSP frame-ancestors para Chatwoot + cookie de sesión al entrar por iframe."""
+    response = await call_next(request)
+    origins = get_settings().dashboard_embed_origins_list
+    if origins:
+        ancestors = " ".join(["'self'", *origins])
+        response.headers["Content-Security-Policy"] = f"frame-ancestors {ancestors}"
+    if getattr(request.state, "set_dashboard_embed_cookie", False):
+        set_dashboard_auth_cookie(
+            response, get_settings().admin_api_token, embed=True
+        )
+    return response
+
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

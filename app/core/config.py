@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # Admin
     admin_api_token: str
     admin_allowed_ips: str = ""
+    # Orígenes (iframe) que pueden embeber el dashboard sin pedir ADMIN_API_TOKEN.
+    # Separados por coma. Se suma CHATWOOT_BASE_URL si está definido.
+    dashboard_embed_origins: str = (
+        "https://chatwoot.init.com.mx,https://chatwoot.giacero.com"
+    )
 
     # Chatwoot Agent Bot
     chatwoot_enabled: bool = False
@@ -82,6 +87,22 @@ class Settings(BaseSettings):
     @property
     def admin_ips_list(self) -> List[str]:
         return [ip.strip() for ip in self.admin_allowed_ips.split(",") if ip.strip()]
+
+    @property
+    def dashboard_embed_origins_list(self) -> List[str]:
+        origins: List[str] = []
+        seen: set[str] = set()
+        raw = [
+            *self.dashboard_embed_origins.split(","),
+            self.chatwoot_base_url,
+        ]
+        for item in raw:
+            origin = (item or "").strip().rstrip("/")
+            if not origin or origin in seen:
+                continue
+            seen.add(origin)
+            origins.append(origin)
+        return origins
 
 
 @lru_cache
