@@ -14,7 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, 
 from app.core.agent_behavior import get_agent_behavior
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.models.conversation import Channel
+from app.models.conversation import Channel, ConversationStatus
 from app.models.db import SessionLocal
 from app.models.schemas import NormalizedMessage
 from app.services.chatwoot_client import ChatwootClient, ChatwootError
@@ -444,6 +444,8 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
             user_name=user_name or conv.user_name,
             user_phone=user_phone or conv.user_phone,
             user_email=user_email or conv.user_email,
+            handed_off=conv.status == ConversationStatus.handed_off
+            or getattr(conv, "handed_off_at", None) is not None,
         )
 
         try:
