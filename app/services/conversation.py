@@ -361,6 +361,13 @@ class ConversationService:
         )
         return conversation
 
+    async def delete_conversation(self, conversation: Conversation) -> None:
+        """Elimina conversación y mensajes (cascade). Útil para pruebas."""
+        conv_id = conversation.id
+        await self.db.delete(conversation)
+        await commit_with_retry(self.db)
+        logger.info("conversation_deleted", conversation_id=conv_id)
+
     async def _create_lead_in_odoo(self, conversation: Conversation) -> None:
         """Crea o vincula partner y crea crm.lead (solo si Odoo está habilitado)."""
         settings = get_settings()

@@ -21,6 +21,7 @@ from starlette.responses import Response as StarletteResponse
 from app.core.config import get_settings
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.db import get_db
+from app.services.conversation import ConversationService
 from app.services.material_groups import group_material_label
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -867,4 +868,28 @@ async def dashboard_conversation_detail(
             "signals": signals,
             "active_nav": "conversations",
         },
+    )
+
+
+@router.post(
+    "/conversations/{conv_id}/delete",
+    name="dashboard_conversation_delete",
+)
+async def dashboard_conversation_delete(
+    conv_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+):
+    stmt = select(Conversation).where(Conversation.id == conv_id)
+    result = await db.execute(stmt)
+    conv = result.scalar_one_or_none()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+
+    service = ConversationService(db)
+    await service.delete_conversation(conv)
+    return RedirectResponse(
+        url=_rel_path(request, "dashboard_conversations"),
+        status_code=303,
     )

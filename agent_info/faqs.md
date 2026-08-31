@@ -187,7 +187,7 @@ Con gusto: ¿me comparte el nombre de su asesor en GIA? Lo canalizo con él para
 
 ### 4. ¿Quién es el gerente / quiero hablar con un jefe?
 
-Nuestro Gerente Comercial es el Lic. Manuel Vargas: WhatsApp +52 56 3075 2551, mvargas@unigasa.com.mx. Le paso su caso para que le marque hoy mismo.
+Nuestro Gerente Comercial es el Lic. Manuel Vargas: WhatsApp +52 56 3075 2551, mvargas@unigasa.com.mx. Con gusto canalizo su caso con él para seguimiento por mensaje en horario laboral.
 
 ### 5. Busco trabajo, ¿tienen vacantes?
 

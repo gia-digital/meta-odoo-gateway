@@ -64,6 +64,7 @@ def test_handoff_guidance_never_promises_en_breve(settings_env):
         lower = text.lower()
         assert "en breve le" not in lower
         assert "le contactará en breve" not in lower
+        assert "hoy mismo" not in lower
         assert "SIGUES atendiendo" in text
     assert HOURS_LABEL.split("(")[0].strip() in outside
 

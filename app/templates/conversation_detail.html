@@ -28,6 +28,14 @@
       </div>
     </div>
   </div>
+  <form
+    method="post"
+    action="/dashboard/conversations/{{ conversation.id }}/delete"
+    class="inline-form"
+    onsubmit="return confirm('¿Eliminar esta conversación y todo su historial en el gateway? El hilo en Chatwoot no se borra.');"
+  >
+    <button type="submit" class="btn btn-danger btn-sm">Eliminar conversación</button>
+  </form>
 </header>
 
 <section class="detail-grid">

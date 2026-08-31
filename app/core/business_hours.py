@@ -196,17 +196,21 @@ def hours_prompt_block(now: datetime | None = None) -> str:
     if is_within_hours(now):
         status = "AHORA estamos DENTRO del horario laboral de ventas."
         advise = (
-            "Un asesor PUEDE tomar el hilo; no prometas que contestará de inmediato "
-            "ni digas 'en breve'. Tú sigues atendiendo hasta que un humano escriba "
-            "al cliente. Antes de hablar de cuándo contactará un asesor, usa "
-            "check_sales_hours."
+            "Un asesor PUEDE tomar el hilo por este chat; no prometas que contestará "
+            "de inmediato, hoy mismo, ni digas 'en breve'. El seguimiento es por "
+            "mensaje (WhatsApp), no por llamada telefónica: NUNCA digas 'le marcará', "
+            "'le llamará' ni 'le contactará hoy'. Tú sigues atendiendo hasta que un "
+            "humano escriba al cliente. Antes de hablar de cuándo dará seguimiento un "
+            "asesor, usa check_sales_hours."
         )
     else:
         status = "AHORA estamos FUERA del horario laboral de ventas."
         advise = (
-            "No digas 'en breve' ni prometas hora exacta. "
-            "Si el cliente pide un asesor, di que pueden atenderle en el próximo "
-            "horario laboral (la 'Próxima ventana' de arriba); no es una promesa. "
+            "No digas 'en breve', 'hoy mismo' ni prometas hora o día exacto. "
+            "El seguimiento del asesor es por mensaje en este chat, no por llamada: "
+            "prohibido 'le marcará' o 'le llamará'. "
+            "Si el cliente pide un asesor, di que pueden darle seguimiento en el "
+            "próximo horario laboral (la 'Próxima ventana' de arriba); no es promesa. "
             "Tú sigues ayudando ahora. Usa check_sales_hours si dudas o si el "
             "cliente propone un día/hora."
         )
@@ -220,14 +224,15 @@ def client_handoff_guidance(now: datetime | None = None) -> str:
     snap = availability_snapshot(now)
     if is_within_hours(now):
         say = (
-            "Di que un asesor de GIA puede tomar el chat; no prometas un tiempo "
-            "exacto ni digas 'en breve'."
+            "Di que un asesor de GIA puede darle seguimiento por este chat en "
+            "horario laboral; no prometas tiempo exacto, 'hoy mismo' ni 'en breve'. "
+            "NUNCA digas que le marcarán o llamarán: el contacto es por mensaje."
         )
     else:
         say = (
-            f"Di que un asesor puede atenderle a partir de {format_next_open(now)}; "
-            "no es una promesa de respuesta a esa hora exacta. Nunca inventes "
-            "otra franja ni digas 'en breve'."
+            f"Di que un asesor puede darle seguimiento por este chat a partir de "
+            f"{format_next_open(now)} (horario laboral); no prometas 'hoy mismo', "
+            "hora exacta ni 'en breve'. NUNCA digas que le marcarán o llamarán."
         )
     return (
         "El ticket quedó abierto para un asesor; tú SIGUES atendiendo hasta que "

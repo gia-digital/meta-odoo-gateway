@@ -12,7 +12,25 @@ from app.services.gia_agent import (
     BotContext,
     _conversation_handed_off,
     _empty_reply_fallback,
+    _handoff_note_lead,
 )
+
+
+def test_handoff_note_lead_prefix():
+    first = _handoff_note_lead(
+        already_handed_off=False,
+        team_label="recepción",
+        reason="Cotización",
+        summary="Tubería 2\"",
+    )
+    again = _handoff_note_lead(
+        already_handed_off=True,
+        team_label="recepción",
+        reason="Pide asesor",
+        summary="Reintento",
+    )
+    assert first.startswith("Lead creado y escalado")
+    assert again.startswith("Re-escalado")
 
 
 def test_conversation_handed_off_by_status():

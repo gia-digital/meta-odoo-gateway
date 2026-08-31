@@ -84,3 +84,16 @@ async def reprocess_conversation(conv_id: int, db: AsyncSession = Depends(get_db
         "conversation_status": conv.status.value,
         "qualification_source": conv.qualification_source.value,
     }
+
+
+@router.delete("/conversations/{conv_id}")
+async def delete_conversation(conv_id: int, db: AsyncSession = Depends(get_db)):
+    stmt = select(Conversation).where(Conversation.id == conv_id)
+    result = await db.execute(stmt)
+    conv = result.scalar_one_or_none()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    service = ConversationService(db)
+    await service.delete_conversation(conv)
+    return {"status": "deleted", "conversation_id": conv_id}

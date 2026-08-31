@@ -38,8 +38,8 @@ _EMPTY_REPLY_FALLBACK = (
     "si prefiere, puedo canalizarle con un asesor de GIA."
 )
 _HANDED_OFF_REPLY_FALLBACK = (
-    "Perfecto, ya quedó registrado. Un asesor de GIA le contactará "
-    "en horario laboral."
+    "Perfecto, ya quedó registrado. Un asesor de GIA le dará seguimiento "
+    "por este chat en horario laboral."
 )
 
 
@@ -53,6 +53,20 @@ def _empty_reply_fallback(*, handed_off: bool) -> str:
     if handed_off:
         return _HANDED_OFF_REPLY_FALLBACK
     return _EMPTY_REPLY_FALLBACK
+
+
+def _handoff_note_lead(
+    *, already_handed_off: bool, team_label: str, reason: str, summary: str
+) -> str:
+    prefix = "Re-escalado" if already_handed_off else "Lead creado y escalado"
+    return f"{prefix} → {team_label}. Motivo: {reason}. {summary}".strip()
+
+
+def _rehandoff_tool_hint() -> str:
+    return (
+        "Si el cliente solo confirma o vuelve a pedir asesor, responde UNA línea "
+        "breve; no repitas el mismo discurso de escalado en cada turno."
+    )
 
 
 @dataclass
@@ -177,51 +191,40 @@ def _build_tools():
         bot.conversation = conv
         if handed_off:
             bot.handed_off = True
-            if already_handed_off:
-                logger.info(
-                    "agent_tool_create_lead_skip_handoff",
-                    conversation_id=conv.id,
-                    reason="already_handed_off",
-                )
-            else:
-                team_id, team_label = resolve_handoff_queue(queue)
-                try:
-                    async with ChatwootClient() as cw:
-                        await cw.handoff_to_human(
-                            bot.chatwoot_conversation_id,
-                            team_id=team_id,
-                            note=(
-                                f"Lead creado y escalado → {team_label}. "
-                                f"Motivo: {reason}. {summary}".strip()
-                            ),
-                        )
-                except Exception as exc:
-                    logger.error(
-                        "agent_create_lead_handoff_failed",
-                        error=str(exc),
-                        chatwoot_conversation_id=bot.chatwoot_conversation_id,
-                        queue=queue,
+            team_id, team_label = resolve_handoff_queue(queue)
+            try:
+                async with ChatwootClient() as cw:
+                    await cw.handoff_to_human(
+                        bot.chatwoot_conversation_id,
                         team_id=team_id,
+                        note=_handoff_note_lead(
+                            already_handed_off=already_handed_off,
+                            team_label=team_label,
+                            reason=reason,
+                            summary=summary,
+                        ),
                     )
+            except Exception as exc:
+                logger.error(
+                    "agent_create_lead_handoff_failed",
+                    error=str(exc),
+                    chatwoot_conversation_id=bot.chatwoot_conversation_id,
+                    queue=queue,
+                    team_id=team_id,
+                )
         logger.info(
             "agent_tool_create_lead",
             conversation_id=conv.id,
             handed_off=handed_off,
             queue=(queue or "reception") if handed_off else None,
-            skipped_handoff=handed_off and already_handed_off,
+            re_handoff=handed_off and already_handed_off,
         )
         if handed_off:
-            if already_handed_off:
-                return (
-                    f"Lead actualizado (id interno {conv.id}, status={conv.status.value}). "
-                    "La conversación YA estaba escalada: NO vuelvas a llamar "
-                    "create_lead ni escalate_to_human. Confirma al cliente en una "
-                    "línea que ya quedó canalizado y responde solo si hay una "
-                    "duda nueva breve."
-                )
+            action = "actualizado y re-asignado" if already_handed_off else "registrado"
             return (
-                f"Lead registrado (id interno {conv.id}, status={conv.status.value}). "
-                f"{client_handoff_guidance()} No menciones IDs internos ni el equipo."
+                f"Lead {action} (id interno {conv.id}, status={conv.status.value}). "
+                f"{client_handoff_guidance()} No menciones IDs internos ni el equipo. "
+                f"{_rehandoff_tool_hint()}"
             )
         return (
             f"Lead registrado (id interno {conv.id}, status={conv.status.value}). "
@@ -245,28 +248,18 @@ def _build_tools():
         cliente con vendedor, o el cliente pide hablar con una persona.
         """
         bot = ctx.context
-        if _conversation_handed_off(bot.conversation) or bot.handed_off:
-            bot.handed_off = True
-            logger.info(
-                "agent_tool_escalate_skip",
-                conversation_id=bot.conversation.id,
-                reason="already_handed_off",
-            )
-            return (
-                "La conversación YA estaba escalada a un asesor. NO vuelvas a "
-                "llamar escalate_to_human ni create_lead con handed_off=true. "
-                "Confirma al cliente en una línea que ya quedó canalizado."
-            )
+        already_handed_off = _conversation_handed_off(bot.conversation) or bot.handed_off
         service = ConversationService(bot.db)
         await service.mark_handed_off(bot.conversation, reason=reason)
         bot.handed_off = True
         team_id, team_label = resolve_handoff_queue(queue)
+        note_prefix = "Re-escalado" if already_handed_off else "Escalado"
         try:
             async with ChatwootClient() as cw:
                 await cw.handoff_to_human(
                     bot.chatwoot_conversation_id,
                     team_id=team_id,
-                    note=f"Escalado → {team_label}. Motivo: {reason}",
+                    note=f"{note_prefix} → {team_label}. Motivo: {reason}",
                 )
         except Exception as exc:
             logger.error(
@@ -287,10 +280,12 @@ def _build_tools():
             queue=queue or "reception",
             team_id=team_id,
             team_label=team_label,
+            re_handoff=already_handed_off,
         )
         return (
             f"{client_handoff_guidance()} "
-            "No menciones el equipo interno al cliente."
+            "No menciones el equipo interno al cliente. "
+            f"{_rehandoff_tool_hint()}"
         )
 
     @function_tool
@@ -420,11 +415,15 @@ async def run_gia_agent(
         ctx.handed_off = True
         instructions = (
             f"{instructions}\n\n---\n\n"
-            "ESTADO: Esta conversación YA fue escalada a un asesor humano. "
-            "NO vuelvas a llamar create_lead ni escalate_to_human salvo que "
-            "cambie por completo el requerimiento. Si el cliente confirma o "
-            "pide asesor, responde en UNA línea que ya quedó canalizado; "
-            "no repitas la misma frase de escalado en cada turno."
+            "ESTADO: Esta conversación ya fue escalada antes. Puedes volver a "
+            "llamar create_lead (handed_off=true) o escalate_to_human si el "
+            "cliente pide de nuevo un asesor, cambió el requerimiento o hace "
+            "falta re-asignar en Chatwoot. Si solo confirma o repite la petición, "
+            "responde en UNA línea breve; no repitas el mismo discurso de "
+            "canalización en cada turno. "
+            "PROHIBIDO: 'hoy mismo', 'le marcará', 'le llamará', prometer "
+            "cotización o respuesta el mismo día. El seguimiento es por mensaje "
+            "en este chat, en horario laboral (usa check_sales_hours si dudas)."
         )
     hits = await retrieve_knowledge(ctx.db, user_message)
     retrieved = format_hits(hits)
