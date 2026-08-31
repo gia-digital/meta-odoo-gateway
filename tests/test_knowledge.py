@@ -269,9 +269,13 @@ async def test_product_index_chunks_long_details(monkeypatch):
 
     captured: list[list[str]] = []
 
+    async def fake_delete(self, *args, **kwargs):
+        return None
+
     async def fake_insert(self, *, texts, **kwargs):
         captured.append(list(texts))
 
+    monkeypatch.setattr(KnowledgeStore, "_delete_chunks", fake_delete)
     monkeypatch.setattr(KnowledgeStore, "_insert_chunks", fake_insert)
 
     product = type("P", (), {
