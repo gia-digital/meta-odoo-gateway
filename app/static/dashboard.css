@@ -1303,6 +1303,47 @@ dd.mono {
   font-size: 1.28rem;
 }
 
+.overview-period-filter {
+  margin: 0 0 1rem;
+}
+
+.period-nav {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.period-nav-fields {
+  flex: 1;
+  min-width: 0;
+}
+
+.period-nav-fields label {
+  width: 100%;
+}
+
+.period-nav-fields select {
+  width: 100%;
+  min-width: 0;
+}
+
+.period-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.period-nav-btn.is-disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));

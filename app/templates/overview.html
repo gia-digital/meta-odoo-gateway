@@ -4,20 +4,72 @@
 <header class="page-header page-header-compact">
   <div>
     <h1>Resumen de prospectos</h1>
+    <p class="muted no-margin">{{ stats.period_label }}</p>
   </div>
   <a class="btn btn-primary btn-sm" href="/dashboard/leads">Ver lista</a>
 </header>
+
+<form class="filters overview-period-filter" method="get" action="/dashboard/overview">
+  <div class="period-nav" role="group" aria-label="Navegación de periodo">
+    {% if period_nav.prev %}
+    <a class="btn btn-ghost btn-sm period-nav-btn" href="{{ period_nav.prev.href }}" title="{{ period_nav.prev.label }}" aria-label="{{ period_nav.prev.label }}">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8 10 12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+    {% else %}
+    <span class="btn btn-ghost btn-sm period-nav-btn is-disabled" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5.5 8 10 12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </span>
+    {% endif %}
+
+    <div class="filters-fields period-nav-fields">
+      <label>
+        Periodo
+        <select name="period" id="overview-period">
+          <optgroup label="Recientes">
+            {% for opt in period_choices.quick %}
+            <option value="{{ opt.value }}" {% if period_choices.selected == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </optgroup>
+          {% if period_choices.months %}
+          <optgroup label="Por mes">
+            {% for opt in period_choices.months %}
+            <option value="{{ opt.value }}" {% if period_choices.selected == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+          <optgroup label="Histórico">
+            <option value="all" {% if period_choices.selected == 'all' %}selected{% endif %}>Todo el tiempo</option>
+          </optgroup>
+        </select>
+      </label>
+    </div>
+
+    {% if period_nav.next %}
+    <a class="btn btn-ghost btn-sm period-nav-btn" href="{{ period_nav.next.href }}" title="{{ period_nav.next.label }}" aria-label="{{ period_nav.next.label }}">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+    {% else %}
+    <span class="btn btn-ghost btn-sm period-nav-btn is-disabled" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </span>
+    {% endif %}
+  </div>
+  {% if stats.period_anchor_end %}
+  <input type="hidden" name="end" value="{{ stats.period_anchor_end }}" id="overview-period-end">
+  {% endif %}
+  <button type="submit">Aplicar</button>
+</form>
 
 <section class="metric-grid" aria-label="Indicadores">
   <article class="metric-card">
     <p class="metric-label">Total</p>
     <p class="metric-value">{{ stats.total }}</p>
-    <p class="metric-meta">Prospectos activos</p>
+    <p class="metric-meta">Prospectos en el periodo</p>
   </article>
   <article class="metric-card">
-    <p class="metric-label">7 días</p>
-    <p class="metric-value">{{ stats.this_week }}</p>
-    <p class="metric-meta">Nuevos</p>
+    <p class="metric-label">Promedio</p>
+    <p class="metric-value">{{ stats.avg_per_day }}</p>
+    <p class="metric-meta">Por día en el periodo</p>
   </article>
   <article class="metric-card">
     <p class="metric-label">Escalados</p>
@@ -57,7 +109,7 @@
 
 <section class="charts-grid charts-grid-compact">
   <article class="card chart-card chart-trend">
-    <h2>Últimos {{ stats.chart_days }} días</h2>
+    <h2>{{ stats.chart_title }}</h2>
     <div class="chart-wrap chart-wrap-md">
       <canvas id="chartTrend" aria-label="Tendencia de prospectos"></canvas>
     </div>
@@ -125,9 +177,17 @@
     </table>
   </div>
   {% else %}
-  <p class="muted no-margin">Aún no hay prospectos para graficar. Cuando el agente llame a <code>POST /leads</code>, aparecerán aquí.</p>
+  <p class="muted no-margin">No hay prospectos en {{ stats.period_label|lower }}. Prueba otro periodo o espera a que el agente registre leads con <code>POST /leads</code>.</p>
   {% endif %}
 </section>
+
+<script>
+document.getElementById("overview-period")?.addEventListener("change", () => {
+  const form = document.querySelector(".overview-period-filter");
+  form?.querySelector("#overview-period-end")?.remove();
+  form?.requestSubmit();
+});
+</script>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
