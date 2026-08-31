@@ -781,10 +781,10 @@ async def test_handoff_assigns_team(monkeypatch):
     cw.settings = get_settings()
     cw._client = FakeHttp()
     await cw.handoff_to_human(42, note="Escalado → recepción", team_id=1)
-    assert posts[0][0].endswith("/conversations/42/toggle_status")
-    assert posts[0][1] == {"status": "open"}
-    assert posts[1][0].endswith("/conversations/42/assignments")
-    assert posts[1][1] == {"team_id": 1}
+    assert posts[0][0].endswith("/conversations/42/assignments")
+    assert posts[0][1] == {"team_id": 1}
+    assert posts[1][0].endswith("/conversations/42/toggle_status")
+    assert posts[1][1] == {"status": "open"}
     assert posts[2][0].endswith("/conversations/42/messages")
     assert posts[2][1].get("private") is True
     get_settings.cache_clear()

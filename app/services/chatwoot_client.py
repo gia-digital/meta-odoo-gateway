@@ -281,11 +281,16 @@ class ChatwootClient:
         assignee_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
-        Cambia status a open y opcionalmente asigna equipo/agente.
+        Asigna equipo/agente y luego cambia status a open.
+
+        El equipo va primero (aún en pending) para que la auto-asignación
+        de Chatwoot (inbox + toggle del equipo) elija un miembro del
+        equipo correcto al abrir el hilo, sin repartir antes entre todos
+        los colaboradores del inbox.
+
         El bot sigue contestando hasta que un humano escriba en público;
         asignar equipo o mirar el hilo no lo calla.
         """
-        data = await self.set_status(conversation_id, "open")
         if team_id is not None or assignee_id is not None:
             try:
                 await self.assign_conversation(
@@ -301,6 +306,7 @@ class ChatwootClient:
                     assignee_id=assignee_id,
                     error=str(exc),
                 )
+        data = await self.set_status(conversation_id, "open")
         logger.info(
             "chatwoot_handed_off",
             conversation_id=conversation_id,
