@@ -15,6 +15,7 @@ from app.core.logging import get_logger
 from app.models.knowledge import KnowledgeFaq, KnowledgeProduct, KnowledgeSkill
 from app.services.agent_knowledge import invalidate_instructions_cache
 from app.services.knowledge.ingest import ingest_file
+from app.services.knowledge.product_specs import merge_specs_into_products
 from app.services.knowledge.seed import faq_question
 from app.services.knowledge.store import KnowledgeStore
 
@@ -57,7 +58,9 @@ def load_bundle_from_dir(base: Path) -> Bundle:
         "business_info": business,
         "faqs": _load_json_file(base / "faqs.json") or {"faqs": []},
         "skills": _load_json_file(base / "skills.json") or {"skills": []},
-        "products": _load_json_file(base / "products.json") or {"products": []},
+        "products": merge_specs_into_products(
+            _load_json_file(base / "products.json") or {"products": []}
+        ),
         "file_blobs": file_blobs,
     }
 

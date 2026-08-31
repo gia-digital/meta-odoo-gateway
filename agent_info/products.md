@@ -1,8 +1,19 @@
 # Productos y servicios — agente GIA
 
-Fuente: `agent_info/products.json` (seed a `knowledge_products`). Catálogo operativo tomado de **Carta Presentación GIA.pdf** y FAQs de producto. La presentación corporativa incluye planes 2027 (p. ej. menudeo): no es oferta vigente.
+Fuente: `agent_info/products.json` + `agent_info/product_specs.json` (Anexo A: calibres, espesores, pesos, rendimientos) → seed a `knowledge_products`. Catálogo operativo tomado de **Carta Presentación GIA.pdf** y Guía de Respuesta GIA.
 
-Se edita después en `/dashboard/knowledge/products`. El agente recibe este catálogo en cada turno (no solo vía búsqueda).
+Se edita después en `/dashboard/knowledge/products`. El agente recibe el catálogo en cada turno; las tablas técnicas completas se indexan para `search_knowledge`.
+
+## Especificaciones técnicas (Anexo A)
+
+- **Aceros planos:** calibres 1/4" al 28 (espesor 6.35–0.38 mm); pesos por hoja estándar 3'×6' a 4'×10'.
+- **Tubería redonda:** 1/2" a 3", calibres 14–24 según diámetro; kg/ml y kg por 6 m; piezas por atado.
+- **Tubería cuadrada/rectangular/ovalada:** calibres por perfil.
+- **Acanalados:** calibres y kg/ml por perfil (R-101, R-72, O-100, O-30, RN-100/35, KR-18, Deck 25).
+- **Varilla:** 5/16" a 1 1/2" (kg/ml).
+- **Alambre:** calibres 7/0 al 16 con rendimiento m/kg.
+
+Si el cliente pide un calibre que no está en la tabla del material, GIA no lo maneja en esa línea.
 
 ## Sí vendemos (mayoreo)
 

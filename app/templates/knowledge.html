@@ -271,7 +271,7 @@
 
 {% if tab == 'products' %}
 <div class="section-toolbar">
-  <p class="muted">El agente usa este catálogo en cada conversación. Marca «No se ofrece» para materiales que hay que rechazar (inoxidable, aluminio, PTR, etc.).</p>
+  <p class="muted">El agente usa este catálogo en cada conversación. Los <strong>calibres y pesos</strong> están en el campo «Detalle» de cada producto (sección <em>CALIBRES Y ESPECIFICACIONES</em>) y en los productos de categoría <em>Especificaciones técnicas (Anexo A)</em>. Tras actualizar <code>product_specs.json</code>, reimporta agent_info.</p>
   <button type="button" class="btn btn-primary" data-open-dialog="product-modal">Nuevo producto</button>
 </div>
 
@@ -353,8 +353,8 @@
       <label>Resumen (lo que el agente debe saber de un vistazo)
         <textarea name="summary" rows="3">{{ editing.summary if editing else '' }}</textarea>
       </label>
-      <label>Detalle (perfiles, mínimos, notas)
-        <textarea name="details" rows="6">{{ editing.details if editing else '' }}</textarea>
+      <label>Detalle (perfiles, calibres, pesos, mínimos, notas)
+        <textarea name="details" rows="12">{{ editing.details if editing else '' }}</textarea>
       </label>
       <label>También se conoce como
         <input type="text" name="aliases" value="{{ editing.aliases if editing else '' }}" placeholder="HR, caliente, hot rolled" />

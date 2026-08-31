@@ -17,6 +17,7 @@ from app.models.knowledge import (
     KnowledgeSkill,
 )
 from app.services.knowledge.ingest import copy_into_uploads, ingest_file
+from app.services.knowledge.product_specs import merge_specs_into_products
 from app.services.knowledge.store import KnowledgeStore
 
 logger = get_logger(__name__)
@@ -218,7 +219,9 @@ async def seed_from_agent_info(db: AsyncSession, *, agent_info: Path | None = No
         ).scalar() or 0
         products_path = base / "products.json"
         if products_path.exists() and product_count == 0:
-            data = json.loads(products_path.read_text(encoding="utf-8"))
+            data = merge_specs_into_products(
+                json.loads(products_path.read_text(encoding="utf-8"))
+            )
             for item in data.get("products") or []:
                 name = (item.get("name") or "").strip()
                 if not name:

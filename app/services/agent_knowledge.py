@@ -124,6 +124,7 @@ PRODUCT_CATEGORY_LABELS = {
     "varilla": "Varilla",
     "alambre": "Alambre",
     "servicios": "Servicios de transformación",
+    "especificaciones": "Especificaciones técnicas (Anexo A)",
     "limites": "Fuera de catálogo",
 }
 

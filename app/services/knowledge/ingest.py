@@ -3,20 +3,16 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import List
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.models.knowledge import KnowledgeFile
+from app.services.knowledge.chunking import chunk_text
 from app.services.knowledge.store import KnowledgeStore
 
 logger = get_logger(__name__)
-
-# ~800 tokens ≈ 3200 caracteres; overlap ~100 tokens
-CHUNK_CHARS = 3200
-CHUNK_OVERLAP = 400
 
 
 def uploads_dir() -> Path:
@@ -26,23 +22,6 @@ def uploads_dir() -> Path:
         path = Path(__file__).resolve().parents[3] / path
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-def chunk_text(text: str, *, size: int = CHUNK_CHARS, overlap: int = CHUNK_OVERLAP) -> List[str]:
-    cleaned = " ".join((text or "").split())
-    if not cleaned:
-        return []
-    if len(cleaned) <= size:
-        return [cleaned]
-    chunks: List[str] = []
-    start = 0
-    while start < len(cleaned):
-        end = min(len(cleaned), start + size)
-        chunks.append(cleaned[start:end].strip())
-        if end >= len(cleaned):
-            break
-        start = max(0, end - overlap)
-    return [c for c in chunks if c]
 
 
 def extract_text(path: Path) -> str:

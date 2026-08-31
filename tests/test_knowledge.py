@@ -223,6 +223,68 @@ def test_seed_source_has_catalog_limits():
     assert "3" in (tuberia.get("summary") or "")
 
 
+def test_product_specs_cover_anexo_a():
+    from app.services.knowledge.product_specs import (
+        load_product_specs,
+        merge_specs_into_products,
+        specs_to_product_items,
+    )
+
+    specs = load_product_specs()
+    assert specs.get("specs")
+    items = specs_to_product_items(specs)
+    names = [i["name"] for i in items]
+    assert any("planos" in n.lower() for n in names)
+    assert any("tubería" in n.lower() and "redonda" in n.lower() for n in names)
+    assert any("acanalada" in n.lower() for n in names)
+
+    planos = next(i for i in items if i.get("spec_id") == "planos_hojas")
+    assert "28" in planos["summary"]
+    assert "40" in planos["details"]  # ejemplo de calibre no manejado
+    assert "6.35" in planos["details"]
+
+    merged = merge_specs_into_products({"products": []})
+    assert len(merged["products"]) == len(items)
+    assert "agent_info/product_specs.json" in merged["generated_from"]
+
+    from pathlib import Path
+    import json
+
+    base = json.loads(
+        (Path(__file__).resolve().parents[1] / "agent_info" / "products.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    enriched = merge_specs_into_products(base)
+    cr = next(
+        p for p in enriched["products"] if "fría recocida" in (p.get("name") or "").lower()
+    )
+    assert "CALIBRES Y ESPECIFICACIONES" in cr.get("details", "")
+    assert "28" in cr.get("summary", "")
+
+
+@pytest.mark.asyncio
+async def test_product_index_chunks_long_details(monkeypatch):
+    from app.services.knowledge.store import KnowledgeStore
+
+    captured: list[list[str]] = []
+
+    async def fake_insert(self, *, texts, **kwargs):
+        captured.append(list(texts))
+
+    monkeypatch.setattr(KnowledgeStore, "_insert_chunks", fake_insert)
+
+    product = type("P", (), {
+        "id": 1, "active": True, "name": "Spec", "kind": "product",
+        "category": "especificaciones", "summary": "s", "aliases": "",
+        "details": "x" * 4000,
+    })()
+
+    await KnowledgeStore(None).index_product(product)
+    assert captured
+    assert len(captured[0]) > 1
+
+
 def test_format_catalog_marks_out_of_catalog():
     from types import SimpleNamespace
 
@@ -434,6 +496,10 @@ def test_load_bundle_from_dir_and_zip_roundtrip(tmp_path):
     assert bundle["faqs"]["faqs"]
     assert bundle["skills"]["skills"]
     assert (bundle["business_info"].get("payload") or {}).get("business_description")
+    assert any(
+        "planos" in (p.get("name") or "").lower()
+        for p in bundle["products"].get("products") or []
+    )
 
     zip_bytes = build_export_zip(
         {

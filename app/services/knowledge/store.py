@@ -16,6 +16,7 @@ from app.models.knowledge import (
     KnowledgeSkill,
 )
 from app.services.knowledge.embeddings import embed_texts
+from app.services.knowledge.chunking import chunk_text
 
 logger = get_logger(__name__)
 
@@ -200,11 +201,12 @@ class KnowledgeStore:
         )
         if aliases:
             text += f"\nTambién conocido como: {aliases}"
+        chunks = chunk_text(text) or [text]
         await self._insert_chunks(
             source_type="product",
             source_id=product.id,
             title=(product.name or "")[:255],
-            texts=[text],
+            texts=chunks,
         )
 
     async def index_skill(self, skill: KnowledgeSkill) -> None:

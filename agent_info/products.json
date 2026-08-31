@@ -13,7 +13,7 @@
       "sort_order": 10,
       "aliases": "HR, hot rolled, caliente sin decapar, rolado en caliente, antiderrapante",
       "summary": "Acero rolado en caliente, acabado rugoso, tolerancias más amplias; liso o antiderrapante. Formatos: rollo, hoja y cinta.",
-      "details": "Se lamina a altas temperaturas. Peso teórico: espesor mm × ancho m × largo m × 7.85 (densidad 7,850 kg/m³); rige la báscula de GIA. Medidas estándar y especiales. Solo acero al carbono."
+      "details": "Se lamina a altas temperaturas. Calibres GIA: 1/4\" al 28 (Anexo A.1); fuera de esa tabla no se maneja (ej. cal. 29, 30, 40). Peso teórico: espesor mm × ancho m × largo m × 7.85 (densidad 7,850 kg/m³); rige la báscula de GIA. Medidas estándar y especiales. Solo acero al carbono."
     },
     {
       "name": "Lámina caliente decapada (HRPO)",
@@ -22,7 +22,7 @@
       "sort_order": 20,
       "aliases": "HRPO, hot rolled pickled, caliente decapada, pickled and oiled",
       "summary": "Lámina caliente decapada (ácido clorhídrico): limpia, lista para usar, favorece pintura y recubrimientos. Rollo, hoja y cinta.",
-      "details": "También llamada Hot Rolled & Pickled. En seco (sin aceite ni pasivado) se vende sin garantía por óxido. Peso teórico orientativo; rige báscula GIA."
+      "details": "También llamada Hot Rolled & Pickled. Calibres: mismos que aceros planos (1/4\" al 28, Anexo A). En seco (sin aceite ni pasivado) se vende sin garantía por óxido. Peso teórico orientativo; rige báscula GIA."
     },
     {
       "name": "Lámina fría recocida (CR)",
@@ -31,7 +31,7 @@
       "sort_order": 30,
       "aliases": "CR, cold rolled, fría recocida, lámina fría, cold rolled annealed",
       "summary": "Reducción de espesor en frío; acabado uniforme brillante o mate, usos estéticos. Rollo, hoja y cinta.",
-      "details": "CR seco: sin garantía por óxido. Peso teórico orientativo; rige báscula GIA. Solo acero al carbono."
+      "details": "CR seco: sin garantía por óxido. Calibres: 1/4\" al 28 (Anexo A). Peso teórico orientativo; rige báscula GIA. Solo acero al carbono."
     },
     {
       "name": "Lámina galvanizada G60 / G90",
@@ -40,7 +40,7 @@
       "sort_order": 40,
       "aliases": "galvanizada, G60, G90, zinc, galv, lámina zinc",
       "summary": "Capa de zinc contra oxidación. Acabados G60 y G90; flor mínima, regular o sin flor. Rollo, hoja y cinta.",
-      "details": "Garantía por óxido (si aplica): con aceite 45 días desde embarque; pasivado sin aceite 30 días; seco sin aceite ni pasivado: sin garantía. No es acero inoxidable ni aluminio."
+      "details": "Garantía por óxido (si aplica): con aceite 45 días desde embarque; pasivado sin aceite 30 días; seco sin aceite ni pasivado: sin garantía. Calibres planos: 1/4\" al 28 (Anexo A). No es acero inoxidable ni aluminio."
     },
     {
       "name": "Lámina Galvanneal",
@@ -148,7 +148,7 @@
       "sort_order": 160,
       "aliases": "tubo, tubería, pipe, tubo negro, industrial, atado, tubular",
       "summary": "Tubería industrial de acero negro comercial con costura interna, diámetro hasta 3\". Fabricamos largos especiales. No es grado estructural ni PTR ni cédula.",
-      "details": "Solo diámetros hasta 3\" inclusive. NO cédula (30/40/80), NO tubo >3\", NO cerquero, NO HSS. Hoy no es tubería galvanizada de línea. Venta por atados completos. Ejemplos piezas/atado: 3\" ≈ 86, 2\" ≈ 61, 1\" ≈ 169 (tabla con el asesor). No sirve como estructural: dilo con transparencia. Corte a la medida en planta."
+      "details": "Solo diámetros hasta 3\" inclusive. Calibres por diámetro en Anexo A.2/A.3 (típ. 14–24, varía por medida). NO cédula (30/40/80), NO tubo >3\", NO cerquero, NO HSS. Venta por atados completos. Ejemplos piezas/atado: 3\" ≈ 86, 2\" ≈ 61, 1\" ≈ 169. No sirve como estructural. Corte a la medida en planta; largo estándar 6 m."
     },
     {
       "name": "Varilla",
