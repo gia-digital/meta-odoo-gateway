@@ -71,14 +71,14 @@ def test_build_lead_stats_aggregates():
 
 
 def test_build_lead_stats_filters_by_month():
-    now = datetime.now(timezone.utc)
+    now = datetime(2026, 8, 31, 12, tzinfo=timezone.utc)
     current = now
     previous = now - timedelta(days=40)
     leads = [
         _lead(qualified_at=current, created_at=current),
         _lead(qualified_at=previous, created_at=previous),
     ]
-    month_key = current.astimezone(timezone.utc).strftime("%Y-%m")
+    month_key = "2026-08"
     period = parse_dashboard_period(month_key, now=now)
     stats = build_lead_stats(leads, period, now=now)
     assert stats["total"] == 1
