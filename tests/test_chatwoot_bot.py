@@ -337,6 +337,39 @@ def test_human_assignee_and_attachments():
     assert has_attachments({"content": "hola"}) is False
 
 
+def test_attachment_kind_classifies_stickers_and_media():
+    from app.services.chatwoot_payload import (
+        attachment_describe_reply,
+        attachment_kind,
+        attachments_are_sticker_only,
+        primary_attachment_kind,
+    )
+
+    assert (
+        attachment_kind(
+            {
+                "file_type": "image",
+                "content_type": "image/webp",
+                "data_url": "https://x/sticker.webp",
+            }
+        )
+        == "sticker"
+    )
+    assert attachment_kind({"file_type": "sticker"}) == "sticker"
+    assert (
+        attachment_kind({"file_type": "image", "data_url": "https://x/foto.jpg"})
+        == "image"
+    )
+    assert attachment_kind({"file_type": "audio"}) == "audio"
+    assert attachment_kind({"file_type": "file"}) == "file"
+    assert attachments_are_sticker_only(["sticker", "sticker"]) is True
+    assert attachments_are_sticker_only(["sticker", "image"]) is False
+    assert primary_attachment_kind(["sticker", "image"]) == "image"
+    assert attachment_describe_reply("sticker") is None
+    assert "imagen" in (attachment_describe_reply("image") or "")
+    assert "archivo" in (attachment_describe_reply("file") or "")
+
+
 def test_merge_incoming_and_agent_error_reason():
     batch = [
         {"message_type": "incoming", "content": "Hola"},

@@ -31,6 +31,8 @@ def test_tool_rules_tell_llm_when_to_split():
     assert "---" in TOOL_RULES
     assert "NUNCA separes" in TOOL_RULES or "misma idea" in TOOL_RULES.lower()
     assert "send_catalog" in TOOL_RULES
+    assert "[sticker]" in TOOL_RULES
+    assert "archivo" in TOOL_RULES.lower()
 
 
 @pytest.mark.asyncio
@@ -719,11 +721,147 @@ async def test_attachment_without_text_skips_agent(monkeypatch):
     sent, handoffs, _ = _webhook_fakes(monkeypatch, conv=conv, service=service, boom=False)
     monkeypatch.setattr("app.services.gia_agent.run_gia_agent", must_not_run)
 
-    from app.routers.chatwoot_webhook import ATTACHMENT_REPLY, _process_incoming_message
+    from app.routers.chatwoot_webhook import _process_incoming_message
+    from app.services.chatwoot_payload import attachment_describe_reply
 
     await _process_incoming_message(payload)
     assert handoffs == []
-    assert sent == [ATTACHMENT_REPLY]
+    assert sent == [attachment_describe_reply("image")]
+    inbound = service.add_inbound_message.await_args.args[1]
+    assert inbound.text == "[imagen adjunta]"
+    reset_for_tests()
+    invalidate_agent_behavior()
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_webp_sticker_without_text_goes_to_agent(monkeypatch):
+    """Stickers WA llegan como image/webp vacío; no pedir 'describa el archivo'."""
+    monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    monkeypatch.setenv("CHATWOOT_DEBOUNCE_SECONDS", "0")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.core.agent_behavior import invalidate_agent_behavior
+    from app.services.turn_guard import reset_for_tests
+
+    invalidate_agent_behavior()
+    reset_for_tests()
+
+    payload = {
+        "event": "message_created",
+        "message_type": "incoming",
+        "content": "",
+        "attachments": [
+            {
+                "file_type": "image",
+                "content_type": "image/webp",
+                "data_url": "https://chatwoot.example/rails/active_storage/sticker.webp",
+            }
+        ],
+        "conversation": {"id": 91, "status": "pending"},
+        "contact": {"name": "Ana", "phone_number": "5215512345678"},
+        "inbox": {"channel_type": "Channel::Whatsapp"},
+    }
+    conv = SimpleNamespace(
+        id=5,
+        status=SimpleNamespace(value="active"),
+        user_name="Ana",
+        user_phone="5215512345678",
+        user_email=None,
+        messages=[],
+        handed_off_at=None,
+        human_replied_at=None,
+        qualification_reason=None,
+    )
+    service = MagicMock()
+    service.get_or_create = AsyncMock(return_value=conv)
+    service.add_inbound_message = AsyncMock()
+    service.process_after_message = AsyncMock()
+    service.add_outbound_message = AsyncMock()
+    service.mark_handed_off = AsyncMock()
+    service.resume_bot = AsyncMock()
+
+    agent_calls: list[str] = []
+
+    async def fake_agent(**kwargs):
+        agent_calls.append(kwargs.get("user_message") or "")
+        return "Con gusto, ¿en qué le ayudo?"
+
+    sent, handoffs, _ = _webhook_fakes(monkeypatch, conv=conv, service=service, boom=False)
+    monkeypatch.setattr("app.services.gia_agent.run_gia_agent", fake_agent)
+
+    from app.routers.chatwoot_webhook import STICKER_PLACEHOLDER, _process_incoming_message
+
+    await _process_incoming_message(payload)
+    assert handoffs == []
+    assert agent_calls == [STICKER_PLACEHOLDER]
+    assert sent == ["Con gusto, ¿en qué le ayudo?"]
+    inbound = service.add_inbound_message.await_args.args[1]
+    assert inbound.text == STICKER_PLACEHOLDER
+    reset_for_tests()
+    invalidate_agent_behavior()
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_explicit_sticker_file_type_goes_to_agent(monkeypatch):
+    monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    monkeypatch.setenv("CHATWOOT_DEBOUNCE_SECONDS", "0")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.core.agent_behavior import invalidate_agent_behavior
+    from app.services.turn_guard import reset_for_tests
+
+    invalidate_agent_behavior()
+    reset_for_tests()
+
+    payload = {
+        "event": "message_created",
+        "message_type": "incoming",
+        "content": "",
+        "attachments": [{"file_type": "sticker", "data_url": "https://x/s.png"}],
+        "conversation": {"id": 92, "status": "pending"},
+        "contact": {"name": "Ana", "phone_number": "5215512345678"},
+    }
+    conv = SimpleNamespace(
+        id=6,
+        status=SimpleNamespace(value="active"),
+        user_name="Ana",
+        user_phone="5215512345678",
+        user_email=None,
+        messages=[],
+        handed_off_at=None,
+        human_replied_at=None,
+        qualification_reason=None,
+    )
+    service = MagicMock()
+    service.get_or_create = AsyncMock(return_value=conv)
+    service.add_inbound_message = AsyncMock()
+    service.process_after_message = AsyncMock()
+    service.add_outbound_message = AsyncMock()
+    service.mark_handed_off = AsyncMock()
+    service.resume_bot = AsyncMock()
+
+    agent_calls: list[str] = []
+
+    async def fake_agent(**kwargs):
+        agent_calls.append(kwargs.get("user_message") or "")
+        return "¡Hola! ¿Qué material busca?"
+
+    sent, handoffs, _ = _webhook_fakes(monkeypatch, conv=conv, service=service, boom=False)
+    monkeypatch.setattr("app.services.gia_agent.run_gia_agent", fake_agent)
+
+    from app.routers.chatwoot_webhook import STICKER_PLACEHOLDER, _process_incoming_message
+
+    await _process_incoming_message(payload)
+    assert agent_calls == [STICKER_PLACEHOLDER]
+    assert sent == ["¡Hola! ¿Qué material busca?"]
     reset_for_tests()
     invalidate_agent_behavior()
     get_settings.cache_clear()

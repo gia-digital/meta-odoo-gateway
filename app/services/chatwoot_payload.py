@@ -107,6 +107,146 @@ def has_attachments(payload: Dict[str, Any]) -> bool:
     return bool(attachments_of(payload))
 
 
+# Stickers (WA/IG/FB) suelen llegar sin texto. Chatwoot mapea sticker de WhatsApp
+# a file_type=image; el mime/extension webp (o file_type=sticker) los distingue
+# de fotos reales.
+_STICKER_FILE_TYPES = frozenset({"sticker"})
+_IMAGE_FILE_TYPES = frozenset({"image"})
+_AUDIO_FILE_TYPES = frozenset({"audio"})
+_VIDEO_FILE_TYPES = frozenset({"video"})
+_FILE_FILE_TYPES = frozenset({"file", "document"})
+_SKIP_DESCRIBE_TYPES = frozenset(
+    {"location", "contact", "fallback", "share", "story_mention", "embed"}
+)
+_WEBP_MARKERS = (".webp", "image/webp", "webp")
+
+
+def _attachment_blob(att: Any) -> Dict[str, Any]:
+    return att if isinstance(att, dict) else {}
+
+
+def _attachment_haystack(att: Dict[str, Any]) -> str:
+    parts: List[str] = []
+    for key in (
+        "file_type",
+        "content_type",
+        "extension",
+        "file_name",
+        "filename",
+        "data_url",
+        "thumb_url",
+        "external_url",
+    ):
+        val = att.get(key)
+        if val:
+            parts.append(str(val).lower())
+    meta = att.get("meta") or att.get("metadata") or {}
+    if isinstance(meta, dict):
+        for val in meta.values():
+            if val is not None and not isinstance(val, (dict, list)):
+                parts.append(str(val).lower())
+    return " ".join(parts)
+
+
+def _looks_like_webp_sticker(att: Dict[str, Any]) -> bool:
+    """WhatsApp stickers son webp; Chatwoot los guarda como image."""
+    hay = _attachment_haystack(att)
+    if not any(marker in hay for marker in _WEBP_MARKERS):
+        return False
+    # sticker_id (Messenger) o animated refuerzan el caso
+    if "sticker" in hay or att.get("sticker_id") is not None:
+        return True
+    file_type = str(att.get("file_type") or "").lower()
+    return file_type in _IMAGE_FILE_TYPES or file_type == ""
+
+
+def attachment_kind(att: Any) -> str:
+    """
+    Clasifica un adjunto Chatwoot: sticker | image | audio | video | file |
+    location | contact | other.
+    """
+    blob = _attachment_blob(att)
+    file_type = str(blob.get("file_type") or "").lower().strip()
+
+    if file_type in _STICKER_FILE_TYPES or _looks_like_webp_sticker(blob):
+        return "sticker"
+    if file_type in _IMAGE_FILE_TYPES:
+        return "image"
+    if file_type in _AUDIO_FILE_TYPES:
+        return "audio"
+    if file_type in _VIDEO_FILE_TYPES:
+        return "video"
+    if file_type in _FILE_FILE_TYPES:
+        return "file"
+    if file_type in ("location",):
+        return "location"
+    if file_type in ("contact",):
+        return "contact"
+    if file_type in _SKIP_DESCRIBE_TYPES:
+        return "other"
+    if file_type:
+        return "file"
+    # Sin file_type: webp → sticker; si no, archivo genérico
+    if _looks_like_webp_sticker(blob):
+        return "sticker"
+    return "file"
+
+
+def attachment_kinds(payload: Dict[str, Any]) -> List[str]:
+    return [attachment_kind(att) for att in attachments_of(payload)]
+
+
+def batch_attachment_kinds(payloads: List[Dict[str, Any]]) -> List[str]:
+    kinds: List[str] = []
+    for payload in payloads:
+        kinds.extend(attachment_kinds(payload))
+    return kinds
+
+
+def attachments_are_sticker_only(kinds: List[str]) -> bool:
+    return bool(kinds) and all(k == "sticker" for k in kinds)
+
+
+def primary_attachment_kind(kinds: List[str]) -> str:
+    """Prioriza el tipo que debe guiar la respuesta (no sticker si hay media real)."""
+    priority = ("file", "audio", "video", "image", "location", "contact", "sticker", "other")
+    present = set(kinds)
+    for kind in priority:
+        if kind in present:
+            return kind
+    return "file"
+
+
+def attachment_placeholder(kind: str) -> str:
+    return {
+        "sticker": "[sticker]",
+        "image": "[imagen adjunta]",
+        "audio": "[audio adjunto]",
+        "video": "[video adjunto]",
+        "file": "[archivo adjunto]",
+        "location": "[ubicacion]",
+        "contact": "[contacto]",
+    }.get(kind, "[archivo adjunto]")
+
+
+def attachment_describe_reply(kind: str) -> Optional[str]:
+    """
+    Texto fijo pidiendo descripción, o None si no conviene preguntar
+    (sticker / location / contact / other).
+    """
+    if kind in ("sticker", "location", "contact", "other"):
+        return None
+    noun = {
+        "image": "imagen",
+        "audio": "audio",
+        "video": "video",
+        "file": "archivo",
+    }.get(kind, "archivo")
+    return (
+        f"Recibí su {noun}. ¿Puede describirlo por texto para poder ayudarle?"
+    )
+
+
 def incoming_message_source_id(payload: Dict[str, Any]) -> Optional[str]:
     """ID del mensaje en el canal (WhatsApp Cloud → wamid… en ``source_id``)."""
     msg = _as_message(payload)
