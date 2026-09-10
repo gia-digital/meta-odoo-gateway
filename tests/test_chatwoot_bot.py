@@ -337,6 +337,88 @@ def test_human_assignee_and_attachments():
     assert has_attachments({"content": "hola"}) is False
 
 
+def test_attachment_kind_classifies_stickers_and_media():
+    from app.services.chatwoot_payload import (
+        attachment_describe_reply,
+        attachment_kind,
+        attachments_are_sticker_only,
+        primary_attachment_kind,
+    )
+
+    assert (
+        attachment_kind(
+            {
+                "file_type": "image",
+                "content_type": "image/webp",
+                "data_url": "https://x/sticker.webp",
+            }
+        )
+        == "sticker"
+    )
+    assert attachment_kind({"file_type": "sticker"}) == "sticker"
+    assert (
+        attachment_kind({"file_type": "image", "data_url": "https://x/foto.jpg"})
+        == "image"
+    )
+    assert attachment_kind({"file_type": "audio"}) == "audio"
+    assert attachment_kind({"file_type": "file"}) == "file"
+    assert attachments_are_sticker_only(["sticker", "sticker"]) is True
+    assert attachments_are_sticker_only(["sticker", "image"]) is False
+    assert primary_attachment_kind(["sticker", "image"]) == "image"
+    assert attachment_describe_reply("sticker") is None
+    assert "imagen" in (attachment_describe_reply("image") or "")
+    assert "archivo" in (attachment_describe_reply("file") or "")
+
+    # Like de Messenger: CDN Meta (t39.1997) aunque file_type=image
+    assert (
+        attachment_kind(
+            {
+                "file_type": "image",
+                "data_url": (
+                    "https://scontent.xx.fbcdn.net/v/t39.1997-6/"
+                    "851557_369239266556155_759568595_n.png"
+                ),
+            }
+        )
+        == "sticker"
+    )
+    # Like rehosteado en Chatwoot (PNG chico) en inbox Facebook
+    fb_payload = {
+        "content": "",
+        "attachments": [
+            {
+                "file_type": "image",
+                "data_url": "https://cw.example/rails/active_storage/blobs/like.png",
+                "file_size": 18340,
+            }
+        ],
+        "inbox": {"channel_type": "Channel::Facebook", "name": "Facebook Page"},
+    }
+    assert (
+        attachment_kind(
+            fb_payload["attachments"][0],
+            channel="messenger",
+            payload=fb_payload,
+        )
+        == "sticker"
+    )
+    assert (
+        attachment_kind(fb_payload["attachments"][0], payload=fb_payload) == "sticker"
+    )
+    # Foto grande en Messenger sigue siendo imagen
+    assert (
+        attachment_kind(
+            {
+                "file_type": "image",
+                "data_url": "https://cw.example/foto.jpg",
+                "file_size": 900_000,
+            },
+            channel="messenger",
+        )
+        == "image"
+    )
+
+
 def test_merge_incoming_and_agent_error_reason():
     batch = [
         {"message_type": "incoming", "content": "Hola"},

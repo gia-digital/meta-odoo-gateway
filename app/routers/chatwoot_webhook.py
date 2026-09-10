@@ -19,10 +19,15 @@ from app.models.db import SessionLocal
 from app.models.schemas import NormalizedMessage
 from app.services.chatwoot_client import ChatwootClient, ChatwootError
 from app.services.chatwoot_payload import (
+    attachment_describe_reply,
+    attachment_placeholder,
+    attachments_are_sticker_only,
+    batch_attachment_kinds,
     has_attachments,
     is_human_public_outgoing,
     latest_incoming_source_id,
     latest_incoming_source_id_from_messages,
+    primary_attachment_kind,
     resolve_inbound_wamid_for_human_reply,
 )
 from app.services.conversation import ConversationService
@@ -43,9 +48,11 @@ from app.services.turn_guard import (
     record_inbound_wamid,
 )
 
+# Compat tests / callers que importan el mensaje genérico de adjunto.
 ATTACHMENT_REPLY = (
     "Recibí su archivo. ¿Puede describirlo por texto para poder ayudarle?"
 )
+STICKER_PLACEHOLDER = "[sticker]"
 AGENT_RETRY_REPLY = (
     "Disculpe, tengo un problema técnico momentáneo. "
     "¿Puede repetir su mensaje en un momento?"
@@ -348,6 +355,13 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
     payload = incoming_batch[-1]
     content = _merge_incoming_texts(incoming_batch)
     attached = any(has_attachments(item) for item in incoming_batch)
+    # Canal antes de clasificar adjuntos: el Like de Messenger llega como image/PNG.
+    channel = _resolve_channel(payload)
+    attach_kinds = (
+        batch_attachment_kinds(incoming_batch, channel=channel.value)
+        if attached
+        else []
+    )
     started_at = time.monotonic()
     record_inbound_wamid(cw_conv_id, latest_incoming_source_id(incoming_batch))
 
@@ -369,20 +383,41 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
                     reason="attachment",
                 )
                 return
-            content = ATTACHMENT_REPLY
-            await _reply_without_agent(
-                payload,
-                cw_conv_id,
-                content,
-                started_at=started_at,
-                inbound_source_id=latest_incoming_source_id(incoming_batch),
-            )
+            # Stickers (WA/IG/FB) llegan como adjunto sin texto; no son un "archivo".
+            # En Messenger el Like azul es image rehosteada (no webp).
+            if attachments_are_sticker_only(attach_kinds):
+                content = STICKER_PLACEHOLDER
+                logger.info(
+                    "chatwoot_sticker_as_text",
+                    conversation_id=cw_conv_id,
+                    channel=channel.value,
+                    kinds=attach_kinds,
+                )
+            else:
+                kind = primary_attachment_kind(attach_kinds)
+                describe = attachment_describe_reply(kind)
+                if describe is None:
+                    logger.info(
+                        "chatwoot_skip_non_describable_attachment",
+                        conversation_id=cw_conv_id,
+                        kind=kind,
+                        kinds=attach_kinds,
+                    )
+                    return
+                await _reply_without_agent(
+                    payload,
+                    cw_conv_id,
+                    describe,
+                    started_at=started_at,
+                    inbound_source_id=latest_incoming_source_id(incoming_batch),
+                    inbound_placeholder=attachment_placeholder(kind),
+                )
+                return
+        else:
+            logger.info("chatwoot_skip_empty_content", conversation_id=cw_conv_id)
             return
-        logger.info("chatwoot_skip_empty_content", conversation_id=cw_conv_id)
-        return
 
     external_user_id, user_name, user_phone, user_email = _contact_identity(payload)
-    channel = _resolve_channel(payload)
 
     async with SessionLocal() as db:
         service = ConversationService(db)
@@ -677,6 +712,7 @@ async def _reply_without_agent(
     *,
     started_at: Optional[float] = None,
     inbound_source_id: Optional[str] = None,
+    inbound_placeholder: str = "[archivo adjunto]",
 ) -> None:
     """Respuesta fija (p. ej. adjunto sin texto) sin llamar al LLM."""
     external_user_id, user_name, user_phone, _ = _contact_identity(payload)
@@ -693,7 +729,7 @@ async def _reply_without_agent(
             NormalizedMessage(
                 channel=channel.value,
                 external_user_id=external_user_id,
-                text="[archivo adjunto]",
+                text=inbound_placeholder,
                 external_message_id=str(
                     (payload.get("message") or {}).get("id") or payload.get("id") or ""
                 )

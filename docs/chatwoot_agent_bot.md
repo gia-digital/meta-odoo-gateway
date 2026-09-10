@@ -120,7 +120,7 @@ En droplets de 1 GB el API corre con **1 worker** uvicorn. No subir
 | Bot no responde pero HTTP 200 | Un humano ya escribió en público (`chatwoot_skip_human_replied`), o el hilo está `resolved`/`snoozed`. Falta de API key. |
 | Cliente no ve palomitas azules / «escribiendo…» | Chatwoot no lo hace nativo. Configura `WHATSAPP_CLOUD_ACCESS_TOKEN` y `WHATSAPP_CLOUD_PHONE_NUMBER_ID`. El bot envía read+typing al preparar respuesta; un humano en Chatwoot dispara read al enviar (wamid cacheado del último mensaje del cliente). |
 | Hilo `open` y el bot sigue hablando | Esperado hasta que un asesor escriba al cliente. Para callarlo: responder en público. Para devolverlo al bot: status **Pending**. |
-| Adjunto / audio sin texto | El bot pide descripción por texto (`chatwoot_skip_empty_content` solo si no hay attachments). |
+| Adjunto / audio sin texto | El bot pide descripción por texto (imagen/audio/video/archivo). Stickers van al agente como `[sticker]`: webp (WhatsApp), `file_type=sticker`, o el Like/stickers de Messenger (CDN `t39.1997` o imagen chica en inbox Facebook). `chatwoot_skip_empty_content` solo si no hay attachments. |
 | RAG vacío / no respeta catálogo | Ver `/dashboard/knowledge` (FAQs activas, chunks > 0). Seed corre al arrancar si las tablas están vacías. Sin `OPENAI_API_KEY` no hay embeddings (solo keyword). |
 
 ## 8. Dependencias
