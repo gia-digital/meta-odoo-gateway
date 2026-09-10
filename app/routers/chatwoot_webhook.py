@@ -355,7 +355,13 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
     payload = incoming_batch[-1]
     content = _merge_incoming_texts(incoming_batch)
     attached = any(has_attachments(item) for item in incoming_batch)
-    attach_kinds = batch_attachment_kinds(incoming_batch) if attached else []
+    # Canal antes de clasificar adjuntos: el Like de Messenger llega como image/PNG.
+    channel = _resolve_channel(payload)
+    attach_kinds = (
+        batch_attachment_kinds(incoming_batch, channel=channel.value)
+        if attached
+        else []
+    )
     started_at = time.monotonic()
     record_inbound_wamid(cw_conv_id, latest_incoming_source_id(incoming_batch))
 
@@ -378,11 +384,13 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
                 )
                 return
             # Stickers (WA/IG/FB) llegan como adjunto sin texto; no son un "archivo".
+            # En Messenger el Like azul es image rehosteada (no webp).
             if attachments_are_sticker_only(attach_kinds):
                 content = STICKER_PLACEHOLDER
                 logger.info(
                     "chatwoot_sticker_as_text",
                     conversation_id=cw_conv_id,
+                    channel=channel.value,
                     kinds=attach_kinds,
                 )
             else:
@@ -410,7 +418,6 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
             return
 
     external_user_id, user_name, user_phone, user_email = _contact_identity(payload)
-    channel = _resolve_channel(payload)
 
     async with SessionLocal() as db:
         service = ConversationService(db)

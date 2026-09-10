@@ -107,9 +107,10 @@ def has_attachments(payload: Dict[str, Any]) -> bool:
     return bool(attachments_of(payload))
 
 
-# Stickers (WA/IG/FB) suelen llegar sin texto. Chatwoot mapea sticker de WhatsApp
-# a file_type=image; el mime/extension webp (o file_type=sticker) los distingue
-# de fotos reales.
+# Stickers (WA/IG/FB) suelen llegar sin texto.
+# - WhatsApp: Chatwoot mapea sticker → image/webp
+# - Messenger Like/stickers: Meta manda type=sticker (o image+sticker_id);
+#   Chatwoot lo guarda como image (a veces rehosteado, sin webp)
 _STICKER_FILE_TYPES = frozenset({"sticker"})
 _IMAGE_FILE_TYPES = frozenset({"image"})
 _AUDIO_FILE_TYPES = frozenset({"audio"})
@@ -119,6 +120,26 @@ _SKIP_DESCRIBE_TYPES = frozenset(
     {"location", "contact", "fallback", "share", "story_mention", "embed"}
 )
 _WEBP_MARKERS = (".webp", "image/webp", "webp")
+# CDN de stickers de Facebook: …/v/t39.1997-6/… (Like y packs)
+_FB_STICKER_CDN_MARKERS = (
+    "t39.1997",
+    "t39.1997-6",
+    "/stickers/",
+    "sticker_id=",
+)
+# Like / thumbs-up de Messenger (tamaños small/medium/large históricos)
+_MESSENGER_LIKE_STICKER_IDS = frozenset(
+    {
+        "369239263222822",
+        "369239343222814",
+        "369239383222810",
+        "369239343222717",
+        "369239383222713",
+        "369239266556155",
+    }
+)
+# Tras rehost en Chatwoot el Like es un PNG chico; fotos de celular suelen ser mayores.
+_MESSENGER_STICKER_MAX_BYTES = 250_000
 
 
 def _attachment_blob(att: Any) -> Dict[str, Any]:
@@ -134,8 +155,11 @@ def _attachment_haystack(att: Dict[str, Any]) -> str:
         "file_name",
         "filename",
         "data_url",
+        "data_url",  # por si algún export usa dataUrl-style distinto
+        "thumb_url",
         "thumb_url",
         "external_url",
+        "sticker_id",
     ):
         val = att.get(key)
         if val:
@@ -148,19 +172,140 @@ def _attachment_haystack(att: Dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def _payload_haystack(payload: Optional[Dict[str, Any]]) -> str:
+    """Busca sticker_id / señales Meta en el webhook (content_attributes, etc.)."""
+    if not isinstance(payload, dict):
+        return ""
+    parts: List[str] = []
+
+    def _walk(obj: Any, depth: int = 0) -> None:
+        if depth > 4 or obj is None:
+            return
+        if isinstance(obj, dict):
+            for key, val in obj.items():
+                key_l = str(key).lower()
+                if key_l in ("sticker_id", "sticker") and val is not None:
+                    parts.append(str(val).lower())
+                if key_l in (
+                    "data_url",
+                    "data_url",
+                    "external_url",
+                    "thumb_url",
+                    "thumb_url",
+                    "url",
+                    "channel_type",
+                    "channel",
+                    "medium",
+                    "name",
+                ) and val:
+                    parts.append(str(val).lower())
+                if isinstance(val, (dict, list)) and key_l in (
+                    "inbox",
+                    "conversation",
+                    "meta",
+                    "additional_attributes",
+                    "content_attributes",
+                    "attachments",
+                    "message",
+                ):
+                    _walk(val, depth + 1)
+                elif isinstance(val, (dict, list)) and depth < 2:
+                    _walk(val, depth + 1)
+        elif isinstance(obj, list):
+            for item in obj[:20]:
+                _walk(item, depth + 1)
+
+    _walk(payload)
+    return " ".join(parts)
+
+
+def messenger_channel_hint(payload: Optional[Dict[str, Any]]) -> bool:
+    """True si el webhook parece inbox Facebook/Messenger."""
+    hay = _payload_haystack(payload)
+    return "facebook" in hay or "messenger" in hay
+
+
+def _haystack_has_messenger_sticker_signal(hay: str) -> bool:
+    if not hay:
+        return False
+    if any(marker in hay for marker in _FB_STICKER_CDN_MARKERS):
+        return True
+    if "sticker" in hay and ("fbcdn" in hay or "facebook" in hay or "messenger" in hay):
+        return True
+    return any(sid in hay for sid in _MESSENGER_LIKE_STICKER_IDS)
+
+
 def _looks_like_webp_sticker(att: Dict[str, Any]) -> bool:
     """WhatsApp stickers son webp; Chatwoot los guarda como image."""
     hay = _attachment_haystack(att)
     if not any(marker in hay for marker in _WEBP_MARKERS):
         return False
-    # sticker_id (Messenger) o animated refuerzan el caso
     if "sticker" in hay or att.get("sticker_id") is not None:
         return True
     file_type = str(att.get("file_type") or "").lower()
     return file_type in _IMAGE_FILE_TYPES or file_type == ""
 
 
-def attachment_kind(att: Any) -> str:
+def _looks_like_messenger_sticker(
+    att: Dict[str, Any],
+    *,
+    channel: Optional[str] = None,
+    payload: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """
+    Like/stickers de Messenger: Chatwoot los persiste como image (a menudo PNG).
+    Detecta CDN Meta, sticker_id, o imagen pequeña en canal messenger.
+    """
+    hay = _attachment_haystack(att)
+    if _haystack_has_messenger_sticker_signal(hay):
+        return True
+    if att.get("sticker_id") is not None:
+        return True
+    if _haystack_has_messenger_sticker_signal(_payload_haystack(payload)):
+        file_type = str(att.get("file_type") or "").lower()
+        if file_type in _IMAGE_FILE_TYPES or file_type in _STICKER_FILE_TYPES or not file_type:
+            return True
+
+    channel_l = (channel or "").lower()
+    if channel_l not in ("messenger", "facebook", "Channel::Facebook".lower()):
+        # También aceptar si el payload del inbox delata Messenger
+        blob = _payload_haystack(payload)
+        if "messenger" not in blob and "facebook" not in blob:
+            return False
+        channel_l = "messenger"
+
+    file_type = str(att.get("file_type") or "").lower()
+    if file_type and file_type not in _IMAGE_FILE_TYPES and file_type not in _STICKER_FILE_TYPES:
+        return False
+
+    size = att.get("file_size")
+    try:
+        size_n = int(size) if size is not None else None
+    except (TypeError, ValueError):
+        size_n = None
+    # Sin tamaño o PNG/GIF chico → gesto (Like); fotos reales suelen ser más pesadas
+    if size_n is None or size_n <= _MESSENGER_STICKER_MAX_BYTES:
+        return True
+    return False
+
+
+def _looks_like_sticker(
+    att: Dict[str, Any],
+    *,
+    channel: Optional[str] = None,
+    payload: Optional[Dict[str, Any]] = None,
+) -> bool:
+    if _looks_like_webp_sticker(att):
+        return True
+    return _looks_like_messenger_sticker(att, channel=channel, payload=payload)
+
+
+def attachment_kind(
+    att: Any,
+    *,
+    channel: Optional[str] = None,
+    payload: Optional[Dict[str, Any]] = None,
+) -> str:
     """
     Clasifica un adjunto Chatwoot: sticker | image | audio | video | file |
     location | contact | other.
@@ -168,7 +313,9 @@ def attachment_kind(att: Any) -> str:
     blob = _attachment_blob(att)
     file_type = str(blob.get("file_type") or "").lower().strip()
 
-    if file_type in _STICKER_FILE_TYPES or _looks_like_webp_sticker(blob):
+    if file_type in _STICKER_FILE_TYPES or _looks_like_sticker(
+        blob, channel=channel, payload=payload
+    ):
         return "sticker"
     if file_type in _IMAGE_FILE_TYPES:
         return "image"
@@ -186,20 +333,30 @@ def attachment_kind(att: Any) -> str:
         return "other"
     if file_type:
         return "file"
-    # Sin file_type: webp → sticker; si no, archivo genérico
-    if _looks_like_webp_sticker(blob):
+    if _looks_like_sticker(blob, channel=channel, payload=payload):
         return "sticker"
     return "file"
 
 
-def attachment_kinds(payload: Dict[str, Any]) -> List[str]:
-    return [attachment_kind(att) for att in attachments_of(payload)]
+def attachment_kinds(
+    payload: Dict[str, Any],
+    *,
+    channel: Optional[str] = None,
+) -> List[str]:
+    return [
+        attachment_kind(att, channel=channel, payload=payload)
+        for att in attachments_of(payload)
+    ]
 
 
-def batch_attachment_kinds(payloads: List[Dict[str, Any]]) -> List[str]:
+def batch_attachment_kinds(
+    payloads: List[Dict[str, Any]],
+    *,
+    channel: Optional[str] = None,
+) -> List[str]:
     kinds: List[str] = []
     for payload in payloads:
-        kinds.extend(attachment_kinds(payload))
+        kinds.extend(attachment_kinds(payload, channel=channel))
     return kinds
 
 

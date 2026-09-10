@@ -807,6 +807,79 @@ async def test_webp_sticker_without_text_goes_to_agent(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_facebook_like_sticker_goes_to_agent(monkeypatch):
+    """El Like azul de Messenger llega como image/PNG rehosteada, no como emoji."""
+    monkeypatch.setenv("CHATWOOT_ENABLED", "true")
+    monkeypatch.setenv("CHATWOOT_DEBOUNCE_SECONDS", "0")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.core.agent_behavior import invalidate_agent_behavior
+    from app.services.turn_guard import reset_for_tests
+
+    invalidate_agent_behavior()
+    reset_for_tests()
+
+    payload = {
+        "event": "message_created",
+        "message_type": "incoming",
+        "content": "",
+        "attachments": [
+            {
+                "file_type": "image",
+                "content_type": "image/png",
+                "data_url": "https://chatwoot.example/rails/active_storage/like.png",
+                "file_size": 18340,
+            }
+        ],
+        "conversation": {"id": 93, "status": "pending"},
+        "contact": {"name": "Ana", "identifier": "fb-psid-123"},
+        "inbox": {"channel_type": "Channel::Facebook", "name": "Facebook Page"},
+    }
+    conv = SimpleNamespace(
+        id=7,
+        status=SimpleNamespace(value="active"),
+        user_name="Ana",
+        user_phone=None,
+        user_email=None,
+        messages=[],
+        handed_off_at=None,
+        human_replied_at=None,
+        qualification_reason=None,
+    )
+    service = MagicMock()
+    service.get_or_create = AsyncMock(return_value=conv)
+    service.add_inbound_message = AsyncMock()
+    service.process_after_message = AsyncMock()
+    service.add_outbound_message = AsyncMock()
+    service.mark_handed_off = AsyncMock()
+    service.resume_bot = AsyncMock()
+
+    agent_calls: list[str] = []
+
+    async def fake_agent(**kwargs):
+        agent_calls.append(kwargs.get("user_message") or "")
+        return "Perfecto, quedo atento a cualquier duda."
+
+    sent, handoffs, _ = _webhook_fakes(monkeypatch, conv=conv, service=service, boom=False)
+    monkeypatch.setattr("app.services.gia_agent.run_gia_agent", fake_agent)
+
+    from app.routers.chatwoot_webhook import STICKER_PLACEHOLDER, _process_incoming_message
+
+    await _process_incoming_message(payload)
+    assert handoffs == []
+    assert agent_calls == [STICKER_PLACEHOLDER]
+    assert sent == ["Perfecto, quedo atento a cualquier duda."]
+    inbound = service.add_inbound_message.await_args.args[1]
+    assert inbound.text == STICKER_PLACEHOLDER
+    reset_for_tests()
+    invalidate_agent_behavior()
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
 async def test_explicit_sticker_file_type_goes_to_agent(monkeypatch):
     monkeypatch.setenv("CHATWOOT_ENABLED", "true")
     monkeypatch.setenv("CHATWOOT_DEBOUNCE_SECONDS", "0")
