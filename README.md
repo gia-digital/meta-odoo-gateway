@@ -67,12 +67,42 @@ El scoring local sigue calculándose (sección secundaria en el detalle) pero **
 - Odoo (fase siguiente): `docs/odoo_setup.md`
 - **Deploy DigitalOcean (CI/CD):** `docs/deploy.md`
 
+## Migraciones de base de datos (Alembic)
+
+Al arrancar, la API aplica las migraciones pendientes (`alembic upgrade head`) con un advisory lock de Postgres. Las bases creadas antes de Alembic se ponen al día con la migración base `0001`, que solo agrega lo que falte.
+
+Para cambiar el esquema:
+
+```bash
+# 1. Edita los modelos en app/models/
+# 2. Genera la migración contra la base local (ya migrada por `docker compose up`).
+#    El -v monta el repo para que el archivo quede en migrations/versions/ del host.
+docker compose build api
+docker compose run --rm --no-deps -v "$PWD:/app" api \
+  alembic revision --autogenerate -m "agregar campo x a conversations"
+# 3. Revisa el archivo generado y pruébalo
+docker compose run --rm --no-deps -v "$PWD:/app" api \
+  sh -c "alembic upgrade head && alembic downgrade -1 && alembic upgrade head && alembic check"
+```
+
+CI falla si un modelo cambió sin migración (`alembic check`).
+
+Reglas, porque el rollback automático regresa a la imagen anterior **sin** revertir la base:
+
+- Solo agregar: columnas nullable o con `server_default`, tablas e índices nuevos.
+- Para borrar o renombrar, hazlo en dos deploys: primero el código deja de usar la columna y después una migración la quita.
+
 ## CI/CD
 
 | Workflow | Trigger | Acción |
 |---|---|---|
-| `CI` | push/PR → `main` | pytest |
-| `Deploy` | push → `main` (o manual) | test → imagen GHCR → SSH al droplet |
+| `CI` | PR → `main` | pytest + migraciones (`upgrade`, `check`, `downgrade`) contra pgvector + validación de `deploy/`, compose, Caddyfile e imagen |
+| `Deploy` | push → `main` (o manual) | CI → imagen GHCR → SSH al droplet (respaldo, health, rollback) |
+| `Droplet maintenance` | domingo 04:00 CDMX (o manual) | apt upgrade, imágenes base, limpieza Docker, respaldo de `knowledge_uploads`, reinicio si hace falta, verifica respaldos |
+
+Respaldos de la base: antes de cada deploy y diarios (servicio `backup`). Restaurar con `deploy/restore.sh`.
+
+Dependabot (`.github/dependabot.yml`) abre PRs los lunes para actions de GitHub, la imagen base de Python y las imágenes del compose (sin saltos de versión mayor de Postgres).
 
 Imagen: `ghcr.io/gia-digital/meta-odoo-gateway:<sha>`
 

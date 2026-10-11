@@ -14,3 +14,5 @@ __pycache__
 tests
 agent_info/conversaciones_whatsapp.txt
 docker-compose*.yml
+deploy
+backups

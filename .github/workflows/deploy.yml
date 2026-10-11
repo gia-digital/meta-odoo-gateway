@@ -1,4 +1,4 @@
-# CD — build imagen → GHCR → deploy por SSH al droplet
+# CD — CI → build imagen → GHCR → deploy por SSH al droplet (deploy/deploy.sh)
 name: Deploy
 
 on:
@@ -10,33 +10,25 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    env:
-      LEAD_WEBHOOK_TOKEN: ci-lead-token
-      ADMIN_API_TOKEN: ci-admin-token
-      DATABASE_URL: postgresql+asyncpg://gateway:gateway@localhost/gateway
-      ODOO_ENABLED: "false"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-      - run: pip install -r requirements.txt
-      - run: pytest tests/ -v --tb=short
+  ci:
+    uses: ./.github/workflows/ci.yml
 
   build-and-push:
-    needs: test
+    needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    outputs:
+      image: ${{ steps.image.outputs.ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,13 +45,16 @@ jobs:
 
       - name: Downcase image name
         id: image
-        run: echo "name=${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+        run: |
+          name="${REGISTRY}/${IMAGE_NAME,,}"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "ref=$name:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Extract metadata (tags)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
+          images: ${{ steps.image.outputs.name }}
           tags: |
             type=sha,prefix=,format=short
             type=raw,value=latest,enable={{is_default_branch}}
@@ -77,37 +72,49 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    # Opcional: descomenta para approvals / secrets por environment
-    # environment: production
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.DOMAIN && format('https://{0}/dashboard', vars.DOMAIN) || '' }}
     permissions:
       contents: read
       packages: read
     steps:
+      - name: Validar secrets
+        env:
+          HAS_HOST: ${{ secrets.DROPLET_HOST != '' }}
+          HAS_USER: ${{ secrets.DROPLET_USER != '' }}
+          HAS_KEY: ${{ secrets.DROPLET_SSH_KEY != '' }}
+          HAS_PATH: ${{ secrets.DEPLOY_PATH != '' }}
+        run: |
+          missing=()
+          [ "$HAS_HOST" = true ] || missing+=("DROPLET_HOST")
+          [ "$HAS_USER" = true ] || missing+=("DROPLET_USER")
+          [ "$HAS_KEY" = true ]  || missing+=("DROPLET_SSH_KEY")
+          [ "$HAS_PATH" = true ] || missing+=("DEPLOY_PATH")
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf '::error::Falta el secret %s\n' "${missing[@]}"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Short SHA
-        id: sha
-        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-
-      - name: Downcase image name
-        id: image
-        run: echo "name=${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
-
-      - name: Copy compose + Caddyfile to droplet
+      - name: Copy compose, Caddyfile and deploy scripts to droplet
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           port: ${{ secrets.DROPLET_SSH_PORT || 22 }}
-          source: "docker-compose.prod.yml,Caddyfile"
+          fingerprint: ${{ secrets.DROPLET_SSH_FINGERPRINT }}
+          source: "docker-compose.prod.yml,Caddyfile,deploy"
           target: ${{ secrets.DEPLOY_PATH }}
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
-          IMAGE_REF: ghcr.io/${{ steps.image.outputs.name }}:${{ steps.sha.outputs.short }}
+          IMAGE_REF: ${{ needs.build-and-push.outputs.image }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN || secrets.GITHUB_TOKEN }}
@@ -116,65 +123,18 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           port: ${{ secrets.DROPLET_SSH_PORT || 22 }}
-          script_stop: true
+          fingerprint: ${{ secrets.DROPLET_SSH_FINGERPRINT }}
+          command_timeout: 15m
           envs: IMAGE_REF,DEPLOY_PATH,GHCR_USER,GHCR_TOKEN
           script: |
             set -euo pipefail
-            cd "$DEPLOY_PATH"
-
-            if [ ! -f .env ]; then
-              echo "Missing .env in $DEPLOY_PATH — create it once on the droplet (from .env.example)." >&2
-              exit 1
-            fi
-            if [ ! -f Caddyfile ]; then
-              echo "Missing Caddyfile in $DEPLOY_PATH" >&2
-              exit 1
-            fi
-
-            if [ ! -S /var/run/docker.sock ]; then
-              echo "ERROR: /var/run/docker.sock no existe. Instala Docker Engine (docs/deploy.md)." >&2
-              exit 1
-            fi
-            if ! docker info >/dev/null 2>&1; then
-              echo "ERROR: 'docker info' falló. sudo usermod -aG docker \$USER && re-login" >&2
-              exit 1
-            fi
-            if ! docker compose version >/dev/null 2>&1; then
-              echo "ERROR: falta plugin 'docker compose' v2." >&2
-              exit 1
-            fi
-
-            if systemctl is-active --quiet caddy 2>/dev/null; then
-              sudo systemctl disable --now caddy || true
-            fi
-
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            bash "$DEPLOY_PATH/deploy/deploy.sh" "$IMAGE_REF"
 
-            mkdir -p knowledge_uploads
-            chmod 777 knowledge_uploads || true
-
-            export GATEWAY_IMAGE="$IMAGE_REF"
-            echo "GATEWAY_IMAGE=$GATEWAY_IMAGE" > .deploy.env
-
-            # Liberar disco antes del pull (evita "no space left" con imágenes viejas acumuladas)
-            docker image prune -af || true
-
-            docker compose -f docker-compose.prod.yml --env-file .deploy.env pull api caddy
-            docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d
-            docker image prune -af || true
-
-            echo "Waiting for health (API localhost)..."
-            for i in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1:8000/health >/dev/null; then
-                DOMAIN_VAL=$(grep -E '^DOMAIN=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
-                echo "Deploy OK: $GATEWAY_IMAGE"
-                if [ -n "$DOMAIN_VAL" ]; then
-                  echo "HTTPS: https://${DOMAIN_VAL}/dashboard"
-                fi
-                exit 0
-              fi
-              sleep 2
-            done
-            echo "Health check failed" >&2
-            docker compose -f docker-compose.prod.yml --env-file .deploy.env logs --tail=80 api caddy
-            exit 1
+      - name: Smoke test HTTPS
+        if: vars.DOMAIN != ''
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+        run: |
+          curl -fsS --retry 10 --retry-delay 6 --retry-all-errors --max-time 10 \
+            "https://$DOMAIN/health"

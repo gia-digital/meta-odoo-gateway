@@ -1,0 +1,47 @@
+# PRs semanales para actions de GitHub e imágenes Docker. CI corre en cada PR;
+# al hacer merge a main, Deploy los despliega como cualquier otro cambio.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: America/Mexico_City
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  # Imagen base del Dockerfile (python). CI prueba con la misma versión.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: America/Mexico_City
+    commit-message:
+      prefix: docker
+
+  # docker-compose*.yml: pgvector, Caddy y backups.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: America/Mexico_City
+    groups:
+      compose-images:
+        patterns: ["*"]
+    commit-message:
+      prefix: docker
+    ignore:
+      # Cambiar de versión mayor de Postgres exige dump/restore manual del volumen.
+      - dependency-name: pgvector/pgvector
+        update-types: ["version-update:semver-major"]
+      - dependency-name: prodrigestivill/postgres-backup-local
+        update-types: ["version-update:semver-major"]

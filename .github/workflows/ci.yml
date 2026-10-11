@@ -1,13 +1,32 @@
-# CI — tests en cada PR (en main el gate de tests vive en Deploy)
+# CI — tests y validación de deploy en cada PR; Deploy lo reutiliza como gate en main
 name: CI
 
 on:
   pull_request:
     branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
+    name: Tests + migraciones
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: gateway
+          POSTGRES_PASSWORD: gateway
+          POSTGRES_DB: gateway
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U gateway"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       LEAD_WEBHOOK_TOKEN: ci-lead-token
       ADMIN_API_TOKEN: ci-admin-token
@@ -18,14 +37,62 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # La misma versión que la imagen, así los PRs de Dependabot que la suben se prueban con ella.
+      - name: Versión de Python del Dockerfile
+        id: python
+        run: echo "version=$(sed -nE 's/^FROM python:([0-9]+\.[0-9]+).*/\1/p' Dockerfile)" >> "$GITHUB_OUTPUT"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ steps.python.outputs.version }}
           cache: pip
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Migraciones aplican desde cero
+        run: alembic upgrade head
+
+      - name: Modelos y migraciones coinciden
+        run: alembic check
+
+      - name: Downgrade y upgrade de nuevo
+        run: alembic downgrade base && alembic upgrade head
+
       - name: Run tests
         run: pytest tests/ -v --tb=short
+
+  deploy-config:
+    name: Validar configuración de deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shellcheck de deploy/
+        run: shellcheck -x deploy/*.sh
+
+      - name: docker-compose.prod.yml
+        run: |
+          touch .env
+          GATEWAY_IMAGE=ghcr.io/ci/ci:ci docker compose -f docker-compose.prod.yml config --quiet
+
+      - name: Caddyfile
+        run: |
+          docker run --rm -e DOMAIN=ci.invalid \
+            -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+  # En main la imagen se construye en Deploy; aquí solo se comprueba que compile.
+  docker:
+    name: Docker image build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha

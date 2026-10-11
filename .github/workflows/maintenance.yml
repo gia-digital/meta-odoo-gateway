@@ -1,0 +1,105 @@
+# Mantenimiento semanal del droplet (deploy/maintenance.sh): apt upgrade, imágenes de
+# Postgres/Caddy/backups, respaldo de knowledge_uploads, limpieza de Docker, reinicio
+# si el kernel lo pide y verificación de que existan respaldos recientes de la base.
+name: Droplet maintenance
+
+on:
+  schedule:
+    # Domingo 10:00 UTC = 04:00 en Ciudad de México (sin horario de verano).
+    - cron: "0 10 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  maintenance:
+    name: Maintenance production
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      SSH_HOST: ${{ secrets.DROPLET_HOST }}
+      SSH_USER: ${{ secrets.DROPLET_USER }}
+      SSH_PORT: ${{ secrets.DROPLET_SSH_PORT || 22 }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+    steps:
+      - name: Validar secrets
+        env:
+          HAS_KEY: ${{ secrets.DROPLET_SSH_KEY != '' }}
+        run: |
+          missing=()
+          [ -n "$SSH_HOST" ]    || missing+=("DROPLET_HOST")
+          [ -n "$SSH_USER" ]    || missing+=("DROPLET_USER")
+          [ -n "$DEPLOY_PATH" ] || missing+=("DEPLOY_PATH")
+          [ "$HAS_KEY" = true ] || missing+=("DROPLET_SSH_KEY")
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf '::error::Falta el secret %s\n' "${missing[@]}"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DROPLET_SSH_KEY }}
+
+      - name: Known hosts
+        env:
+          KNOWN_HOSTS: ${{ secrets.DROPLET_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          if [ -n "$KNOWN_HOSTS" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::Sin secret DROPLET_SSH_KNOWN_HOSTS; se confía en la llave que presente el host (ssh-keyscan)."
+            ssh-keyscan -p "$SSH_PORT" -t ed25519 "$SSH_HOST" > ~/.ssh/known_hosts
+          fi
+          chmod 600 ~/.ssh/known_hosts
+          printf 'Host droplet\n  HostName %s\n  User %s\n  Port %s\n  ConnectTimeout 10\n' \
+            "$SSH_HOST" "$SSH_USER" "$SSH_PORT" >> ~/.ssh/config
+
+      - name: Subir scripts de deploy/
+        run: tar -czf - deploy | ssh droplet "mkdir -p '$DEPLOY_PATH' && tar -xzf - -C '$DEPLOY_PATH'"
+
+      - name: Actualizar droplet y limpiar Docker
+        id: maint
+        run: |
+          ssh droplet "bash '$DEPLOY_PATH/deploy/maintenance.sh'" | tee maintenance.log
+          if grep -q '^REBOOT_SCHEDULED=1' maintenance.log; then
+            echo "reboot=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Esperar reinicio y verificar servicios
+        if: steps.maint.outputs.reboot == 'true'
+        run: |
+          sleep 120
+          for i in $(seq 1 30); do
+            if ssh droplet "bash '$DEPLOY_PATH/deploy/maintenance.sh' verify"; then
+              exit 0
+            fi
+            echo "Droplet aún no disponible (intento $i)"
+            sleep 15
+          done
+          echo "::error::El droplet no volvió sano después del reinicio"
+          exit 1
+
+      - name: Verificar respaldos programados
+        run: ssh droplet "bash '$DEPLOY_PATH/deploy/maintenance.sh' check-backups"
+
+      - name: Smoke test HTTPS
+        if: vars.DOMAIN != ''
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+        run: |
+          curl -fsS --retry 10 --retry-delay 6 --retry-all-errors --max-time 10 \
+            "https://$DOMAIN/health"
