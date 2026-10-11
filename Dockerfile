@@ -12,7 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Código de la aplicación + knowledge seed + scripts ops
+# Código de la aplicación + migraciones + knowledge seed + scripts ops
+COPY ./alembic.ini ./alembic.ini
+COPY ./migrations ./migrations
 COPY ./app ./app
 COPY ./agent_info ./agent_info
 COPY ./docs ./docs
