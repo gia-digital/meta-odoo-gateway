@@ -12,16 +12,17 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 PRUNE_UNTIL="${PRUNE_UNTIL:-168h}"
 KEEP_KNOWLEDGE_DAYS="${KEEP_KNOWLEDGE_DAYS:-56}"
 BACKUP_MAX_AGE_DAYS="${BACKUP_MAX_AGE_DAYS:-2}"
+VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-240}"
 export DEBIAN_FRONTEND=noninteractive
 
 verify() {
-  if wait_healthy "${1:-240}"; then
+  if wait_healthy "$VERIFY_TIMEOUT"; then
     dc ps
     log "Servicios sanos."
     return 0
   fi
   dc ps || true
-  log "La API no está sana después de ${1:-240}s."
+  log "La API no está sana después de ${VERIFY_TIMEOUT}s."
   return 1
 }
 
