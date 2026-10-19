@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Probar chatbot — GIA{% endblock %}
+{% block body_class %}playground-view{% endblock %}
+{% block content %}
+<div class="playground-page">
+<header class="page-header">
+  <div>
+    <p class="eyebrow">Agente</p>
+    <h1>Probar el chatbot</h1>
+    <p class="muted">Escribe como si fueras un cliente de WhatsApp. GIA contesta con el mismo agente y el knowledge actual. Esta charla no se guarda, no crea prospectos y no se envía a Chatwoot.</p>
+  </div>
+  <button type="button" class="btn btn-secondary" id="playground-reset">Nueva prueba</button>
+</header>
+
+<section class="playground-shell" aria-label="Chat de prueba">
+  <div class="playground-log" id="playground-log" aria-live="polite">
+    <div class="playground-empty" id="playground-empty">
+      <p class="empty-title">Listo para una prueba</p>
+      <p class="muted">Por ejemplo: «Buen día, ¿manejan lámina galvanizada?» o «Necesito 8 toneladas de varilla para la próxima semana».</p>
+      {% if agent_model %}<p class="muted small">Modelo: {{ agent_model }}</p>{% endif %}
+    </div>
+  </div>
+  <form class="playground-composer" id="playground-form">
+    <label class="sr-only" for="playground-input">Mensaje del cliente</label>
+    <textarea id="playground-input" rows="2" maxlength="4000" placeholder="Escribe lo que enviaría un cliente…" required></textarea>
+    <button type="submit" class="btn" id="playground-send">Enviar</button>
+  </form>
+</section>
+</div>
+{% endblock %}

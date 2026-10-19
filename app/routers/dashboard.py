@@ -11,7 +11,8 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import BaseModel, Field
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,11 +20,16 @@ from sqlalchemy.orm import selectinload
 from starlette.responses import Response as StarletteResponse
 
 from app.core.config import get_settings
+from app.core.llm_runtime import get_llm_runtime
+from app.core.logging import get_logger
 from app.core.pagination import make_pager, normalize_page_size, parse_page
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.db import get_db
 from app.services.conversation import ConversationService
 from app.services.material_groups import group_material_label
+from app.services.playground import run_playground_turn
+
+logger = get_logger(__name__)
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -911,3 +917,56 @@ async def dashboard_conversation_delete(
         url=_rel_path(request, "dashboard_conversations"),
         status_code=303,
     )
+
+
+class PlaygroundTurnBody(BaseModel):
+    message: str = ""
+    history: list = Field(default_factory=list)
+    state: dict = Field(default_factory=dict)
+
+
+@router.get("/playground", response_class=HTMLResponse, name="dashboard_playground")
+async def dashboard_playground(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+):
+    model_label = ""
+    try:
+        runtime = await get_llm_runtime(db)
+        model_label = runtime.agent_model or ""
+    except Exception as exc:
+        logger.warning("playground_runtime_unavailable", error=str(exc))
+    return templates.TemplateResponse(
+        "playground.html",
+        {
+            "request": request,
+            "active_nav": "playground",
+            "agent_model": model_label,
+        },
+    )
+
+
+@router.post("/playground/turn", name="dashboard_playground_turn")
+async def dashboard_playground_turn(
+    body: PlaygroundTurnBody,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_dashboard_auth),
+):
+    message = (body.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Escribe un mensaje.")
+    try:
+        payload = await run_playground_turn(
+            db,
+            message=message,
+            history=body.history,
+            state=body.state,
+        )
+    except Exception as exc:
+        logger.exception("playground_turn_failed", error=str(exc))
+        return JSONResponse(
+            status_code=502,
+            content={"detail": "No se pudo generar la respuesta. Intenta de nuevo."},
+        )
+    return payload

@@ -7,6 +7,7 @@ Agente conversacional GIA vía OpenAI Agents SDK.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +27,7 @@ from app.models.conversation import (
     QualificationSource,
 )
 from app.services.agent_knowledge import build_agent_instructions
-from app.services.catalog_document import deliver_catalog
+from app.services.catalog_document import deliver_catalog, find_catalog_pdf
 from app.services.chatwoot_client import ChatwootClient, resolve_handoff_queue
 from app.services.conversation import ConversationService
 from app.services.knowledge.retriever import format_hits, retrieve_knowledge
@@ -69,6 +70,197 @@ def _rehandoff_tool_hint() -> str:
     )
 
 
+def _lead_tool_reply(
+    *,
+    conv_id: Any,
+    status: str,
+    handed_off: bool,
+    already_handed_off: bool,
+) -> str:
+    if handed_off:
+        action = "actualizado y re-asignado" if already_handed_off else "registrado"
+        return (
+            f"Lead {action} (id interno {conv_id}, status={status}). "
+            f"{client_handoff_guidance()} No menciones IDs internos ni el equipo. "
+            f"{_rehandoff_tool_hint()}"
+        )
+    return (
+        f"Lead registrado (id interno {conv_id}, status={status}). "
+        f"{client_handoff_guidance()} No menciones IDs internos. "
+        "Si aún no llamaste check_sales_hours, úsala antes de hablar de horarios."
+    )
+
+
+def _escalate_tool_reply() -> str:
+    return (
+        f"{client_handoff_guidance()} "
+        "No menciones el equipo interno al cliente. "
+        f"{_rehandoff_tool_hint()}"
+    )
+
+
+def record_playground_event(
+    bot: BotContext, kind: str, label: str, detail: str = ""
+) -> None:
+    events = bot.extra.setdefault("playground_events", [])
+    events.append(
+        {
+            "kind": kind,
+            "label": label,
+            "detail": (detail or "").strip()[:500],
+        }
+    )
+
+
+def _clip_field(value: str, limit: int) -> str:
+    return (value or "").strip()[:limit]
+
+
+def sandbox_register_lead(
+    bot: BotContext,
+    *,
+    reason: str,
+    summary: str,
+    product_interest: str = "",
+    budget: str = "",
+    timeline: str = "",
+    preferred_contact_time: str = "",
+    user_name: str = "",
+    user_phone: str = "",
+    user_email: str = "",
+    handed_off: bool = False,
+    queue: str = "reception",
+) -> str:
+    """Simula create_lead: actualiza el hilo en memoria, sin DB ni Chatwoot."""
+    conv = bot.conversation
+    already_handed_off = _conversation_handed_off(conv)
+    if user_name.strip():
+        conv.user_name = _clip_field(user_name, 255)
+        bot.user_name = conv.user_name
+    if user_phone.strip():
+        conv.user_phone = _clip_field(user_phone, 64)
+        bot.user_phone = conv.user_phone
+    if user_email.strip():
+        conv.user_email = _clip_field(user_email, 255)
+        bot.user_email = conv.user_email
+    if product_interest.strip():
+        conv.product_interest = _clip_field(product_interest, 255)
+    if summary.strip():
+        conv.lead_summary = _clip_field(summary, 4000)
+    if budget.strip():
+        conv.budget = _clip_field(budget, 255)
+    if timeline.strip():
+        conv.timeline = _clip_field(timeline, 255)
+    if preferred_contact_time.strip():
+        conv.preferred_contact_time = _clip_field(preferred_contact_time, 255)
+    conv.qualification_source = QualificationSource.chatwoot_agent
+    conv.qualification_reason = _clip_field(
+        reason or summary or "Qualified by Chatwoot Agent Bot", 4000
+    )
+    now = datetime.now(timezone.utc)
+    if getattr(conv, "qualified_at", None) is None:
+        conv.qualified_at = now
+    if handed_off:
+        conv.status = ConversationStatus.handed_off
+        if getattr(conv, "handed_off_at", None) is None:
+            conv.handed_off_at = now
+        bot.handed_off = True
+    elif conv.status == ConversationStatus.active:
+        conv.status = ConversationStatus.qualified
+
+    _, team_label = resolve_handoff_queue(queue)
+    if handed_off and already_handed_off:
+        label = "Reasignaría el prospecto"
+    elif handed_off:
+        label = "Registraría y escalaría el prospecto"
+    else:
+        label = "Registraría un prospecto"
+    detail_bits = [
+        bit.strip()
+        for bit in (product_interest, budget, timeline, summary, reason)
+        if (bit or "").strip()
+    ]
+    if handed_off:
+        detail_bits.append(f"cola: {team_label}")
+    record_playground_event(bot, "lead", label, " · ".join(detail_bits))
+    logger.info(
+        "playground_tool_create_lead",
+        handed_off=handed_off,
+        queue=(queue or "reception") if handed_off else None,
+        re_handoff=handed_off and already_handed_off,
+    )
+    return _lead_tool_reply(
+        conv_id=conv.id,
+        status=conv.status.value,
+        handed_off=handed_off,
+        already_handed_off=already_handed_off,
+    )
+
+
+def sandbox_escalate(bot: BotContext, *, reason: str, queue: str = "reception") -> str:
+    """Simula escalate_to_human sin abrir ticket ni escribir en la base."""
+    conv = bot.conversation
+    already_handed_off = _conversation_handed_off(conv) or bot.handed_off
+    now = datetime.now(timezone.utc)
+    conv.status = ConversationStatus.handed_off
+    if getattr(conv, "handed_off_at", None) is None:
+        conv.handed_off_at = now
+    if (reason or "").strip():
+        conv.qualification_reason = _clip_field(reason, 4000)
+    bot.handed_off = True
+    _, team_label = resolve_handoff_queue(queue)
+    label = "Re-escalaría a un asesor" if already_handed_off else "Escalaría a un asesor"
+    record_playground_event(
+        bot,
+        "handoff",
+        label,
+        f"{team_label}. {(reason or '').strip()}".strip(" ."),
+    )
+    logger.info(
+        "playground_tool_escalate",
+        reason=reason,
+        queue=queue or "reception",
+        team_label=team_label,
+        re_handoff=already_handed_off,
+    )
+    return _escalate_tool_reply()
+
+
+async def sandbox_send_catalog(bot: BotContext) -> str:
+    """Simula el PDF del catálogo: no lo sube a Chatwoot."""
+    if bot.extra.get("catalog_sent"):
+        return (
+            "El catálogo ya se envió en este turno. Confirma al cliente que lo "
+            "tiene y pregunta qué material y tonelaje busca."
+        )
+    path = await find_catalog_pdf(bot.db)
+    if path is None:
+        record_playground_event(
+            bot,
+            "catalog",
+            "No encontró la carta de presentación",
+            "El agente describirá las líneas en texto.",
+        )
+        return (
+            "No se encontró el PDF de la carta de presentación. Describe las "
+            "líneas del catálogo en texto (aceros planos, acanalados, tubería "
+            "industrial, varilla y alambre) y ofrece que un asesor lo envíe."
+        )
+    bot.extra["catalog_sent"] = True
+    record_playground_event(
+        bot,
+        "catalog",
+        "Enviaría la carta de presentación",
+        path.name,
+    )
+    logger.info("playground_tool_send_catalog", path=str(path))
+    return (
+        "Catálogo enviado (Carta de presentación GIA.pdf). Confirma al cliente "
+        "que ya lo tiene y pregunta qué material y tonelaje busca. No lo "
+        "vuelvas a enviar en este turno. No es la lista de precios mensual."
+    )
+
+
 @dataclass
 class BotContext:
     """Contexto por request para tools del agente."""
@@ -83,6 +275,7 @@ class BotContext:
     user_email: Optional[str] = None
     handed_off: bool = False
     fresh_cycle: bool = False
+    sandbox: bool = False
     extra: dict = field(default_factory=dict)
 
 
@@ -180,6 +373,21 @@ def _build_tools():
         Tú sigues contestando tras escalar hasta que un humano escriba al cliente.
         """
         bot = ctx.context
+        if bot.sandbox:
+            return sandbox_register_lead(
+                bot,
+                reason=reason,
+                summary=summary,
+                product_interest=product_interest,
+                budget=budget,
+                timeline=timeline,
+                preferred_contact_time=preferred_contact_time,
+                user_name=user_name,
+                user_phone=user_phone,
+                user_email=user_email,
+                handed_off=handed_off,
+                queue=queue,
+            )
         service = ConversationService(bot.db)
         already_handed_off = _conversation_handed_off(bot.conversation)
         conv = await service.create_lead_from_payload(
@@ -228,17 +436,11 @@ def _build_tools():
             queue=(queue or "reception") if handed_off else None,
             re_handoff=handed_off and already_handed_off,
         )
-        if handed_off:
-            action = "actualizado y re-asignado" if already_handed_off else "registrado"
-            return (
-                f"Lead {action} (id interno {conv.id}, status={conv.status.value}). "
-                f"{client_handoff_guidance()} No menciones IDs internos ni el equipo. "
-                f"{_rehandoff_tool_hint()}"
-            )
-        return (
-            f"Lead registrado (id interno {conv.id}, status={conv.status.value}). "
-            f"{client_handoff_guidance()} No menciones IDs internos. "
-            "Si aún no llamaste check_sales_hours, úsala antes de hablar de horarios."
+        return _lead_tool_reply(
+            conv_id=conv.id,
+            status=conv.status.value,
+            handed_off=handed_off,
+            already_handed_off=already_handed_off,
         )
 
     @function_tool
@@ -257,6 +459,8 @@ def _build_tools():
         cliente con vendedor, o el cliente pide hablar con una persona.
         """
         bot = ctx.context
+        if bot.sandbox:
+            return sandbox_escalate(bot, reason=reason, queue=queue)
         already_handed_off = _conversation_handed_off(bot.conversation) or bot.handed_off
         service = ConversationService(bot.db)
         await service.mark_handed_off(bot.conversation, reason=reason)
@@ -291,11 +495,7 @@ def _build_tools():
             team_label=team_label,
             re_handoff=already_handed_off,
         )
-        return (
-            f"{client_handoff_guidance()} "
-            "No menciones el equipo interno al cliente. "
-            f"{_rehandoff_tool_hint()}"
-        )
+        return _escalate_tool_reply()
 
     @function_tool
     async def search_knowledge(
@@ -329,6 +529,8 @@ def _build_tools():
         presentación corporativa / planes 2027. Después confirma en texto y
         pregunta qué material y tonelaje buscan.
         """
+        if ctx.context.sandbox:
+            return await sandbox_send_catalog(ctx.context)
         return await deliver_catalog(ctx.context)
 
     @function_tool
