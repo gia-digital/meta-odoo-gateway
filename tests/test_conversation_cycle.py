@@ -363,11 +363,12 @@ async def test_webhook_queues_resolved_and_ignores_assignment(monkeypatch):
     get_settings.cache_clear()
     queued: list = []
 
-    async def fake_process(payload):
-        queued.append(payload.get("event"))
+    async def fake_enqueue(payload, *, kind, conversation_id=None, attempts=0):
+        queued.append(payload.get("event") if kind == "resolved" else kind)
+        return None
 
     monkeypatch.setattr(
-        "app.routers.chatwoot_webhook._process_cycle_resolved", fake_process
+        "app.routers.chatwoot_webhook.enqueue_webhook", fake_enqueue
     )
 
     from httpx import ASGITransport, AsyncClient

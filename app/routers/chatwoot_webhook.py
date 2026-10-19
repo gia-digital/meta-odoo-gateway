@@ -7,7 +7,7 @@ import hashlib
 import json
 import random
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
 
@@ -23,12 +23,19 @@ from app.services.chatwoot_payload import (
     attachment_placeholder,
     attachments_are_sticker_only,
     batch_attachment_kinds,
+    bot_replied_after,
     has_attachments,
     is_human_public_outgoing,
     latest_incoming_source_id,
     latest_incoming_source_id_from_messages,
+    message_external_id,
     primary_attachment_kind,
     resolve_inbound_wamid_for_human_reply,
+)
+from app.services.webhook_inbox import (
+    enqueue_webhook,
+    mark_retry_many,
+    process_inbox_row,
 )
 from app.services.conversation import ConversationService, cycle_private_note
 from app.services.reply_bubbles import (
@@ -317,6 +324,53 @@ def _changed_status_current(payload: Dict[str, Any]) -> str:
     return ""
 
 
+def _batch_inbox_ids(batch: list) -> List[int]:
+    ids: List[int] = []
+    for item in batch:
+        if not isinstance(item, dict):
+            continue
+        raw = item.get("_inbox_id")
+        if raw is None:
+            continue
+        try:
+            ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    return ids
+
+
+async def _skip_replay(batch: list, cw_conv_id: int) -> bool:
+    """En un reintento, no volver a contestar si el bot ya escribió después."""
+    attempts = 0
+    for item in batch:
+        if isinstance(item, dict):
+            try:
+                attempts = max(attempts, int(item.get("_inbox_attempts") or 0))
+            except (TypeError, ValueError):
+                continue
+    if attempts <= 0:
+        return False
+    inbound_id = None
+    for item in reversed(batch):
+        if isinstance(item, dict):
+            inbound_id = message_external_id(item)
+            if inbound_id:
+                break
+    if not inbound_id:
+        return False
+    try:
+        async with ChatwootClient() as cw:
+            messages = await cw.list_messages(cw_conv_id)
+    except Exception as exc:
+        logger.warning(
+            "chatwoot_replay_check_failed",
+            conversation_id=cw_conv_id,
+            error=str(exc),
+        )
+        return False
+    return bot_replied_after(messages, inbound_id)
+
+
 def should_close_cycle(event: str, payload: Dict[str, Any]) -> bool:
     """True si un humano (o la cuenta) marcó la conversación como resuelta."""
     if event == "conversation_resolved":
@@ -394,25 +448,28 @@ async def _process_human_outgoing(payload: Dict[str, Any]) -> None:
     )
 
 
-async def _process_incoming_message(payload: Dict[str, Any]) -> None:
+async def _process_incoming_message(
+    payload: Dict[str, Any],
+) -> Optional[List[int]]:
+    """None = perdió el debounce (la fila sigue en processing hasta que gane el otro)."""
     settings = get_settings()
     if not settings.chatwoot_enabled:
-        return
+        return _batch_inbox_ids([payload])
 
     cw_conv_id = _conversation_id(payload)
     if not cw_conv_id:
         logger.warning("chatwoot_missing_conversation_id")
-        return
+        return _batch_inbox_ids([payload])
 
     batch = await debounce_payloads(cw_conv_id, payload)
     if batch is None:
         logger.info("chatwoot_debounced", conversation_id=cw_conv_id)
-        return
+        return None
 
     incoming_batch = [item for item in batch if _is_incoming_event(item)]
     if not incoming_batch:
         logger.info("chatwoot_skip_non_incoming", conversation_id=cw_conv_id)
-        return
+        return _batch_inbox_ids(batch)
 
     payload = incoming_batch[-1]
     content = _merge_incoming_texts(incoming_batch)
@@ -427,6 +484,7 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
     started_at = time.monotonic()
     record_inbound_wamid(cw_conv_id, latest_incoming_source_id(incoming_batch))
 
+    done_ids = _batch_inbox_ids(incoming_batch)
     status_conv = _conversation_status(payload)
     if _is_snoozed(status_conv):
         logger.info(
@@ -434,7 +492,7 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
             conversation_id=cw_conv_id,
             status=status_conv,
         )
-        return
+        return done_ids
 
     if not content:
         if attached:
@@ -444,7 +502,7 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
                     conversation_id=cw_conv_id,
                     reason="attachment",
                 )
-                return
+                return done_ids
             # Stickers (WA/IG/FB) llegan como adjunto sin texto; no son un "archivo".
             # En Messenger el Like azul es image rehosteada (no webp).
             if attachments_are_sticker_only(attach_kinds):
@@ -465,19 +523,29 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
                         kind=kind,
                         kinds=attach_kinds,
                     )
-                    return
-                await _reply_without_agent(
-                    payload,
-                    cw_conv_id,
-                    describe,
-                    started_at=started_at,
-                    inbound_source_id=latest_incoming_source_id(incoming_batch),
-                    inbound_placeholder=attachment_placeholder(kind),
-                )
-                return
+                    return done_ids
+                try:
+                    await _reply_without_agent(
+                        payload,
+                        cw_conv_id,
+                        describe,
+                        started_at=started_at,
+                        inbound_source_id=latest_incoming_source_id(incoming_batch),
+                        inbound_placeholder=attachment_placeholder(kind),
+                    )
+                except ChatwootError as exc:
+                    logger.error(
+                        "chatwoot_reply_failed",
+                        error=str(exc),
+                        conversation_id=cw_conv_id,
+                    )
+                    if done_ids:
+                        await mark_retry_many(done_ids, str(exc))
+                        return None
+                return done_ids
         else:
             logger.info("chatwoot_skip_empty_content", conversation_id=cw_conv_id)
-            return
+            return done_ids
 
     external_user_id, user_name, user_phone, user_email = _contact_identity(payload)
 
@@ -520,7 +588,7 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
                 conversation_id=conv.id,
                 chatwoot_conversation_id=cw_conv_id,
             )
-            return
+            return done_ids
         elif status_conv == "open" and await _history_has_human_reply(cw_conv_id):
             record_human_reply(cw_conv_id)
             await service.mark_human_replied(conv)
@@ -530,7 +598,14 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
                 chatwoot_conversation_id=cw_conv_id,
                 source="history",
             )
-            return
+            return done_ids
+
+        if await _skip_replay(incoming_batch, cw_conv_id):
+            logger.info(
+                "chatwoot_replay_already_answered",
+                conversation_id=cw_conv_id,
+            )
+            return done_ids
 
         inbound_wa_id = latest_incoming_source_id(incoming_batch)
         if channel == Channel.whatsapp:
@@ -608,6 +683,10 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
                 error=str(exc),
                 conversation_id=cw_conv_id,
             )
+            if done_ids:
+                await mark_retry_many(done_ids, str(exc))
+                return None
+        return done_ids
 
 
 async def _signal_inbound_whatsapp(
@@ -813,6 +892,12 @@ async def _reply_without_agent(
                 raw=payload,
             ),
         )
+        if await _skip_replay([payload], cw_conv_id):
+            logger.info(
+                "chatwoot_replay_already_answered",
+                conversation_id=cw_conv_id,
+            )
+            return
         try:
             await _deliver_reply(
                 service,
@@ -829,6 +914,8 @@ async def _reply_without_agent(
                 error=str(exc),
                 conversation_id=cw_conv_id,
             )
+            if payload.get("_inbox_id"):
+                raise
 
 
 async def _maybe_note_new_cycle(conv: Any, cw_conv_id: int) -> None:
@@ -847,6 +934,22 @@ async def _maybe_note_new_cycle(conv: Any, cw_conv_id: int) -> None:
             error=str(exc),
             conversation_id=cw_conv_id,
         )
+
+
+async def run_inbox_payload(payload: Dict[str, Any]) -> Optional[List[int]]:
+    """Despacha una fila ya reclamada. None = debounce perdedor o reintento programado."""
+    event = str(payload.get("event") or "")
+    if is_human_public_outgoing(payload):
+        await _process_human_outgoing(payload)
+        return _batch_inbox_ids([payload])
+    if event in ("message_created", "message_updated", "") and (
+        _is_incoming_event(payload) or event == ""
+    ):
+        return await _process_incoming_message(payload)
+    if should_close_cycle(event, payload):
+        await _process_cycle_resolved(payload)
+        return _batch_inbox_ids([payload])
+    return _batch_inbox_ids([payload])
 
 
 async def _process_cycle_resolved(payload: Dict[str, Any]) -> None:
@@ -925,17 +1028,33 @@ async def chatwoot_agent_webhook(
         if event == "message_updated":
             logger.info("chatwoot_ignored_event", chatwoot_event=event)
             return {"status": "ignored", "reason": "message_updated"}
-        if is_human_public_outgoing(payload):
-            background_tasks.add_task(_process_human_outgoing, payload)
-            return {"status": "ok", "queued": "true", "kind": "human_outgoing"}
-        if _is_incoming_event(payload) or event == "":
-            background_tasks.add_task(_process_incoming_message, payload)
-            return {"status": "ok", "queued": "true"}
+        if (
+            is_human_public_outgoing(payload)
+            or _is_incoming_event(payload)
+            or event == ""
+        ):
+            row_id = await enqueue_webhook(
+                payload,
+                kind="message",
+                conversation_id=_conversation_id(payload),
+            )
+            if row_id is not None:
+                background_tasks.add_task(process_inbox_row, row_id)
+            body: Dict[str, str] = {"status": "ok", "queued": "true"}
+            if is_human_public_outgoing(payload):
+                body["kind"] = "human_outgoing"
+            return body
         logger.info("chatwoot_ignored_event", chatwoot_event=event or "unknown")
         return {"status": "ignored", "reason": "non_incoming"}
 
     if should_close_cycle(event, payload):
-        background_tasks.add_task(_process_cycle_resolved, payload)
+        row_id = await enqueue_webhook(
+            payload,
+            kind="resolved",
+            conversation_id=_conversation_id(payload),
+        )
+        if row_id is not None:
+            background_tasks.add_task(process_inbox_row, row_id)
         return {"status": "ok", "queued": "true", "kind": "conversation_resolved"}
 
     logger.info("chatwoot_ignored_event", chatwoot_event=event or "unknown")

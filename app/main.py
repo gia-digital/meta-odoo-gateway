@@ -40,12 +40,17 @@ async def lifespan(app: FastAPI):
 
     # No bloquear /health: el seed (embeddings + PDFs) puede tardar minutos.
     seed_task = asyncio.create_task(_seed())
+    from app.services.webhook_inbox import inbox_worker
+
+    inbox_task = asyncio.create_task(inbox_worker())
     yield
+    inbox_task.cancel()
     seed_task.cancel()
-    try:
-        await seed_task
-    except asyncio.CancelledError:
-        pass
+    for task in (inbox_task, seed_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 settings = get_settings()

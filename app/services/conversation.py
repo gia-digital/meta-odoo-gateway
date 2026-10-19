@@ -13,6 +13,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -295,14 +296,30 @@ class ConversationService:
         )
         return conv
 
+    async def _inbound_by_external_id(
+        self, external_message_id: str
+    ) -> Optional[Message]:
+        return await self.db.scalar(
+            select(Message)
+            .where(Message.external_message_id == external_message_id)
+            .order_by(Message.id)
+            .limit(1)
+        )
+
     async def add_inbound_message(
         self, conversation: Conversation, message: NormalizedMessage
     ) -> Message:
+        ext_id = message.external_message_id
+        if ext_id:
+            existing = await self._inbound_by_external_id(ext_id)
+            if existing is not None:
+                await self.db.refresh(conversation, ["messages"])
+                return existing
         msg = Message(
             conversation_id=conversation.id,
             direction=Direction.inbound,
             body=message.text,
-            external_message_id=message.external_message_id,
+            external_message_id=ext_id,
             raw_payload=message.raw,
         )
         self.db.add(msg)
@@ -312,7 +329,17 @@ class ConversationService:
         if message.user_phone and not conversation.user_phone:
             conversation.user_phone = message.user_phone
 
-        await commit_with_retry(self.db)
+        try:
+            await commit_with_retry(self.db)
+        except IntegrityError:
+            await self.db.rollback()
+            if not ext_id:
+                raise
+            existing = await self._inbound_by_external_id(ext_id)
+            if existing is None:
+                raise
+            await self.db.refresh(conversation, ["messages"])
+            return existing
         await self.db.refresh(conversation, ["messages"])
         return msg
 

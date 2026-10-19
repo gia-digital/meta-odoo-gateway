@@ -21,6 +21,12 @@ class ChatwootRetryableError(ChatwootError):
     pass
 
 
+class ChatwootForbidden(ChatwootError):
+    """401/403: el token no puede listar (el barrido se omite)."""
+
+    pass
+
+
 class ChatwootClient:
     """Cliente del Agent Bot: enviar mensajes y handoff a humano."""
 
@@ -219,6 +225,52 @@ class ChatwootClient:
         if isinstance(data, dict) and isinstance(data.get("payload"), dict):
             return data["payload"]
         return data if isinstance(data, dict) else {}
+
+    def _unwrap_list(self, data: Any) -> List[Dict[str, Any]]:
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+        if not isinstance(data, dict):
+            return []
+        for key in ("payload", "data"):
+            nested = data.get(key)
+            if isinstance(nested, list):
+                return [item for item in nested if isinstance(item, dict)]
+            if isinstance(nested, dict):
+                inner = nested.get("payload") or nested.get("messages") or nested.get("data")
+                if isinstance(inner, list):
+                    return [item for item in inner if isinstance(item, dict)]
+        messages = data.get("messages")
+        if isinstance(messages, list):
+            return [item for item in messages if isinstance(item, dict)]
+        return []
+
+    async def list_conversations(
+        self, *, status: str, max_pages: int = 5
+    ) -> List[Dict[str, Any]]:
+        """Conversaciones recientes. 401/403 no se reintenta: el barrido se salta."""
+        assert self._client is not None
+        found: List[Dict[str, Any]] = []
+        url = self._account_path("/conversations")
+        for page in range(1, max_pages + 1):
+            r = await self._client.get(
+                url,
+                params={"status": status, "assignee_type": "all", "page": page},
+            )
+            if r.status_code in (401, 403):
+                raise ChatwootForbidden(
+                    f"list_conversations failed: {r.status_code} {r.text[:300]}"
+                )
+            if r.status_code >= 400:
+                raise ChatwootError(
+                    f"list_conversations failed: {r.status_code} {r.text[:300]}"
+                )
+            batch = self._unwrap_list(r.json() if r.content else {})
+            if not batch:
+                break
+            found.extend(batch)
+            if len(batch) < 25:
+                break
+        return found
 
     async def list_messages(self, conversation_id: int) -> List[Dict[str, Any]]:
         """Últimos mensajes del hilo (red de seguridad si no llega outgoing al bot)."""

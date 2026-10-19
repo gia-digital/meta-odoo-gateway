@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     chatwoot_team_important_id: int = 3
     # Junta mensajes rápidos del mismo hilo antes de llamar al LLM (1 worker).
     chatwoot_debounce_seconds: float = 4.0
+    # Al volver de un apagón, recupera mensajes de Chatwoot de esta ventana.
+    chatwoot_reconcile_lookback_minutes: int = 30
+    # Cada cuánto se barre la API por webhooks que nunca llegaron.
+    chatwoot_reconcile_interval_seconds: int = 120
     # Tras «resuelta», un mensaje del cliente dentro de esta ventana sigue el
     # mismo pedido. Pasado el plazo, se abre un ciclo local nuevo.
     chatwoot_cycle_reopen_hours: float = 24.0

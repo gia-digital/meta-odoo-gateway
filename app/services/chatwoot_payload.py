@@ -1,4 +1,5 @@
 """Parseo de payloads Chatwoot (sin I/O)."""
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 
@@ -461,6 +462,120 @@ def latest_incoming_source_id_from_messages(
 ) -> Optional[str]:
     """Último wamid entrante en el historial de Chatwoot (p. ej. reply humano)."""
     return latest_incoming_source_id(messages)
+
+
+def coerce_timestamp(value: Any) -> Optional[datetime]:
+    """Unix (int/float/str) o ISO-8601 de Chatwoot a datetime UTC."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, tz=timezone.utc)
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.isdigit():
+        return datetime.fromtimestamp(int(text), tz=timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def message_external_id(payload: Dict[str, Any]) -> Optional[str]:
+    """Id del mensaje Chatwoot (raíz o anidado)."""
+    msg = payload.get("message")
+    if isinstance(msg, dict) and msg.get("id") not in (None, ""):
+        return str(msg["id"])
+    if payload.get("id") not in (None, ""):
+        return str(payload["id"])
+    return None
+
+
+def is_bot_public_outgoing(payload: Dict[str, Any]) -> bool:
+    """Outgoing público del agent bot (no de un asesor)."""
+    if not is_outgoing_message(payload):
+        return False
+    if is_private_message(payload):
+        return False
+    atype = str(_sender_dict(payload).get("type") or "").lower()
+    return atype in ("agent_bot", "bot")
+
+
+def bot_replied_after(messages: List[Dict[str, Any]], inbound_id: str) -> bool:
+    """True si ya hay un outgoing del bot posterior a ese mensaje entrante."""
+    inbound = next(
+        (item for item in messages if str(item.get("id")) == str(inbound_id)),
+        None,
+    )
+    if inbound is None:
+        return False
+    inbound_at = coerce_timestamp(inbound.get("created_at"))
+    try:
+        inbound_num = int(inbound_id)
+    except (TypeError, ValueError):
+        inbound_num = None
+    for item in messages:
+        if not is_bot_public_outgoing(item):
+            continue
+        created = coerce_timestamp(item.get("created_at"))
+        if inbound_at and created:
+            if created > inbound_at:
+                return True
+            continue
+        try:
+            msg_num = int(item.get("id"))
+        except (TypeError, ValueError):
+            continue
+        if inbound_num is not None and msg_num > inbound_num:
+            return True
+    return False
+
+
+def conversation_activity_at(conversation: Dict[str, Any]) -> Optional[datetime]:
+    for key in ("last_activity_at", "timestamp", "updated_at", "created_at"):
+        found = coerce_timestamp(conversation.get(key))
+        if found is not None:
+            return found
+    return None
+
+
+def message_to_webhook_payload(
+    conversation: Dict[str, Any], message: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Arma el mismo shape que el webhook a partir de la API de Chatwoot."""
+    meta = conversation.get("meta") if isinstance(conversation.get("meta"), dict) else {}
+    sender = message.get("sender") if isinstance(message.get("sender"), dict) else {}
+    contact = meta.get("sender") if isinstance(meta.get("sender"), dict) else sender
+    channel = meta.get("channel") or conversation.get("channel")
+    inbox = conversation.get("inbox") if isinstance(conversation.get("inbox"), dict) else {}
+    if channel and "channel_type" not in inbox:
+        inbox = {**inbox, "channel_type": channel}
+    return {
+        "event": "message_created",
+        "id": message.get("id"),
+        "content": message.get("content"),
+        "message_type": message.get("message_type"),
+        "private": message.get("private"),
+        "sender": sender,
+        "source_id": message.get("source_id"),
+        "attachments": message.get("attachments") or [],
+        "created_at": message.get("created_at"),
+        "conversation": {
+            "id": conversation.get("id") or message.get("conversation_id"),
+            "status": conversation.get("status"),
+            "meta": meta,
+            "inbox_id": conversation.get("inbox_id"),
+        },
+        "contact": contact,
+        "inbox": inbox,
+    }
 
 
 def resolve_inbound_wamid_for_human_reply(

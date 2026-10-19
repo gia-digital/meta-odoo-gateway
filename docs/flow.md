@@ -74,9 +74,13 @@ El cliente `OdooClient` usa `tenacity` con backoff exponencial (3 reintentos). S
 
 Mejora futura: cola de reintentos persistente (Redis + Arq, o tabla de "outbox").
 
+### ¿Qué pasa si el gateway está caído cuando llega un mensaje?
+
+El texto ya está en Chatwoot. El POST al bot no se reintenta si el puerto está cerrado (Chatwoot solo reintenta 429 y 500). Por eso el webhook se guarda en `webhook_inbox` y se hace commit **antes** de responder 200. Si el proceso muere a mitad del turno, al arrancar esa fila vuelve a `pending` y se procesa. Además, cada `CHATWOOT_RECONCILE_INTERVAL_SECONDS` se listan conversaciones `pending` y `open` de los últimos `CHATWOOT_RECONCILE_LOOKBACK_MINUTES` y se encolan los mensajes que nunca llegaron. Un apagón más largo que esa ventana no se responde solo.
+
 ### ¿Qué pasa si llega un mensaje duplicado?
 
-Chatwoot (o reintentos de red) puede reenviar el mismo evento. El campo `external_message_id` identifica el mensaje; mejora pendiente: `UNIQUE INDEX` en `messages.external_message_id` y atrapar la excepción de integridad.
+Chatwoot (o reintentos de red) puede reenviar el mismo evento. `webhook_inbox.dedupe_key` (`msg:{id}` o `evt:conversation_resolved:{id}`) y el índice único parcial `messages.external_message_id` ignoran el duplicado. Un replay no vuelve a contestar si el bot ya escribió después de ese mensaje.
 
 ### ¿Y los mensajes no-texto (audio, imagen)?
 
