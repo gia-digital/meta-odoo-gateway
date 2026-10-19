@@ -30,7 +30,7 @@ from app.services.chatwoot_payload import (
     primary_attachment_kind,
     resolve_inbound_wamid_for_human_reply,
 )
-from app.services.conversation import ConversationService
+from app.services.conversation import ConversationService, cycle_private_note
 from app.services.reply_bubbles import (
     first_send_wait_seconds,
     next_bubble_wait_seconds,
@@ -270,8 +270,63 @@ def _merge_incoming_texts(batch: list) -> str:
     return "\n".join(texts)
 
 
-def _is_inactive_status(status_conv: str) -> bool:
-    return status_conv in ("resolved", "snoozed")
+def _is_snoozed(status_conv: str) -> bool:
+    return status_conv == "snoozed"
+
+
+def _normalize_conversation_event(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Eventos de conversación traen el objeto en la raíz, no bajo ``conversation``."""
+    if isinstance(payload.get("conversation"), dict):
+        return payload
+    if not (payload.get("meta") or payload.get("status")):
+        return payload
+    sender: Dict[str, Any] = {}
+    meta = payload.get("meta")
+    if isinstance(meta, dict) and isinstance(meta.get("sender"), dict):
+        sender = meta["sender"]
+    inbox = payload.get("inbox") if isinstance(payload.get("inbox"), dict) else {}
+    if payload.get("channel") and "channel_type" not in inbox:
+        inbox = {**inbox, "channel_type": payload.get("channel")}
+    return {
+        **payload,
+        "conversation": payload,
+        "contact": sender,
+        "sender": sender,
+        "inbox": inbox,
+    }
+
+
+def _changed_status_current(payload: Dict[str, Any]) -> str:
+    raw = payload.get("changed_attributes")
+    items: list = []
+    if isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, dict):
+        items = [raw]
+    for item in items:
+        if not isinstance(item, dict) or "status" not in item:
+            continue
+        status = item["status"]
+        if isinstance(status, dict):
+            current = status.get("current_value")
+            if current is None:
+                current = status.get("current")
+            return str(current or "").lower()
+        if isinstance(status, (list, tuple)) and status:
+            return str(status[-1]).lower()
+    return ""
+
+
+def should_close_cycle(event: str, payload: Dict[str, Any]) -> bool:
+    """True si un humano (o la cuenta) marcó la conversación como resuelta."""
+    if event == "conversation_resolved":
+        return True
+    if event != "conversation_status_changed":
+        return False
+    shaped = _normalize_conversation_event(payload)
+    if _conversation_status(shaped) == "resolved":
+        return True
+    return _changed_status_current(payload) == "resolved"
 
 
 async def _history_has_human_reply(cw_conv_id: int) -> bool:
@@ -307,7 +362,14 @@ async def _process_human_outgoing(payload: Dict[str, Any]) -> None:
             channel=channel,
             external_user_id=external_user_id,
             user_name=user_name,
+            create=False,
         )
+        if conv is None:
+            logger.info(
+                "chatwoot_human_outgoing_no_open_cycle",
+                conversation_id=cw_conv_id,
+            )
+            return
         await service.mark_human_replied(conv)
         inbound_wamid = resolve_inbound_wamid_for_human_reply(
             cw_conv_id, payload, conv.messages
@@ -366,7 +428,7 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
     record_inbound_wamid(cw_conv_id, latest_incoming_source_id(incoming_batch))
 
     status_conv = _conversation_status(payload)
-    if _is_inactive_status(status_conv):
+    if _is_snoozed(status_conv):
         logger.info(
             "chatwoot_skip_inactive",
             conversation_id=cw_conv_id,
@@ -425,7 +487,13 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
             channel=channel,
             external_user_id=external_user_id,
             user_name=user_name,
+            user_phone=user_phone,
+            user_email=user_email,
+            apply_cycle=True,
+            payload_status=status_conv,
+            chatwoot_conversation_id=cw_conv_id,
         )
+        await _maybe_note_new_cycle(conv, cw_conv_id)
         nm = NormalizedMessage(
             channel=channel.value,
             external_user_id=external_user_id,
@@ -481,6 +549,7 @@ async def _process_incoming_message(payload: Dict[str, Any]) -> None:
             user_email=user_email or conv.user_email,
             handed_off=conv.status == ConversationStatus.handed_off
             or getattr(conv, "handed_off_at", None) is not None,
+            fresh_cycle=bool(getattr(conv, "fresh_cycle", False)),
         )
 
         try:
@@ -723,7 +792,12 @@ async def _reply_without_agent(
             channel=channel,
             external_user_id=external_user_id,
             user_name=user_name,
+            user_phone=user_phone,
+            apply_cycle=True,
+            payload_status=_conversation_status(payload),
+            chatwoot_conversation_id=cw_conv_id,
         )
+        await _maybe_note_new_cycle(conv, cw_conv_id)
         await service.add_inbound_message(
             conv,
             NormalizedMessage(
@@ -755,6 +829,50 @@ async def _reply_without_agent(
                 error=str(exc),
                 conversation_id=cw_conv_id,
             )
+
+
+async def _maybe_note_new_cycle(conv: Any, cw_conv_id: int) -> None:
+    """Nota privada cuando el mensaje abre un pedido nuevo. El cliente no la ve."""
+    if not getattr(conv, "fresh_cycle", False):
+        return
+    when = getattr(conv, "previous_resolved_at", None)
+    if when is None:
+        return
+    try:
+        async with ChatwootClient() as cw:
+            await cw.send_message(cw_conv_id, cycle_private_note(when), private=True)
+    except Exception as exc:
+        logger.error(
+            "chatwoot_cycle_note_failed",
+            error=str(exc),
+            conversation_id=cw_conv_id,
+        )
+
+
+async def _process_cycle_resolved(payload: Dict[str, Any]) -> None:
+    """Un humano marcó resuelta: cierra el ciclo local y quita el mute del hilo."""
+    settings = get_settings()
+    if not settings.chatwoot_enabled:
+        return
+    shaped = _normalize_conversation_event(payload)
+    cw_conv_id = _conversation_id(shaped)
+    if cw_conv_id:
+        clear_human_reply_guard(cw_conv_id)
+    external_user_id, _, _, _ = _contact_identity(shaped)
+    if not external_user_id or external_user_id == "unknown":
+        logger.warning(
+            "cycle_resolve_missing_contact",
+            conversation_id=cw_conv_id,
+        )
+        return
+    channel = _resolve_channel(shaped)
+    async with SessionLocal() as db:
+        service = ConversationService(db)
+        await service.mark_cycle_resolved(
+            channel=channel,
+            external_user_id=external_user_id,
+            chatwoot_conversation_id=cw_conv_id,
+        )
 
 
 @router.post("/chatwoot", status_code=200)
@@ -815,6 +933,10 @@ async def chatwoot_agent_webhook(
             return {"status": "ok", "queued": "true"}
         logger.info("chatwoot_ignored_event", chatwoot_event=event or "unknown")
         return {"status": "ignored", "reason": "non_incoming"}
+
+    if should_close_cycle(event, payload):
+        background_tasks.add_task(_process_cycle_resolved, payload)
+        return {"status": "ok", "queued": "true", "kind": "conversation_resolved"}
 
     logger.info("chatwoot_ignored_event", chatwoot_event=event or "unknown")
     return {"status": "ignored", "event": event or "unknown"}

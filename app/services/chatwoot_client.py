@@ -180,8 +180,19 @@ class ChatwootClient:
             )
         logger.info("chatwoot_update_last_seen", conversation_id=conversation_id)
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
     async def set_status(self, conversation_id: int, status: str) -> Dict[str, Any]:
+        """Cambia el status en Chatwoot. Nunca «resolved»: eso lo marca un humano."""
+        if str(status).lower() == "resolved":
+            raise ChatwootError(
+                "El agente no marca conversaciones como resueltas; "
+                "lo hace un humano en Chatwoot"
+            )
+        return await self._set_status_request(conversation_id, status)
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
+    async def _set_status_request(
+        self, conversation_id: int, status: str
+    ) -> Dict[str, Any]:
         assert self._client is not None
         url = self._account_path(f"/conversations/{conversation_id}/toggle_status")
         r = await self._client.post(url, json={"status": status})

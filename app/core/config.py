@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     chatwoot_team_important_id: int = 3
     # Junta mensajes rápidos del mismo hilo antes de llamar al LLM (1 worker).
     chatwoot_debounce_seconds: float = 4.0
+    # Tras «resuelta», un mensaje del cliente dentro de esta ventana sigue el
+    # mismo pedido. Pasado el plazo, se abre un ciclo local nuevo.
+    chatwoot_cycle_reopen_hours: float = 24.0
     # Fallos seguidos del agente antes de abrir el ticket (0 = nunca por error).
     agent_error_handoff_threshold: int = 3
     # Tope de burbujas si el LLM las marca con ---.

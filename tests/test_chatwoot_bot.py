@@ -870,3 +870,18 @@ async def test_handoff_assigns_team(monkeypatch):
     assert posts[2][0].endswith("/conversations/42/messages")
     assert posts[2][1].get("private") is True
     get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_set_status_rejects_resolved(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    from app.services.chatwoot_client import ChatwootClient, ChatwootError
+
+    cw = ChatwootClient()
+    with pytest.raises(ChatwootError, match="resueltas"):
+        await cw.set_status(7, "resolved")
+    get_settings.cache_clear()

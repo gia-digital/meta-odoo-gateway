@@ -80,6 +80,15 @@ class Conversation(Base):
     odoo_lead_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     odoo_partner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
+    # Cierre comercial en Chatwoot (un humano marca resuelta). No cambia status:
+    # el lead sigue visible. get_or_create no reutiliza filas con resolved_at.
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    chatwoot_conversation_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, index=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

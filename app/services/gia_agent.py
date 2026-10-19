@@ -82,7 +82,16 @@ class BotContext:
     user_phone: Optional[str] = None
     user_email: Optional[str] = None
     handed_off: bool = False
+    fresh_cycle: bool = False
     extra: dict = field(default_factory=dict)
+
+
+FRESH_CYCLE_INSTRUCTION = (
+    "CICLO NUEVO: Este cliente ya tuvo un pedido anterior, cerrado en Chatwoot. "
+    "No retomes material, toneladas ni acuerdos de ese ciclo. "
+    "Si dice que quiere lo mismo que la vez pasada, pide de nuevo producto y cantidad. "
+    "Trata este mensaje como el inicio de un pedido nuevo."
+)
 
 
 def _resolve_api_key(model: str, runtime: Optional[LlmRuntime] = None) -> Optional[str]:
@@ -411,7 +420,9 @@ async def run_gia_agent(
 
     instructions = await build_agent_instructions(ctx.db)
     instructions = f"{instructions}\n\n---\n\n{hours_prompt_block()}"
-    if _conversation_handed_off(ctx.conversation) or ctx.handed_off:
+    if ctx.fresh_cycle:
+        instructions = f"{instructions}\n\n---\n\n{FRESH_CYCLE_INSTRUCTION}"
+    elif _conversation_handed_off(ctx.conversation) or ctx.handed_off:
         ctx.handed_off = True
         instructions = (
             f"{instructions}\n\n---\n\n"

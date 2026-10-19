@@ -8,8 +8,9 @@ Une:
 - Creación de leads en Odoo (solo si ODOO_ENABLED=true)
 """
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +33,52 @@ from app.services.odoo_client import OdooClient
 
 logger = get_logger(__name__)
 
+_OPEN_STATUSES = (
+    ConversationStatus.active,
+    ConversationStatus.qualified,
+    ConversationStatus.handed_off,
+)
+
+
+def decide_inbound_cycle(
+    *,
+    resolved_at: Optional[datetime],
+    payload_status: str,
+    now: datetime,
+    reopen_hours: float,
+) -> str:
+    """continue: mismo pedido. reopen: aclaración dentro de la ventana. new: pedido nuevo."""
+    status = (payload_status or "").lower()
+    if resolved_at is None:
+        if status == "resolved":
+            return "new"
+        return "continue"
+    closed = resolved_at
+    if closed.tzinfo is None:
+        closed = closed.replace(tzinfo=timezone.utc)
+    current = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+    window = timedelta(hours=float(reopen_hours))
+    if current - closed < window:
+        return "reopen"
+    return "new"
+
+
+def cycle_private_note(resolved_at: datetime) -> str:
+    """Nota interna de Chatwoot al abrir un pedido nuevo. El cliente no la ve."""
+    settings = get_settings()
+    try:
+        tz = ZoneInfo(settings.display_timezone or "UTC")
+    except Exception:
+        tz = timezone.utc
+    closed = resolved_at
+    if closed.tzinfo is None:
+        closed = closed.replace(tzinfo=timezone.utc)
+    local = closed.astimezone(tz)
+    return (
+        f"Ciclo anterior cerrado el {local:%d/%m/%Y %H:%M}. "
+        "Este mensaje se atiende como pedido nuevo."
+    )
+
 
 class ConversationService:
     """Orquesta el ciclo de vida de una conversación."""
@@ -39,41 +86,213 @@ class ConversationService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def get_or_create(
-        self, channel: Channel, external_user_id: str, user_name: Optional[str] = None
-    ) -> Conversation:
+    async def _latest_cycle(
+        self,
+        channel: Channel,
+        external_user_id: str,
+        *,
+        include_resolved: bool,
+    ) -> Optional[Conversation]:
         stmt = (
             select(Conversation)
             .where(
                 Conversation.channel == channel,
                 Conversation.external_user_id == external_user_id,
-                Conversation.status.in_(
-                    [
-                        ConversationStatus.active,
-                        ConversationStatus.qualified,
-                        ConversationStatus.handed_off,
-                    ]
-                ),
+                Conversation.status.in_(_OPEN_STATUSES),
             )
             .options(selectinload(Conversation.messages))
             .order_by(Conversation.created_at.desc())
         )
+        if not include_resolved:
+            stmt = stmt.where(Conversation.resolved_at.is_(None))
         result = await self.db.execute(stmt)
-        conv = result.scalars().first()
-        if conv:
-            return conv
+        return result.scalars().first()
 
+    async def _create_conversation(
+        self,
+        *,
+        channel: Channel,
+        external_user_id: str,
+        user_name: Optional[str] = None,
+        user_phone: Optional[str] = None,
+        user_email: Optional[str] = None,
+        chatwoot_conversation_id: Optional[int] = None,
+    ) -> Conversation:
         conv = Conversation(
             channel=channel,
             external_user_id=external_user_id,
             user_name=user_name,
+            user_phone=user_phone,
+            user_email=user_email,
             status=ConversationStatus.active,
             qualification_source=QualificationSource.none,
+            chatwoot_conversation_id=chatwoot_conversation_id,
+            score=0,
+            score_breakdown={},
         )
         self.db.add(conv)
         await commit_with_retry(self.db)
         await self.db.refresh(conv, ["messages"])
         logger.info("conversation_created", id=conv.id, channel=channel.value)
+        return conv
+
+    async def get_or_create(
+        self,
+        channel: Channel,
+        external_user_id: str,
+        user_name: Optional[str] = None,
+        *,
+        user_phone: Optional[str] = None,
+        user_email: Optional[str] = None,
+        create: bool = True,
+        apply_cycle: bool = False,
+        payload_status: str = "",
+        chatwoot_conversation_id: Optional[int] = None,
+    ) -> Optional[Conversation]:
+        if apply_cycle:
+            return await self._open_inbound_cycle(
+                channel=channel,
+                external_user_id=external_user_id,
+                user_name=user_name,
+                user_phone=user_phone,
+                user_email=user_email,
+                payload_status=payload_status,
+                chatwoot_conversation_id=chatwoot_conversation_id,
+            )
+
+        conv = await self._latest_cycle(
+            channel, external_user_id, include_resolved=False
+        )
+        if conv:
+            return conv
+        if not create:
+            return None
+        return await self._create_conversation(
+            channel=channel,
+            external_user_id=external_user_id,
+            user_name=user_name,
+            user_phone=user_phone,
+            user_email=user_email,
+            chatwoot_conversation_id=chatwoot_conversation_id,
+        )
+
+    async def _open_inbound_cycle(
+        self,
+        *,
+        channel: Channel,
+        external_user_id: str,
+        user_name: Optional[str],
+        user_phone: Optional[str],
+        user_email: Optional[str],
+        payload_status: str,
+        chatwoot_conversation_id: Optional[int],
+    ) -> Conversation:
+        """Elige si el mensaje sigue el pedido abierto, lo reabre (<24h) o empieza otro."""
+        now = datetime.now(timezone.utc)
+        latest = await self._latest_cycle(
+            channel, external_user_id, include_resolved=True
+        )
+        action = decide_inbound_cycle(
+            resolved_at=latest.resolved_at if latest is not None else None,
+            payload_status=payload_status,
+            now=now,
+            reopen_hours=get_settings().chatwoot_cycle_reopen_hours,
+        )
+
+        if latest is None:
+            conv = await self._create_conversation(
+                channel=channel,
+                external_user_id=external_user_id,
+                user_name=user_name,
+                user_phone=user_phone,
+                user_email=user_email,
+                chatwoot_conversation_id=chatwoot_conversation_id,
+            )
+            conv.fresh_cycle = False
+            conv.previous_resolved_at = None
+            return conv
+
+        if action == "continue":
+            await self._touch_chatwoot_id(latest, chatwoot_conversation_id)
+            latest.fresh_cycle = False
+            latest.previous_resolved_at = None
+            return latest
+
+        if action == "reopen":
+            latest.resolved_at = None
+            if chatwoot_conversation_id:
+                latest.chatwoot_conversation_id = chatwoot_conversation_id
+            await commit_with_retry(self.db)
+            await self.db.refresh(latest, ["messages"])
+            latest.fresh_cycle = False
+            latest.previous_resolved_at = None
+            logger.info("cycle_reopened", conversation_id=latest.id)
+            return latest
+
+        closed_at = latest.resolved_at or now
+        if latest.resolved_at is None:
+            latest.resolved_at = closed_at
+            if chatwoot_conversation_id:
+                latest.chatwoot_conversation_id = chatwoot_conversation_id
+            await commit_with_retry(self.db)
+        conv = await self._create_conversation(
+            channel=channel,
+            external_user_id=external_user_id,
+            user_name=user_name or latest.user_name,
+            user_phone=user_phone or latest.user_phone,
+            user_email=user_email or latest.user_email,
+            chatwoot_conversation_id=chatwoot_conversation_id,
+        )
+        conv.fresh_cycle = True
+        conv.previous_resolved_at = closed_at
+        logger.info(
+            "cycle_started",
+            conversation_id=conv.id,
+            previous_id=latest.id,
+        )
+        return conv
+
+    async def _touch_chatwoot_id(
+        self, conversation: Conversation, chatwoot_conversation_id: Optional[int]
+    ) -> None:
+        if not chatwoot_conversation_id:
+            return
+        if conversation.chatwoot_conversation_id == chatwoot_conversation_id:
+            return
+        conversation.chatwoot_conversation_id = chatwoot_conversation_id
+        await commit_with_retry(self.db)
+        await self.db.refresh(conversation, ["messages"])
+
+    async def mark_cycle_resolved(
+        self,
+        *,
+        channel: Channel,
+        external_user_id: str,
+        chatwoot_conversation_id: Optional[int] = None,
+    ) -> Optional[Conversation]:
+        """Cierra el ciclo comercial vigente. No cambia el status del lead."""
+        conv = await self._latest_cycle(
+            channel, external_user_id, include_resolved=False
+        )
+        if conv is None:
+            logger.info(
+                "cycle_resolve_no_open_conversation",
+                external_user_id=external_user_id,
+                chatwoot_conversation_id=chatwoot_conversation_id,
+            )
+            return None
+        if conv.resolved_at is None:
+            conv.resolved_at = datetime.now(timezone.utc)
+        if chatwoot_conversation_id:
+            conv.chatwoot_conversation_id = chatwoot_conversation_id
+        await commit_with_retry(self.db)
+        await self.db.refresh(conv)
+        logger.info(
+            "cycle_resolved",
+            conversation_id=conv.id,
+            chatwoot_conversation_id=chatwoot_conversation_id,
+            status=conv.status.value,
+        )
         return conv
 
     async def add_inbound_message(

@@ -941,7 +941,7 @@ async def test_explicit_sticker_file_type_goes_to_agent(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_resolved_conversation_skips_bot(monkeypatch):
+async def test_resolved_payload_still_reaches_agent(monkeypatch):
     monkeypatch.setenv("CHATWOOT_ENABLED", "true")
     monkeypatch.setenv("CHATWOOT_DEBOUNCE_SECONDS", "0")
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
@@ -984,17 +984,25 @@ async def test_resolved_conversation_skips_bot(monkeypatch):
     service.clear_human_reply = AsyncMock()
 
     sent, _, _ = _webhook_fakes(monkeypatch, conv=conv, service=service, boom=False)
+    seen: dict = {}
 
-    async def must_not_run(**kwargs):
-        raise AssertionError("resolved no debe llamar al LLM")
+    async def fake_agent(*, ctx, user_message, history_messages):
+        seen["fresh_cycle"] = ctx.fresh_cycle
+        seen["text"] = user_message
+        return "¿Qué material y cuántas toneladas necesita?"
 
-    monkeypatch.setattr("app.services.gia_agent.run_gia_agent", must_not_run)
+    monkeypatch.setattr("app.services.gia_agent.run_gia_agent", fake_agent)
 
     from app.routers.chatwoot_webhook import _process_incoming_message
 
     await _process_incoming_message(payload)
-    assert sent == []
-    service.add_inbound_message.assert_not_awaited()
+    assert seen["text"] == "Hola"
+    assert seen["fresh_cycle"] is False
+    assert sent == ["¿Qué material y cuántas toneladas necesita?"]
+    service.get_or_create.assert_awaited()
+    assert service.get_or_create.await_args.kwargs["apply_cycle"] is True
+    assert service.get_or_create.await_args.kwargs["payload_status"] == "resolved"
+    service.add_inbound_message.assert_awaited()
     reset_for_tests()
     invalidate_agent_behavior()
     get_settings.cache_clear()
