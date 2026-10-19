@@ -13,12 +13,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response as StarletteResponse
 
 from app.core.config import get_settings
+from app.core.pagination import make_pager, normalize_page_size, parse_page
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.db import get_db
 from app.services.conversation import ConversationService
@@ -731,6 +732,8 @@ async def dashboard_leads(
     _: None = Depends(require_dashboard_auth),
     channel: Optional[str] = Query(default=None),
     status_filter: Optional[str] = Query(default=None, alias="status"),
+    page: Optional[str] = Query(default=None),
+    per: Optional[str] = Query(default=None),
 ):
     stmt = (
         select(Conversation)
@@ -746,13 +749,13 @@ async def dashboard_leads(
         except ValueError:
             pass
 
-    result = await db.execute(stmt.limit(200))
-    conversations = result.scalars().all()
+    conversations, pager = await _page_rows(db, stmt, request, page, per)
     return templates.TemplateResponse(
         "leads.html",
         {
             "request": request,
             "conversations": conversations,
+            "pager": pager,
             "channel": channel or "",
             "status_filter": status_filter or "",
             "active_nav": "leads",
@@ -803,6 +806,8 @@ async def dashboard_conversations(
     _: None = Depends(require_dashboard_auth),
     channel: Optional[str] = Query(default=None),
     status_filter: Optional[str] = Query(default=None, alias="status"),
+    page: Optional[str] = Query(default=None),
+    per: Optional[str] = Query(default=None),
 ):
     stmt = select(Conversation).order_by(Conversation.updated_at.desc())
     if channel:
@@ -814,18 +819,31 @@ async def dashboard_conversations(
         except ValueError:
             pass
 
-    result = await db.execute(stmt.limit(200))
-    conversations = result.scalars().all()
+    conversations, pager = await _page_rows(db, stmt, request, page, per)
     return templates.TemplateResponse(
         "conversations.html",
         {
             "request": request,
             "conversations": conversations,
+            "pager": pager,
             "channel": channel or "",
             "status_filter": status_filter or "",
             "active_nav": "conversations",
         },
     )
+
+
+async def _page_rows(db: AsyncSession, stmt, request: Request, page: Optional[str], per: Optional[str]):
+    page_size = normalize_page_size(per)
+    total = await db.scalar(select(func.count()).select_from(stmt.order_by(None).subquery()))
+    pager = make_pager(
+        request,
+        page=parse_page(page),
+        total=int(total or 0),
+        page_size=page_size,
+    )
+    result = await db.execute(stmt.limit(pager.page_size).offset(pager.offset))
+    return result.scalars().all(), pager
 
 
 @router.get(

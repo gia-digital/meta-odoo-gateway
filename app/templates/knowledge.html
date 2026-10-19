@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Knowledge — GIA{% endblock %}
+{% block body_class %}{% if tab in ('products', 'faqs', 'skills', 'files', 'tools') %}table-view{% endif %}{% endblock %}
 {% block content %}
+<div class="{% if tab in ('products', 'faqs', 'skills', 'files', 'tools') %}table-page{% endif %}">
 <header class="page-header">
   <div>
     <p class="eyebrow">Agente GIA</p>
@@ -270,13 +272,15 @@
 {% endif %}
 
 {% if tab == 'products' %}
+<div class="table-stage">
 <div class="section-toolbar">
   <p class="muted">El agente usa este catálogo en cada conversación. Los <strong>calibres y pesos</strong> están en el campo «Detalle» de cada producto (sección <em>CALIBRES Y ESPECIFICACIONES</em>) y en los productos de categoría <em>Especificaciones técnicas (Anexo A)</em>. Tras actualizar <code>product_specs.json</code>, reimporta agent_info.</p>
   <button type="button" class="btn btn-primary" data-open-dialog="product-modal">Nuevo producto</button>
 </div>
 
 {% if products %}
-<div class="table-wrap">
+<section class="table-panel" aria-label="Productos">
+<div class="table-wrap table-scroll">
   <table class="data-table">
     <thead>
       <tr>
@@ -299,8 +303,9 @@
         <td>{% if p.active %}<span class="badge status-qualified"><span class="badge-dot" aria-hidden="true"></span>Activo</span>{% else %}<span class="badge status-inactive"><span class="badge-dot" aria-hidden="true"></span>Inactivo</span>{% endif %}</td>
         <td class="actions-col">
           <div class="row-actions">
-            <a class="btn btn-ghost btn-sm" href="/dashboard/knowledge/products?edit={{ p.id }}">Editar</a>
+            <a class="btn btn-ghost btn-sm" href="/dashboard/knowledge/products?edit={{ p.id }}{% if pager.extra %}&{{ pager.extra }}{% endif %}">Editar</a>
             <form method="post" action="/dashboard/knowledge/products/{{ p.id }}/toggle" class="inline-form">
+              <input type="hidden" name="list_qs" value="{{ pager.extra }}" />
               <button type="submit" class="btn btn-ghost btn-sm">{{ 'Desactivar' if p.active else 'Activar' }}</button>
             </form>
           </div>
@@ -310,22 +315,26 @@
     </tbody>
   </table>
 </div>
+{% include "partials/pager.html" %}
+</section>
 {% else %}
 <div class="empty">
   <p class="empty-title">No hay productos todavía</p>
   <p class="muted">El catálogo se carga al arrancar si la tabla está vacía.</p>
 </div>
 {% endif %}
+</div>
 
-<dialog class="modal" id="product-modal"{% if editing %} data-open="true" data-dismiss-url="/dashboard/knowledge/products"{% endif %}>
+<dialog class="modal" id="product-modal"{% if editing %} data-open="true" data-dismiss-url="/dashboard/knowledge/products{% if pager.extra %}?{{ pager.extra }}{% endif %}"{% endif %}>
   <form class="modal-card stack-form" method="post" action="/dashboard/knowledge/products">
+    <input type="hidden" name="list_qs" value="{{ pager.extra }}" />
     <div class="modal-head">
       <div>
         <h2>{% if editing %}Editar {{ editing.name }}{% else %}Nuevo producto o servicio{% endif %}</h2>
         <p class="muted">El agente usa este catálogo en cada conversación.</p>
       </div>
       {% if editing %}
-      <a class="modal-close" href="/dashboard/knowledge/products" aria-label="Cerrar">×</a>
+      <a class="modal-close" href="/dashboard/knowledge/products{% if pager.extra %}?{{ pager.extra }}{% endif %}" aria-label="Cerrar">×</a>
       {% else %}
       <button type="button" class="modal-close" data-close-dialog aria-label="Cerrar">×</button>
       {% endif %}
@@ -369,7 +378,7 @@
     <div class="modal-foot form-actions">
       <button class="btn btn-primary" type="submit">Guardar</button>
       {% if editing %}
-      <a class="btn btn-secondary" href="/dashboard/knowledge/products">Cancelar</a>
+      <a class="btn btn-secondary" href="/dashboard/knowledge/products{% if pager.extra %}?{{ pager.extra }}{% endif %}">Cancelar</a>
       {% else %}
       <button class="btn btn-secondary" type="button" data-close-dialog>Cancelar</button>
       {% endif %}
@@ -379,6 +388,7 @@
 {% endif %}
 
 {% if tab == 'faqs' %}
+<div class="table-stage">
 <div class="section-toolbar">
   <form class="filters" method="get" action="/dashboard/knowledge/faqs">
     <div class="filters-fields">
@@ -387,12 +397,14 @@
       </label>
     </div>
     <button type="submit">Filtrar</button>
+    {% if pager.page_size != 25 %}<input type="hidden" name="per" value="{{ pager.page_size }}" />{% endif %}
   </form>
   <button type="button" class="btn btn-primary" data-open-dialog="faq-modal">Nueva FAQ</button>
 </div>
 
 {% if faqs %}
-<div class="table-wrap">
+<section class="table-panel" aria-label="FAQs">
+<div class="table-wrap table-scroll">
   <table class="data-table">
     <thead>
       <tr>
@@ -413,8 +425,9 @@
         <td>{% if f.active %}<span class="badge status-qualified"><span class="badge-dot" aria-hidden="true"></span>Activa</span>{% else %}<span class="badge status-inactive"><span class="badge-dot" aria-hidden="true"></span>Inactiva</span>{% endif %}</td>
         <td class="actions-col">
           <div class="row-actions">
-            <a class="btn btn-ghost btn-sm" href="/dashboard/knowledge/faqs?edit={{ f.id }}">Editar</a>
+            <a class="btn btn-ghost btn-sm" href="/dashboard/knowledge/faqs?edit={{ f.id }}{% if pager.extra %}&{{ pager.extra }}{% endif %}">Editar</a>
             <form method="post" action="/dashboard/knowledge/faqs/{{ f.id }}/toggle" class="inline-form">
+              <input type="hidden" name="list_qs" value="{{ pager.extra }}" />
               <button type="submit" class="btn btn-ghost btn-sm">{{ 'Desactivar' if f.active else 'Activar' }}</button>
             </form>
           </div>
@@ -424,22 +437,26 @@
     </tbody>
   </table>
 </div>
+{% include "partials/pager.html" %}
+</section>
 {% else %}
 <div class="empty">
   <p class="empty-title">No hay FAQs todavía</p>
   <p class="muted">El seed las carga al arrancar si la tabla está vacía.</p>
 </div>
 {% endif %}
+</div>
 
-<dialog class="modal" id="faq-modal"{% if editing %} data-open="true" data-dismiss-url="/dashboard/knowledge/faqs"{% endif %}>
+<dialog class="modal" id="faq-modal"{% if editing %} data-open="true" data-dismiss-url="/dashboard/knowledge/faqs{% if pager.extra %}?{{ pager.extra }}{% endif %}"{% endif %}>
   <form class="modal-card stack-form" method="post" action="/dashboard/knowledge/faqs">
+    <input type="hidden" name="list_qs" value="{{ pager.extra }}" />
     <div class="modal-head">
       <div>
         <h2>{% if editing %}Editar FAQ #{{ editing.id }}{% else %}Nueva FAQ{% endif %}</h2>
         <p class="muted">Preguntas que el agente puede responder de inmediato.</p>
       </div>
       {% if editing %}
-      <a class="modal-close" href="/dashboard/knowledge/faqs" aria-label="Cerrar">×</a>
+      <a class="modal-close" href="/dashboard/knowledge/faqs{% if pager.extra %}?{{ pager.extra }}{% endif %}" aria-label="Cerrar">×</a>
       {% else %}
       <button type="button" class="modal-close" data-close-dialog aria-label="Cerrar">×</button>
       {% endif %}
@@ -462,7 +479,7 @@
     <div class="modal-foot form-actions">
       <button class="btn btn-primary" type="submit">Guardar FAQ</button>
       {% if editing %}
-      <a class="btn btn-secondary" href="/dashboard/knowledge/faqs">Cancelar</a>
+      <a class="btn btn-secondary" href="/dashboard/knowledge/faqs{% if pager.extra %}?{{ pager.extra }}{% endif %}">Cancelar</a>
       {% else %}
       <button class="btn btn-secondary" type="button" data-close-dialog>Cancelar</button>
       {% endif %}
@@ -472,13 +489,15 @@
 {% endif %}
 
 {% if tab == 'skills' %}
+<div class="table-stage">
 <div class="section-toolbar">
   <p class="muted">Instrucciones que el agente aplica según el tipo de conversación.</p>
   <button type="button" class="btn btn-primary" data-open-dialog="skill-modal">Nuevo skill</button>
 </div>
 
 {% if skills %}
-<div class="table-wrap">
+<section class="table-panel" aria-label="Skills">
+<div class="table-wrap table-scroll">
   <table class="data-table">
     <thead>
       <tr>
@@ -496,8 +515,9 @@
         <td>{% if s.active %}<span class="badge status-qualified"><span class="badge-dot" aria-hidden="true"></span>Activo</span>{% else %}<span class="badge status-inactive"><span class="badge-dot" aria-hidden="true"></span>Inactivo</span>{% endif %}</td>
         <td class="actions-col">
           <div class="row-actions">
-            <a class="btn btn-ghost btn-sm" href="/dashboard/knowledge/skills?edit={{ s.id }}">Editar</a>
+            <a class="btn btn-ghost btn-sm" href="/dashboard/knowledge/skills?edit={{ s.id }}{% if pager.extra %}&{{ pager.extra }}{% endif %}">Editar</a>
             <form method="post" action="/dashboard/knowledge/skills/{{ s.id }}/toggle" class="inline-form">
+              <input type="hidden" name="list_qs" value="{{ pager.extra }}" />
               <button type="submit" class="btn btn-ghost btn-sm">{{ 'Desactivar' if s.active else 'Activar' }}</button>
             </form>
           </div>
@@ -507,22 +527,26 @@
     </tbody>
   </table>
 </div>
+{% include "partials/pager.html" %}
+</section>
 {% else %}
 <div class="empty">
   <p class="empty-title">No hay skills todavía</p>
   <p class="muted">Crea el primero para guiar cómo responde el agente.</p>
 </div>
 {% endif %}
+</div>
 
-<dialog class="modal" id="skill-modal"{% if editing %} data-open="true" data-dismiss-url="/dashboard/knowledge/skills"{% endif %}>
+<dialog class="modal" id="skill-modal"{% if editing %} data-open="true" data-dismiss-url="/dashboard/knowledge/skills{% if pager.extra %}?{{ pager.extra }}{% endif %}"{% endif %}>
   <form class="modal-card stack-form" method="post" action="/dashboard/knowledge/skills">
+    <input type="hidden" name="list_qs" value="{{ pager.extra }}" />
     <div class="modal-head">
       <div>
         <h2>{% if editing %}Editar skill{% else %}Nuevo skill{% endif %}</h2>
         <p class="muted">Define cuándo aplicarlo y qué debe hacer el agente.</p>
       </div>
       {% if editing %}
-      <a class="modal-close" href="/dashboard/knowledge/skills" aria-label="Cerrar">×</a>
+      <a class="modal-close" href="/dashboard/knowledge/skills{% if pager.extra %}?{{ pager.extra }}{% endif %}" aria-label="Cerrar">×</a>
       {% else %}
       <button type="button" class="modal-close" data-close-dialog aria-label="Cerrar">×</button>
       {% endif %}
@@ -545,7 +569,7 @@
     <div class="modal-foot form-actions">
       <button class="btn btn-primary" type="submit">Guardar skill</button>
       {% if editing %}
-      <a class="btn btn-secondary" href="/dashboard/knowledge/skills">Cancelar</a>
+      <a class="btn btn-secondary" href="/dashboard/knowledge/skills{% if pager.extra %}?{{ pager.extra }}{% endif %}">Cancelar</a>
       {% else %}
       <button class="btn btn-secondary" type="button" data-close-dialog>Cancelar</button>
       {% endif %}
@@ -555,13 +579,15 @@
 {% endif %}
 
 {% if tab == 'files' %}
+<div class="table-stage">
 <div class="section-toolbar">
   <p class="muted">PDF, TXT o Markdown. El agente podrá consultar el contenido.</p>
   <button type="button" class="btn btn-primary" data-open-dialog="file-modal">Subir archivo</button>
 </div>
 
 {% if files %}
-<div class="table-wrap">
+<section class="table-panel" aria-label="Archivos">
+<div class="table-wrap table-scroll">
   <table class="data-table">
     <thead>
       <tr>
@@ -589,12 +615,15 @@
         <td class="actions-col">
           <div class="row-actions">
             <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/reindex" class="inline-form">
+              <input type="hidden" name="list_qs" value="{{ pager.extra }}" />
               <button type="submit" class="btn btn-ghost btn-sm">Reindexar</button>
             </form>
             <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/toggle" class="inline-form">
+              <input type="hidden" name="list_qs" value="{{ pager.extra }}" />
               <button type="submit" class="btn btn-ghost btn-sm">{{ 'Desactivar' if f.active else 'Activar' }}</button>
             </form>
             <form method="post" action="/dashboard/knowledge/files/{{ f.id }}/delete" class="inline-form" onsubmit="return confirm('¿Eliminar este archivo?');">
+              <input type="hidden" name="list_qs" value="{{ pager.extra }}" />
               <button type="submit" class="btn btn-danger btn-sm">Borrar</button>
             </form>
           </div>
@@ -604,15 +633,19 @@
     </tbody>
   </table>
 </div>
+{% include "partials/pager.html" %}
+</section>
 {% else %}
 <div class="empty">
   <p class="empty-title">No hay archivos indexados</p>
   <p class="muted">Sube un PDF, TXT o Markdown para que el agente pueda consultarlo.</p>
 </div>
 {% endif %}
+</div>
 
 <dialog class="modal" id="file-modal">
   <form class="modal-card stack-form" method="post" action="/dashboard/knowledge/files" enctype="multipart/form-data">
+    <input type="hidden" name="list_qs" value="{{ pager.extra }}" />
     <div class="modal-head">
       <div>
         <h2>Subir archivo</h2>
@@ -637,7 +670,9 @@
 
 {% if tab == 'tools' %}
 <p class="muted">Acciones que el agente puede usar al atender un chat. Esta lista no se edita aquí.</p>
-<div class="table-wrap">
+<div class="table-stage">
+<section class="table-panel" aria-label="Acciones">
+<div class="table-wrap table-scroll">
   <table class="data-table">
     <thead>
       <tr>
@@ -655,5 +690,9 @@
     </tbody>
   </table>
 </div>
+{% include "partials/pager.html" %}
+</section>
+</div>
 {% endif %}
+</div>
 {% endblock %}

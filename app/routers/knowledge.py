@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
+from urllib.parse import urlencode
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
@@ -15,6 +16,7 @@ from app.core.agent_behavior import (
     public_behavior_view,
 )
 from app.core.config import get_settings
+from app.core.pagination import make_pager, normalize_page_size, parse_page, safe_list_params
 from app.core.llm_runtime import (
     compose_agent_model,
     fetch_runtime_row,
@@ -50,14 +52,26 @@ ALLOWED_UPLOAD = {".pdf", ".txt", ".md", ".markdown"}
 ALLOWED_PRODUCT_KINDS = set(PRODUCT_KIND_LABELS)
 
 
-def _redirect(tab: str, notice: str = "") -> RedirectResponse:
-    from urllib.parse import quote
+def _page_slice(request: Request, rows: Sequence, page: Optional[str], per: Optional[str]):
+    page_size = normalize_page_size(per)
+    pager = make_pager(
+        request,
+        page=parse_page(page),
+        total=len(rows),
+        page_size=page_size,
+    )
+    return rows[pager.offset : pager.offset + pager.page_size], pager
 
+
+def _redirect(tab: str, notice: str = "", list_qs: str = "") -> RedirectResponse:
     url = f"/dashboard/knowledge/{tab}".rstrip("/") or "/dashboard/knowledge"
     if tab == "":
         url = "/dashboard/knowledge"
+    params = safe_list_params(list_qs)
     if notice:
-        url += f"?notice={quote(notice)}"
+        params["notice"] = notice
+    if params:
+        url += "?" + urlencode(params)
     return RedirectResponse(url=url, status_code=303)
 
 
@@ -249,11 +263,13 @@ async def knowledge_faqs(
     q: str = "",
     notice: str = "",
     edit: Optional[int] = Query(default=None),
+    page: Optional[str] = Query(default=None),
+    per: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_dashboard_auth),
 ):
     store = KnowledgeStore(db)
-    faqs = await store.list_faqs(q=q)
+    faqs, pager = _page_slice(request, await store.list_faqs(q=q), page, per)
     editing = await store.get_faq(edit) if edit else None
     return templates.TemplateResponse(
         "knowledge.html",
@@ -262,6 +278,7 @@ async def knowledge_faqs(
             "tab": "faqs",
             "active_nav": "knowledge",
             "faqs": faqs,
+            "pager": pager,
             "q": q,
             "editing": editing,
             "notice": notice,
@@ -278,6 +295,7 @@ async def knowledge_faq_save(
     answer: str = Form(...),
     category: str = Form(""),
     active: Optional[str] = Form(default=None),
+    list_qs: str = Form(""),
 ):
     store = KnowledgeStore(db)
     fid = int(faq_id) if str(faq_id).strip().isdigit() else None
@@ -290,7 +308,7 @@ async def knowledge_faq_save(
     row.active = active == "on"
     await store.save_faq(row)
     invalidate_instructions_cache()
-    return _redirect("faqs", "FAQ guardada")
+    return _redirect("faqs", "FAQ guardada", list_qs)
 
 
 @router.post("/faqs/{faq_id}/toggle", name="dashboard_knowledge_faq_toggle")
@@ -298,6 +316,7 @@ async def knowledge_faq_toggle(
     faq_id: int,
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_dashboard_auth),
+    list_qs: str = Form(""),
 ):
     store = KnowledgeStore(db)
     row = await store.get_faq(faq_id)
@@ -306,7 +325,7 @@ async def knowledge_faq_toggle(
     row.active = not row.active
     await store.save_faq(row)
     invalidate_instructions_cache()
-    return _redirect("faqs", "FAQ actualizada")
+    return _redirect("faqs", "FAQ actualizada", list_qs)
 
 
 @router.get("/skills", response_class=HTMLResponse, name="dashboard_knowledge_skills")
@@ -314,11 +333,13 @@ async def knowledge_skills(
     request: Request,
     notice: str = "",
     edit: Optional[int] = Query(default=None),
+    page: Optional[str] = Query(default=None),
+    per: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_dashboard_auth),
 ):
     store = KnowledgeStore(db)
-    skills = await store.list_skills()
+    skills, pager = _page_slice(request, await store.list_skills(), page, per)
     editing = await store.get_skill(edit) if edit else None
     return templates.TemplateResponse(
         "knowledge.html",
@@ -327,6 +348,7 @@ async def knowledge_skills(
             "tab": "skills",
             "active_nav": "knowledge",
             "skills": skills,
+            "pager": pager,
             "editing": editing,
             "notice": notice,
         },
@@ -342,6 +364,7 @@ async def knowledge_skill_save(
     when_to_apply: str = Form(""),
     body: str = Form(""),
     active: Optional[str] = Form(default=None),
+    list_qs: str = Form(""),
 ):
     store = KnowledgeStore(db)
     sid = int(skill_id) if str(skill_id).strip().isdigit() else None
@@ -357,7 +380,7 @@ async def knowledge_skill_save(
     row.active = active == "on"
     await store.save_skill(row)
     invalidate_instructions_cache()
-    return _redirect("skills", "Skill guardado")
+    return _redirect("skills", "Skill guardado", list_qs)
 
 
 @router.post("/skills/{skill_id}/toggle", name="dashboard_knowledge_skill_toggle")
@@ -365,6 +388,7 @@ async def knowledge_skill_toggle(
     skill_id: int,
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_dashboard_auth),
+    list_qs: str = Form(""),
 ):
     store = KnowledgeStore(db)
     row = await store.get_skill(skill_id)
@@ -373,7 +397,7 @@ async def knowledge_skill_toggle(
     row.active = not row.active
     await store.save_skill(row)
     invalidate_instructions_cache()
-    return _redirect("skills", "Skill actualizado")
+    return _redirect("skills", "Skill actualizado", list_qs)
 
 
 @router.get("/products", response_class=HTMLResponse, name="dashboard_knowledge_products")
@@ -381,11 +405,13 @@ async def knowledge_products(
     request: Request,
     notice: str = "",
     edit: Optional[int] = Query(default=None),
+    page: Optional[str] = Query(default=None),
+    per: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_dashboard_auth),
 ):
     store = KnowledgeStore(db)
-    products = await store.list_products()
+    products, pager = _page_slice(request, await store.list_products(), page, per)
     editing = await store.get_product(edit) if edit else None
     return templates.TemplateResponse(
         "knowledge.html",
@@ -394,6 +420,7 @@ async def knowledge_products(
             "tab": "products",
             "active_nav": "knowledge",
             "products": products,
+            "pager": pager,
             "editing": editing,
             "notice": notice,
             "kind_labels": PRODUCT_KIND_LABELS,
@@ -415,6 +442,7 @@ async def knowledge_product_save(
     aliases: str = Form(""),
     sort_order: str = Form("0"),
     active: Optional[str] = Form(default=None),
+    list_qs: str = Form(""),
 ):
     store = KnowledgeStore(db)
     pid = int(product_id) if str(product_id).strip().isdigit() else None
@@ -438,7 +466,7 @@ async def knowledge_product_save(
     row.active = active == "on"
     await store.save_product(row)
     invalidate_instructions_cache()
-    return _redirect("products", "Producto guardado")
+    return _redirect("products", "Producto guardado", list_qs)
 
 
 @router.post("/products/{product_id}/toggle", name="dashboard_knowledge_product_toggle")
@@ -446,6 +474,7 @@ async def knowledge_product_toggle(
     product_id: int,
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_dashboard_auth),
+    list_qs: str = Form(""),
 ):
     store = KnowledgeStore(db)
     row = await store.get_product(product_id)
@@ -454,18 +483,20 @@ async def knowledge_product_toggle(
     row.active = not row.active
     await store.save_product(row)
     invalidate_instructions_cache()
-    return _redirect("products", "Producto actualizado")
+    return _redirect("products", "Producto actualizado", list_qs)
 
 
 @router.get("/files", response_class=HTMLResponse, name="dashboard_knowledge_files")
 async def knowledge_files(
     request: Request,
     notice: str = "",
+    page: Optional[str] = Query(default=None),
+    per: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_dashboard_auth),
 ):
     store = KnowledgeStore(db)
-    files = await store.list_files()
+    files, pager = _page_slice(request, await store.list_files(), page, per)
     return templates.TemplateResponse(
         "knowledge.html",
         {
@@ -473,6 +504,7 @@ async def knowledge_files(
             "tab": "files",
             "active_nav": "knowledge",
             "files": files,
+            "pager": pager,
             "notice": notice,
         },
     )
@@ -483,6 +515,7 @@ async def knowledge_file_upload(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_dashboard_auth),
     upload: UploadFile = File(...),
+    list_qs: str = Form(""),
 ):
     name = Path(upload.filename or "archivo").name
     suffix = Path(name).suffix.lower()
@@ -505,7 +538,7 @@ async def knowledge_file_upload(
     await store.save_file(row)
     await ingest_file(db, row)
     invalidate_instructions_cache()
-    return _redirect("files", "Archivo indexado")
+    return _redirect("files", "Archivo indexado", list_qs)
 
 
 @router.post("/files/{file_id}/reindex", name="dashboard_knowledge_file_reindex")
@@ -513,6 +546,7 @@ async def knowledge_file_reindex(
     file_id: int,
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_dashboard_auth),
+    list_qs: str = Form(""),
 ):
     store = KnowledgeStore(db)
     row = await store.get_file(file_id)
@@ -520,7 +554,7 @@ async def knowledge_file_reindex(
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     await ingest_file(db, row)
     invalidate_instructions_cache()
-    return _redirect("files", "Reindexado")
+    return _redirect("files", "Reindexado", list_qs)
 
 
 @router.post("/files/{file_id}/toggle", name="dashboard_knowledge_file_toggle")
@@ -528,6 +562,7 @@ async def knowledge_file_toggle(
     file_id: int,
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_dashboard_auth),
+    list_qs: str = Form(""),
 ):
     store = KnowledgeStore(db)
     row = await store.get_file(file_id)
@@ -536,7 +571,7 @@ async def knowledge_file_toggle(
     row.active = not row.active
     await store.save_file(row)
     invalidate_instructions_cache()
-    return _redirect("files", "Archivo actualizado")
+    return _redirect("files", "Archivo actualizado", list_qs)
 
 
 @router.post("/files/{file_id}/delete", name="dashboard_knowledge_file_delete")
@@ -544,6 +579,7 @@ async def knowledge_file_delete(
     file_id: int,
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_dashboard_auth),
+    list_qs: str = Form(""),
 ):
     store = KnowledgeStore(db)
     row = await store.get_file(file_id)
@@ -557,7 +593,7 @@ async def knowledge_file_delete(
     except OSError:
         pass
     invalidate_instructions_cache()
-    return _redirect("files", "Archivo eliminado")
+    return _redirect("files", "Archivo eliminado", list_qs)
 
 
 @router.get("/model", response_class=HTMLResponse, name="dashboard_knowledge_model")
@@ -673,15 +709,19 @@ async def knowledge_agent_save(
 @router.get("/tools", response_class=HTMLResponse, name="dashboard_knowledge_tools")
 async def knowledge_tools(
     request: Request,
+    page: Optional[str] = Query(default=None),
+    per: Optional[str] = Query(default=None),
     _: None = Depends(require_dashboard_auth),
 ):
+    tools, pager = _page_slice(request, REGISTERED_TOOLS, page, per)
     return templates.TemplateResponse(
         "knowledge.html",
         {
             "request": request,
             "tab": "tools",
             "active_nav": "knowledge",
-            "tools": REGISTERED_TOOLS,
+            "tools": tools,
+            "pager": pager,
             "notice": "",
         },
     )

@@ -1,20 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Prospectos — GIA{% endblock %}
+{% block body_class %}table-view{% endblock %}
 {% block content %}
+<div class="table-page">
 <header class="page-header">
   <div>
     <p class="eyebrow">Ventas GIA</p>
     <h1>Prospectos calificados</h1>
     <p class="muted">Cotizaciones y solicitudes de material capturadas por el agente. Listas para seguimiento comercial.</p>
   </div>
-  {% if conversations %}
+  {% if pager.total %}
   <div class="stat-pill">
-    <span class="stat-value">{{ conversations|length }}</span>
+    <span class="stat-value">{{ pager.total }}</span>
     <span class="stat-label">prospectos</span>
   </div>
   {% endif %}
 </header>
 
+<div class="table-stage">
 <form class="filters" method="get" action="/dashboard/leads">
   <div class="filters-fields">
     <label>
@@ -35,11 +38,13 @@
       </select>
     </label>
   </div>
+  {% if pager.page_size != 25 %}<input type="hidden" name="per" value="{{ pager.page_size }}" />{% endif %}
   <button type="submit">Aplicar filtros</button>
 </form>
 
 {% if conversations %}
-<div class="table-wrap">
+<section class="table-panel" aria-label="Prospectos">
+<div class="table-wrap table-scroll">
   <table class="data-table">
     <thead>
       <tr>
@@ -107,6 +112,8 @@
     </tbody>
   </table>
 </div>
+{% include "partials/pager.html" %}
+</section>
 {% else %}
 <div class="empty">
   <div class="empty-icon" aria-hidden="true">
@@ -116,4 +123,6 @@
   <p class="muted">Cuando el agente de Meta registre una cotización vía <code>POST /leads</code>, aparecerá aquí para el equipo de ventas.</p>
 </div>
 {% endif %}
+</div>
+</div>
 {% endblock %}

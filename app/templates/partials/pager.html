@@ -1,0 +1,40 @@
+{% if pager.total %}
+<nav class="pager" aria-label="Paginación">
+  <p class="pager-meta">{{ pager.start }}–{{ pager.end }} de {{ pager.total }}</p>
+  {% if pager.show_nav %}
+  <div class="pager-controls">
+    {% if pager.has_prev %}
+    <a class="pager-btn" href="{{ pager.prev_url }}" rel="prev">Anterior</a>
+    {% else %}
+    <span class="pager-btn is-disabled" aria-disabled="true">Anterior</span>
+    {% endif %}
+    {% for item in pager.links %}
+      {% if item.ellipsis %}
+      <span class="pager-ellipsis" aria-hidden="true">…</span>
+      {% elif item.current %}
+      <span class="pager-btn is-current" aria-current="page">{{ item.n }}</span>
+      {% else %}
+      <a class="pager-btn" href="{{ item.url }}">{{ item.n }}</a>
+      {% endif %}
+    {% endfor %}
+    {% if pager.has_next %}
+    <a class="pager-btn" href="{{ pager.next_url }}" rel="next">Siguiente</a>
+    {% else %}
+    <span class="pager-btn is-disabled" aria-disabled="true">Siguiente</span>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if pager.show_sizes %}
+  <div class="pager-sizes" aria-label="Filas por página">
+    <span class="pager-size-label">Filas</span>
+    {% for size in pager.sizes %}
+      {% if size.current %}
+      <span class="pager-btn is-current" aria-current="true">{{ size.n }}</span>
+      {% else %}
+      <a class="pager-btn" href="{{ size.url }}">{{ size.n }}</a>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</nav>
+{% endif %}

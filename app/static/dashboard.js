@@ -2,11 +2,22 @@
   var toggle = document.querySelector("[data-nav-toggle]");
   var nav = document.getElementById("primary-nav");
 
+  function syncTopbarHeight() {
+    if (!document.body.classList.contains("table-view")) return;
+    var bar = document.querySelector(".topbar");
+    if (!bar) return;
+    document.body.style.setProperty("--topbar-h", bar.offsetHeight + "px");
+  }
+
+  syncTopbarHeight();
+  window.addEventListener("resize", syncTopbarHeight);
+
   function setOpen(open) {
     if (!toggle) return;
     document.body.classList.toggle("nav-open", open);
     toggle.setAttribute("aria-expanded", open ? "true" : "false");
     toggle.setAttribute("aria-label", open ? "Cerrar menú" : "Abrir menú");
+    requestAnimationFrame(syncTopbarHeight);
   }
 
   if (toggle && nav) {

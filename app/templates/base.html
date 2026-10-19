@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="/static/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="/static/dashboard.css" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=9" />
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% if active_nav is defined %}
@@ -57,7 +57,7 @@
     {% block content %}{% endblock %}
   </main>
   {% if active_nav is defined %}
-  <script src="/static/dashboard.js"></script>
+  <script src="/static/dashboard.js?v=8"></script>
   {% endif %}
 </body>
 </html>
