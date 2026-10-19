@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ service }}{% endblock %}
+{% block body_class %}is-login{% endblock %}
+{% block main_class %}login-shell{% endblock %}
+{% block content %}
+<aside class="login-aside">
+  <div class="login-aside-inner">
+    <div class="brand brand-on-dark">
+      <img class="brand-logo" src="/static/logo.png" alt="Grupo Industrial Acerero" width="1024" height="393" />
+    </div>
+    <h2 class="login-aside-title">Del chat de Meta al equipo de ventas.</h2>
+    <p class="login-aside-copy">WhatsApp y Messenger llegan al agente GIA. Este servicio deja los prospectos listos para revisar en el panel.</p>
+    <ul class="login-aside-points">
+      <li>Cotizaciones calificadas por el agente</li>
+      <li>Material, volumen y urgencia de entrega</li>
+      <li>Seguimiento listo para el equipo de ventas</li>
+    </ul>
+  </div>
+</aside>
+<section class="login-card">
+  <div class="login-card-inner">
+    <img class="brand-logo brand-logo-ink" src="/static/logo.png" alt="Grupo Industrial Acerero" width="1024" height="393" />
+    <p class="eyebrow">Gateway</p>
+    <h1>{{ service }}</h1>
+    <p class="muted">El servicio está en marcha. Entra al panel para ver prospectos o consulta la documentación de la API.</p>
+    <p class="home-status"><span class="home-status-dot" aria-hidden="true"></span> En línea</p>
+    <div class="home-actions">
+      <a class="btn" href="{{ dashboard }}">Entrar al panel</a>
+      <a class="btn btn-secondary" href="{{ docs }}">Documentación API</a>
+    </div>
+    <ul class="home-integrations">
+      <li>
+        <span>Chatwoot</span>
+        <span class="home-pill {% if chatwoot_enabled %}is-on{% else %}is-off{% endif %}">{{ "Activo" if chatwoot_enabled else "Apagado" }}</span>
+      </li>
+      <li>
+        <span>Odoo</span>
+        <span class="home-pill {% if odoo_enabled %}is-on{% else %}is-off{% endif %}">{{ "Activo" if odoo_enabled else "Apagado" }}</span>
+      </li>
+    </ul>
+  </div>
+</section>
+{% endblock %}

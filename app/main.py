@@ -83,8 +83,8 @@ app.include_router(knowledge_router.router)
 
 
 @app.get("/", include_in_schema=False)
-async def root():
-    return {
+async def root(request: Request):
+    payload = {
         "service": settings.app_name,
         "status": "running",
         "docs": "/docs",
@@ -92,3 +92,11 @@ async def root():
         "odoo_enabled": settings.odoo_enabled,
         "chatwoot_enabled": settings.chatwoot_enabled,
     }
+    if "text/html" in request.headers.get("accept", ""):
+        from app.routers.dashboard import templates
+
+        return templates.TemplateResponse(
+            "home.html",
+            {"request": request, **payload},
+        )
+    return payload

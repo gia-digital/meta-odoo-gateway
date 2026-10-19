@@ -1,5 +1,10 @@
 # GIA · Prospectos (Chatwoot → Gateway)
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="app/static/logo-on-dark.png" />
+  <img src="app/static/logo.png" alt="Grupo Industrial Acerero" width="280" />
+</picture>
+
 Servidor FastAPI para **Grupo Industrial Acerero**: hospeda el **agente de IA** (Agent Bot de Chatwoot / WhatsApp), guarda conversaciones y **prospectos calificados** en PostgreSQL, y los muestra en un dashboard interno. La sincronización con **Odoo** queda para una fase posterior (`ODOO_ENABLED=false` por defecto).
 
 ## Arquitectura (fase actual)

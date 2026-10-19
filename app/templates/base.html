@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light" />
   <title>{% block title %}GIA · Prospectos{% endblock %}</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png" sizes="192x192" />
+  <link rel="apple-touch-icon" href="/static/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="/static/dashboard.css" />
@@ -14,11 +16,8 @@
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true">GIA</span>
-        <div class="brand-text">
-          <span class="brand-name">Grupo Industrial Acerero</span>
-          <span class="brand-sub">Prospectos · Ventas</span>
-        </div>
+        <img class="brand-logo" src="/static/logo.png" alt="Grupo Industrial Acerero" width="1024" height="393" />
+        <span class="brand-sub">Prospectos · Ventas</span>
       </div>
       <nav class="nav-pills" id="primary-nav" aria-label="Principal">
         <a href="/dashboard/overview" class="{% if active_nav == 'overview' %}active{% endif %}">
