@@ -71,10 +71,14 @@ Si cambias `POSTGRES_PASSWORD` en el host, alinea usuario/password en `DATABASE_
 En el `.env` del droplet agrega también:
 
 ```env
-DOMAIN=gia.init.com.mx
+DOMAIN=gia.init.com.mx, leads.giacerero.com
 ```
 
+Varios hosts van separados por coma; Caddy pide un certificado Let's Encrypt por cada uno. El DNS A de **cada** host debe apuntar a la IP del droplet **antes** de levantar Caddy.
+
 (No uses `ACME_EMAIL=admin@localhost`; si pones email, que sea uno real.)
+
+La variable de GitHub Actions `DOMAIN` (smoke test / link del environment) debe ser **un solo** host, p. ej. `leads.giacerero.com` o `gia.init.com.mx` — no la lista completa.
 
 Abre puertos (Caddy usa 80/443 para HTTP→HTTPS y Let's Encrypt):
 
@@ -119,7 +123,7 @@ Y en **Variables** (misma pantalla, pestaña Variables):
 
 | Variable | Descripción |
 |---|---|
-| `DOMAIN` | (Opcional) p. ej. `gia.init.com.mx`. Activa el smoke test HTTPS externo y el link del environment |
+| `DOMAIN` | (Opcional) **un** host, p. ej. `leads.giacerero.com`. Activa el smoke test HTTPS y el link del environment. Los alias extra van solo en el `.env` del droplet (`DOMAIN=a, b`) |
 
 Los jobs de deploy y mantenimiento usan el Environment **production** (GitHub lo crea solo la primera vez). Si le agregas *Required reviewers*, cada deploy **y** el mantenimiento semanal esperan aprobación. Los secrets pueden vivir a nivel repo o del environment.
 
@@ -173,12 +177,13 @@ cat .deploy.env
 docker compose -f docker-compose.prod.yml --env-file .deploy.env ps
 curl -fsS http://127.0.0.1:8000/health
 curl -fsSI https://gia.init.com.mx/health
+curl -fsSI https://leads.giacerero.com/health
 ```
 
 URLs:
 
-- Dashboard: `https://gia.init.com.mx/dashboard`
-- Webhook Chatwoot: `https://gia.init.com.mx/webhook/chatwoot`
+- Dashboard: `https://leads.giacerero.com/dashboard` (también `https://gia.init.com.mx/dashboard`)
+- Webhook Chatwoot: `https://leads.giacerero.com/webhook/chatwoot`
 
 Imagen publicada: `ghcr.io/gia-digital/meta-odoo-gateway:<short-sha>` y `:latest`.
 
@@ -236,13 +241,13 @@ Usa el nombre literal `meta-odoo-gateway_gateway-pgdata` (no un placeholder). Si
 
 Confirma el nombre del volumen con `docker volume ls | grep gateway`. Al primer boot el API hace `CREATE EXTENSION vector`, crea tablas y **seed** de `agent_info` (FAQs, skills, negocio, PDFs).
 
-Dashboard: `https://gia.init.com.mx/dashboard/knowledge`
+Dashboard: `https://leads.giacerero.com/dashboard/knowledge`
 
 ## 8. HTTPS (Caddy)
 
 Caddy va en `docker-compose.prod.yml` y usa [`Caddyfile`](../Caddyfile):
 
-- Certificado Let's Encrypt automático para `DOMAIN`
+- Certificado Let's Encrypt automático por cada host en `DOMAIN` (coma-separados)
 - `reverse_proxy` a `api:8000`
 - Puertos públicos: **80** y **443**
 
@@ -292,7 +297,28 @@ docker logs meta-odoo-gateway --tail 150
 
 ### HTTPS no arranca / challenge ACME falla
 
-- DNS A de `DOMAIN` debe apuntar a la IP del droplet
+- DNS A de **cada** host en `DOMAIN` debe apuntar a la IP del droplet
 - Puertos 80 y 443 abiertos (ufw + firewall de DigitalOcean)
 - No otro proceso usando 80/443
 - Revisa: `docker compose ... logs caddy`
+
+### Agregar un dominio nuevo (ej. `leads.giacerero.com`)
+
+1. Crea el registro DNS **A** → IP del droplet y espera propagación (`dig +short leads.giacerero.com`).
+2. En el droplet, edita `.env`:
+   ```env
+   DOMAIN=gia.init.com.mx, leads.giacerero.com
+   ```
+3. Alinea `.deploy.env` y reinicia Caddy (o re-lanza **Deploy** en GitHub, que copia `DOMAIN` del `.env`):
+   ```bash
+   cd ~/meta-odoo-gateway
+   DOMAIN_LINE=$(grep -E '^DOMAIN=' .env | tail -1)
+   if grep -q '^DOMAIN=' .deploy.env; then
+     sed -i "s|^DOMAIN=.*|$DOMAIN_LINE|" .deploy.env
+   else
+     echo "$DOMAIN_LINE" >> .deploy.env
+   fi
+   docker compose -f docker-compose.prod.yml --env-file .deploy.env up -d caddy
+   docker compose -f docker-compose.prod.yml --env-file .deploy.env logs -f caddy
+   ```
+4. Verifica: `curl -fsSI https://leads.giacerero.com/health`

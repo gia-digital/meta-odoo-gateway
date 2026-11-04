@@ -79,7 +79,7 @@ jobs:
 
       - name: Caddyfile
         run: |
-          docker run --rm -e DOMAIN=ci.invalid \
+          docker run --rm -e DOMAIN='ci.invalid, other.invalid' \
             -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 

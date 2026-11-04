@@ -23,7 +23,7 @@ WhatsApp → Chatwoot inbox (Agent Bot)
 
    `https://<tu-dominio-gateway>/webhook/chatwoot`
 
-   Ejemplo: `https://gia.init.com.mx/webhook/chatwoot`
+   Ejemplo: `https://leads.giacerero.com/webhook/chatwoot`
 
 4. Copia el **access_token** del bot → `CHATWOOT_BOT_TOKEN`.
 5. Si Chatwoot muestra un webhook secret → `CHATWOOT_WEBHOOK_SECRET`.
@@ -69,7 +69,7 @@ Reinicia el API tras cambiar env.
 
 El bot **no** mete todas las FAQs en el system prompt. El conocimiento vive en Postgres + **pgvector** y se edita en:
 
-`https://gia.init.com.mx/dashboard/knowledge`
+`https://leads.giacerero.com/dashboard/knowledge`
 
 | Tipo | Dónde |
 |------|--------|

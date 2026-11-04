@@ -3,7 +3,7 @@
 # Caddy termina TLS (Let's Encrypt) y hace reverse proxy a la API.
 #
 # Requisitos en .env del droplet:
-#   DOMAIN=gia.init.com.mx
+#   DOMAIN=gia.init.com.mx, leads.giacerero.com
 #   ACME_EMAIL=ops@tuempresa.com
 #
 # Uso (deploy/deploy.sh lo hace en cada deploy):
@@ -49,7 +49,8 @@ services:
       - "443:443"
       - "443:443/udp"
     environment:
-      DOMAIN: ${DOMAIN:-gia.init.com.mx}
+      # Coma-separado → varios sitios en el mismo Caddyfile ({$DOMAIN}).
+      DOMAIN: ${DOMAIN:-gia.init.com.mx, leads.giacerero.com}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

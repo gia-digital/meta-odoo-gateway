@@ -5,7 +5,7 @@
 ### Semana 1 — Setup de infraestructura
 
 - [ ] Aprovisionar servidor (cloud o on-prem) con Docker
-- [ ] Configurar dominio + HTTPS (Caddy/Cloudflare Tunnel)
+- [x] Configurar dominio + HTTPS (Caddy/Cloudflare Tunnel)
 - [ ] Crear Agent Bot en Chatwoot y apuntar a `/webhook/chatwoot`
 - [ ] Crear usuario de integración y API Key en Odoo (fase posterior)
 - [ ] Clonar este repo, configurar `.env`, levantar con `docker compose up`

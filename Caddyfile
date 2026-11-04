@@ -1,3 +1,5 @@
+# {$DOMAIN} admite uno o varios hosts separados por coma
+# (ej. gia.init.com.mx, leads.giacerero.com). Let's Encrypt por cada uno.
 {$DOMAIN} {
 	encode gzip
 	reverse_proxy api:8000
