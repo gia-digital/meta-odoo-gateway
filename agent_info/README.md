@@ -6,6 +6,7 @@ Payloads versionados para el seed de Postgres + pgvector. El Agent Bot de Chatwo
 |---------|-----|
 | `faqs.json` | FAQs → `knowledge_faqs` |
 | `business_info.json` | Perfil de negocio → `knowledge_business` |
+| `agent_instructions.md` | Instrucciones editables → `knowledge_business.agent_instructions` (también `/dashboard/knowledge/instructions`) |
 | `products.json` | Catálogo y servicios → `knowledge_products` |
 | `product_specs.json` | Anexo A: calibres, espesores, pesos y rendimientos (se fusiona al importar/seed) |
 | `skills.json` | Skills del agente → `knowledge_skills` |
