@@ -29,6 +29,10 @@ from app.models.conversation import (
 from app.services.agent_knowledge import build_agent_instructions
 from app.services.catalog_document import deliver_catalog, find_catalog_pdf
 from app.services.chatwoot_client import ChatwootClient, resolve_handoff_queue
+from app.services.contact_profile import (
+    format_known_contact_block,
+    get_contact_profile,
+)
 from app.services.conversation import ConversationService
 from app.services.knowledge.retriever import format_hits, retrieve_knowledge
 
@@ -126,6 +130,7 @@ def sandbox_register_lead(
     timeline: str = "",
     preferred_contact_time: str = "",
     user_name: str = "",
+    user_company: str = "",
     user_phone: str = "",
     user_email: str = "",
     handed_off: bool = False,
@@ -137,6 +142,9 @@ def sandbox_register_lead(
     if user_name.strip():
         conv.user_name = _clip_field(user_name, 255)
         bot.user_name = conv.user_name
+    if user_company.strip():
+        conv.user_company = _clip_field(user_company, 255)
+        bot.user_company = conv.user_company
     if user_phone.strip():
         conv.user_phone = _clip_field(user_phone, 64)
         bot.user_phone = conv.user_phone
@@ -271,6 +279,7 @@ class BotContext:
     external_user_id: str
     chatwoot_conversation_id: int
     user_name: Optional[str] = None
+    user_company: Optional[str] = None
     user_phone: Optional[str] = None
     user_email: Optional[str] = None
     handed_off: bool = False
@@ -283,7 +292,9 @@ FRESH_CYCLE_INSTRUCTION = (
     "CICLO NUEVO: Este cliente ya tuvo un pedido anterior, cerrado en Chatwoot. "
     "No retomes material, toneladas ni acuerdos de ese ciclo. "
     "Si dice que quiere lo mismo que la vez pasada, pide de nuevo producto y cantidad. "
-    "Trata este mensaje como el inicio de un pedido nuevo."
+    "Trata este mensaje como el inicio de un pedido nuevo. "
+    "Si hay DATOS DE CONTACTO GUARDADOS, confirma en corto si siguen igual "
+    "cuando toque pedir contacto; no los vuelvas a solicitar de cero."
 )
 
 
@@ -358,6 +369,7 @@ def _build_tools():
         timeline: str = "",
         preferred_contact_time: str = "",
         user_name: str = "",
+        user_company: str = "",
         user_phone: str = "",
         user_email: str = "",
         handed_off: bool = False,
@@ -368,6 +380,8 @@ def _build_tools():
         Usa SOLO si el material es del catálogo GIA (acero al carbono) y hay mayoreo
         (mín. ~1 ton/partida y 3 ton total) o el cliente pidió hablar con un asesor.
         NO uses para inoxidable, aluminio, ni pedidos de menudeo/pocas láminas bajo mínimo.
+        Pasa user_name, user_company, user_phone y user_email cuando el cliente los dio
+        o confirmó (aunque ya estuvieran guardados).
         Si handed_off=true, queue elige el equipo Chatwoot: "reception" (default) o
         "important" (prospectos de alto valor). Criterios en la skill de escalado.
         Tú sigues contestando tras escalar hasta que un humano escriba al cliente.
@@ -383,6 +397,7 @@ def _build_tools():
                 timeline=timeline,
                 preferred_contact_time=preferred_contact_time,
                 user_name=user_name,
+                user_company=user_company,
                 user_phone=user_phone,
                 user_email=user_email,
                 handed_off=handed_off,
@@ -394,6 +409,7 @@ def _build_tools():
             channel=bot.channel,
             external_user_id=bot.external_user_id,
             user_name=user_name or bot.user_name,
+            user_company=user_company or bot.user_company,
             user_phone=user_phone or bot.user_phone or bot.external_user_id,
             user_email=user_email or bot.user_email,
             reason=reason,
@@ -406,6 +422,10 @@ def _build_tools():
             qualification_source=QualificationSource.chatwoot_agent,
         )
         bot.conversation = conv
+        bot.user_name = conv.user_name
+        bot.user_company = conv.user_company
+        bot.user_phone = conv.user_phone
+        bot.user_email = conv.user_email
         if handed_off:
             bot.handed_off = True
             team_id, team_label = resolve_handoff_queue(queue)
@@ -622,6 +642,31 @@ async def run_gia_agent(
 
     instructions = await build_agent_instructions(ctx.db)
     instructions = f"{instructions}\n\n---\n\n{hours_prompt_block()}"
+    if not ctx.sandbox:
+        profile = await get_contact_profile(ctx.db, ctx.channel, ctx.external_user_id)
+        if profile is not None:
+            ctx.user_name = ctx.user_name or profile.display_name
+            ctx.user_company = ctx.user_company or profile.company
+            ctx.user_phone = ctx.user_phone or profile.phone
+            ctx.user_email = ctx.user_email or profile.email
+            conv = ctx.conversation
+            if not conv.user_name and profile.display_name:
+                conv.user_name = profile.display_name
+            if not getattr(conv, "user_company", None) and profile.company:
+                conv.user_company = profile.company
+            if not conv.user_phone and profile.phone:
+                conv.user_phone = profile.phone
+            if not conv.user_email and profile.email:
+                conv.user_email = profile.email
+    known = format_known_contact_block(
+        user_name=ctx.user_name or getattr(ctx.conversation, "user_name", None),
+        user_company=ctx.user_company
+        or getattr(ctx.conversation, "user_company", None),
+        user_phone=ctx.user_phone or getattr(ctx.conversation, "user_phone", None),
+        user_email=ctx.user_email or getattr(ctx.conversation, "user_email", None),
+    )
+    if known:
+        instructions = f"{instructions}\n\n---\n\n{known}"
     if ctx.fresh_cycle:
         instructions = f"{instructions}\n\n---\n\n{FRESH_CYCLE_INSTRUCTION}"
     elif _conversation_handed_off(ctx.conversation) or ctx.handed_off:

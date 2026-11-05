@@ -92,6 +92,9 @@ async def test_run_gia_agent_uses_handed_off_fallback_when_output_empty(monkeypa
     monkeypatch.setattr("app.services.gia_agent.retrieve_knowledge", AsyncMock(return_value=[]))
     monkeypatch.setattr("app.services.gia_agent.get_llm_runtime", AsyncMock())
     monkeypatch.setattr("app.services.gia_agent.build_gia_agent", lambda *a, **k: object())
+    monkeypatch.setattr(
+        "app.services.gia_agent.get_contact_profile", AsyncMock(return_value=None)
+    )
     monkeypatch.setattr("agents.Runner", FakeRunner)
 
     from app.services.gia_agent import run_gia_agent

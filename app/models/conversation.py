@@ -53,6 +53,34 @@ class InboxStatus(str, enum.Enum):
     failed = "failed"
 
 
+class ContactProfile(Base):
+    """Identidad estable del contacto entre ciclos/pedidos (no es el requerimiento)."""
+
+    __tablename__ = "contact_profiles"
+    __table_args__ = (
+        UniqueConstraint(
+            "channel",
+            "external_user_id",
+            name="uq_contact_profiles_channel_external",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    channel: Mapped[Channel] = mapped_column(Enum(Channel), index=True, nullable=False)
+    external_user_id: Mapped[str] = mapped_column(String(512), index=True, nullable=False)
+    display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    company: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class Conversation(Base):
     __tablename__ = "conversations"
 
@@ -61,6 +89,7 @@ class Conversation(Base):
     # Instagram/Chatwoot source_id puede superar 128 (mid base64 ~160+)
     external_user_id: Mapped[str] = mapped_column(String(512), index=True, nullable=False)
     user_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    user_company: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     user_phone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     user_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 

@@ -142,6 +142,7 @@ def _old_cycle(**overrides):
         resolved_at=None,
         status=ConversationStatus.handed_off,
         user_name="Ana",
+        user_company="Aceros del Norte",
         user_phone="5215512345678",
         user_email="ana@example.com",
         product_interest="varilla",
@@ -155,6 +156,29 @@ def _old_cycle(**overrides):
     return SimpleNamespace(**data)
 
 
+def _profile_from_old(old) -> SimpleNamespace:
+    return SimpleNamespace(
+        display_name=old.user_name,
+        company=getattr(old, "user_company", None),
+        phone=old.user_phone,
+        email=old.user_email,
+    )
+
+
+def _patch_profile(monkeypatch, old=None):
+    profile = _profile_from_old(old) if old is not None else SimpleNamespace(
+        display_name=None, company=None, phone=None, email=None
+    )
+
+    async def upsert(*_args, **_kwargs):
+        return profile
+
+    monkeypatch.setattr(
+        "app.services.conversation.upsert_contact_profile", upsert
+    )
+    return profile
+
+
 @pytest.mark.asyncio
 async def test_inbound_after_window_starts_empty_cycle(monkeypatch):
     monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
@@ -166,6 +190,7 @@ async def test_inbound_after_window_starts_empty_cycle(monkeypatch):
     old = _old_cycle(
         resolved_at=datetime.now(timezone.utc) - timedelta(days=40)
     )
+    _patch_profile(monkeypatch, old)
     created: dict = {}
 
     async def latest(*_args, **_kwargs):
@@ -201,6 +226,7 @@ async def test_inbound_after_window_starts_empty_cycle(monkeypatch):
     assert old.lead_summary == "10 ton"
     assert old.messages
     assert created["user_name"] == "Ana"
+    assert created["user_company"] == "Aceros del Norte"
     assert created["user_phone"] == "5215512345678"
     assert created["user_email"] == "ana@example.com"
     get_settings.cache_clear()
@@ -215,6 +241,7 @@ async def test_inbound_within_window_reopens_same_cycle(monkeypatch):
     get_settings.cache_clear()
     service, db = _service()
     old = _old_cycle(resolved_at=datetime.now(timezone.utc) - timedelta(hours=2))
+    _patch_profile(monkeypatch, old)
 
     async def latest(*_args, **_kwargs):
         return old
@@ -248,6 +275,7 @@ async def test_resolved_payload_without_timestamp_starts_new_cycle(monkeypatch):
     get_settings.cache_clear()
     service, db = _service()
     old = _old_cycle(resolved_at=None)
+    _patch_profile(monkeypatch, old)
     created: dict = {}
 
     async def latest(*_args, **_kwargs):
@@ -271,6 +299,7 @@ async def test_resolved_payload_without_timestamp_starts_new_cycle(monkeypatch):
     assert conv.fresh_cycle is True
     assert conv.id == 4
     assert created["user_name"] == "Ana"
+    assert created["user_company"] == "Aceros del Norte"
     db.commit.assert_awaited()
     get_settings.cache_clear()
 

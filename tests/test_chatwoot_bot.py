@@ -296,11 +296,16 @@ async def test_create_lead_chatwoot_source(monkeypatch):
     fake_conv.timeline = None
     fake_conv.preferred_contact_time = None
     fake_conv.user_name = None
+    fake_conv.user_company = None
     fake_conv.user_phone = None
     fake_conv.user_email = None
     fake_conv.qualified_at = None
 
     service.get_or_create = AsyncMock(return_value=fake_conv)
+    monkeypatch.setattr(
+        "app.services.conversation.upsert_contact_profile",
+        AsyncMock(return_value=MagicMock()),
+    )
 
     result = await service.create_lead_from_payload(
         channel=Channel.whatsapp,
