@@ -102,3 +102,54 @@ async def test_run_gia_agent_uses_handed_off_fallback_when_output_empty(monkeypa
     reply = await run_gia_agent(ctx=ctx, user_message="Sí, por favor")
     assert "ya quedó registrado" in reply
     get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_run_gia_agent_strips_meta_prefix(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", "admin")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    conv = SimpleNamespace(
+        id=2,
+        status=ConversationStatus.active,
+        handed_off_at=None,
+        messages=[],
+    )
+    ctx = BotContext(
+        db=MagicMock(),
+        conversation=conv,
+        channel=Channel.whatsapp,
+        external_user_id="5215511112222",
+        chatwoot_conversation_id=2,
+    )
+
+    class FakeResult:
+        final_output = (
+            "Two sheets is far below the 3-ton minimum, so this is a menudeo case. "
+            "Short reply, no lead, no distributors, no contact data.\n\n"
+            "Manejamos puro mayoreo desde 3 toneladas. ¿Alcanza a consolidar?"
+        )
+
+    class FakeRunner:
+        @staticmethod
+        async def run(*args, **kwargs):
+            return FakeResult()
+
+    monkeypatch.setattr("app.services.gia_agent.build_agent_instructions", AsyncMock(return_value="inst"))
+    monkeypatch.setattr("app.services.gia_agent.retrieve_knowledge", AsyncMock(return_value=[]))
+    monkeypatch.setattr("app.services.gia_agent.get_llm_runtime", AsyncMock())
+    monkeypatch.setattr("app.services.gia_agent.build_gia_agent", lambda *a, **k: object())
+    monkeypatch.setattr(
+        "app.services.gia_agent.get_contact_profile", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr("agents.Runner", FakeRunner)
+
+    from app.services.gia_agent import run_gia_agent
+
+    reply = await run_gia_agent(ctx=ctx, user_message="Quiero dos láminas")
+    assert reply.startswith("Manejamos puro mayoreo")
+    assert "Short reply" not in reply
+    get_settings.cache_clear()

@@ -28,6 +28,8 @@ def _fast_behavior(**overrides) -> AgentBehavior:
 
 def test_tool_rules_tell_llm_when_to_split():
     assert "MENSAJES WHATSAPP" in TOOL_RULES
+    assert "SALIDA AL CLIENTE" in TOOL_RULES
+    assert "PROHIBIDO" in TOOL_RULES and "inglés" in TOOL_RULES.lower()
     assert "---" in TOOL_RULES
     assert "NUNCA separes" in TOOL_RULES or "misma idea" in TOOL_RULES.lower()
     assert "send_catalog" in TOOL_RULES
