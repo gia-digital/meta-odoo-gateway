@@ -620,6 +620,7 @@ async def _process_incoming_message(
             external_user_id=external_user_id,
             chatwoot_conversation_id=cw_conv_id,
             user_name=user_name or conv.user_name,
+            user_company=getattr(conv, "user_company", None),
             user_phone=user_phone or conv.user_phone,
             user_email=user_email or conv.user_email,
             handed_off=conv.status == ConversationStatus.handed_off

@@ -19,7 +19,10 @@ class LeadCreate(BaseModel):
         description="ID del usuario en el canal (teléfono WhatsApp u otro id)",
     )
     user_name: Optional[str] = Field(
-        default=None, description="Nombre completo del contacto o razón social"
+        default=None, description="Nombre completo del contacto"
+    )
+    user_company: Optional[str] = Field(
+        default=None, description="Empresa o razón social del contacto"
     )
     user_phone: Optional[str] = Field(
         default=None, description="Teléfono de contacto"
@@ -63,6 +66,7 @@ class LeadOut(BaseModel):
     channel: str
     external_user_id: str
     user_name: Optional[str] = None
+    user_company: Optional[str] = None
     user_phone: Optional[str] = None
     user_email: Optional[str] = None
     status: str
@@ -153,6 +157,7 @@ class ConversationOut(BaseModel):
     channel: str
     external_user_id: str
     user_name: Optional[str]
+    user_company: Optional[str] = None
     user_phone: Optional[str] = None
     user_email: Optional[str] = None
     status: str

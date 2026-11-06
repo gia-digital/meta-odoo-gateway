@@ -29,6 +29,11 @@ from app.models.conversation import (
     QualificationSource,
 )
 from app.models.schemas import NormalizedMessage, OdooLeadCreate
+from app.services.contact_profile import (
+    apply_profile_to_conversation,
+    sync_conversation_contact_fields,
+    upsert_contact_profile,
+)
 from app.services.lead_scorer import score_conversation
 from app.services.odoo_client import OdooClient
 
@@ -115,6 +120,7 @@ class ConversationService:
         channel: Channel,
         external_user_id: str,
         user_name: Optional[str] = None,
+        user_company: Optional[str] = None,
         user_phone: Optional[str] = None,
         user_email: Optional[str] = None,
         chatwoot_conversation_id: Optional[int] = None,
@@ -123,6 +129,7 @@ class ConversationService:
             channel=channel,
             external_user_id=external_user_id,
             user_name=user_name,
+            user_company=user_company,
             user_phone=user_phone,
             user_email=user_email,
             status=ConversationStatus.active,
@@ -143,6 +150,7 @@ class ConversationService:
         external_user_id: str,
         user_name: Optional[str] = None,
         *,
+        user_company: Optional[str] = None,
         user_phone: Optional[str] = None,
         user_email: Optional[str] = None,
         create: bool = True,
@@ -155,6 +163,7 @@ class ConversationService:
                 channel=channel,
                 external_user_id=external_user_id,
                 user_name=user_name,
+                user_company=user_company,
                 user_phone=user_phone,
                 user_email=user_email,
                 payload_status=payload_status,
@@ -168,12 +177,22 @@ class ConversationService:
             return conv
         if not create:
             return None
+        profile = await upsert_contact_profile(
+            self.db,
+            channel=channel,
+            external_user_id=external_user_id,
+            display_name=user_name,
+            company=user_company,
+            phone=user_phone,
+            email=user_email,
+        )
         return await self._create_conversation(
             channel=channel,
             external_user_id=external_user_id,
-            user_name=user_name,
-            user_phone=user_phone,
-            user_email=user_email,
+            user_name=user_name or profile.display_name,
+            user_company=user_company or profile.company,
+            user_phone=user_phone or profile.phone,
+            user_email=user_email or profile.email,
             chatwoot_conversation_id=chatwoot_conversation_id,
         )
 
@@ -183,6 +202,7 @@ class ConversationService:
         channel: Channel,
         external_user_id: str,
         user_name: Optional[str],
+        user_company: Optional[str],
         user_phone: Optional[str],
         user_email: Optional[str],
         payload_status: str,
@@ -192,6 +212,17 @@ class ConversationService:
         now = datetime.now(timezone.utc)
         latest = await self._latest_cycle(
             channel, external_user_id, include_resolved=True
+        )
+        # Identidad estable: el perfil sobrevive al cierre del ciclo.
+        profile = await upsert_contact_profile(
+            self.db,
+            channel=channel,
+            external_user_id=external_user_id,
+            display_name=user_name or (latest.user_name if latest else None),
+            company=user_company
+            or (getattr(latest, "user_company", None) if latest else None),
+            phone=user_phone or (latest.user_phone if latest else None),
+            email=user_email or (latest.user_email if latest else None),
         )
         action = decide_inbound_cycle(
             resolved_at=latest.resolved_at if latest is not None else None,
@@ -204,9 +235,10 @@ class ConversationService:
             conv = await self._create_conversation(
                 channel=channel,
                 external_user_id=external_user_id,
-                user_name=user_name,
-                user_phone=user_phone,
-                user_email=user_email,
+                user_name=user_name or profile.display_name,
+                user_company=user_company or profile.company,
+                user_phone=user_phone or profile.phone,
+                user_email=user_email or profile.email,
                 chatwoot_conversation_id=chatwoot_conversation_id,
             )
             conv.fresh_cycle = False
@@ -215,6 +247,7 @@ class ConversationService:
 
         if action == "continue":
             await self._touch_chatwoot_id(latest, chatwoot_conversation_id)
+            apply_profile_to_conversation(latest, profile)
             latest.fresh_cycle = False
             latest.previous_resolved_at = None
             return latest
@@ -223,6 +256,7 @@ class ConversationService:
             latest.resolved_at = None
             if chatwoot_conversation_id:
                 latest.chatwoot_conversation_id = chatwoot_conversation_id
+            apply_profile_to_conversation(latest, profile)
             await commit_with_retry(self.db)
             await self.db.refresh(latest, ["messages"])
             latest.fresh_cycle = False
@@ -239,9 +273,12 @@ class ConversationService:
         conv = await self._create_conversation(
             channel=channel,
             external_user_id=external_user_id,
-            user_name=user_name or latest.user_name,
-            user_phone=user_phone or latest.user_phone,
-            user_email=user_email or latest.user_email,
+            user_name=user_name or profile.display_name or latest.user_name,
+            user_company=user_company
+            or profile.company
+            or getattr(latest, "user_company", None),
+            user_phone=user_phone or profile.phone or latest.user_phone,
+            user_email=user_email or profile.email or latest.user_email,
             chatwoot_conversation_id=chatwoot_conversation_id,
         )
         conv.fresh_cycle = True
@@ -376,6 +413,7 @@ class ConversationService:
         *,
         reason: Optional[str] = None,
         user_name: Optional[str] = None,
+        user_company: Optional[str] = None,
         user_phone: Optional[str] = None,
         user_email: Optional[str] = None,
         handed_off: bool = False,
@@ -391,12 +429,23 @@ class ConversationService:
         Califica un prospecto (Chatwoot Agent Bot u otra fuente).
         No llama a Odoo (fase posterior).
         """
-        if user_name:
-            conversation.user_name = user_name
-        if user_phone:
-            conversation.user_phone = user_phone
-        if user_email:
-            conversation.user_email = user_email
+        sync_conversation_contact_fields(
+            conversation,
+            user_name=user_name,
+            user_company=user_company,
+            user_phone=user_phone,
+            user_email=user_email,
+        )
+        await upsert_contact_profile(
+            self.db,
+            channel=conversation.channel,
+            external_user_id=conversation.external_user_id,
+            display_name=conversation.user_name,
+            company=getattr(conversation, "user_company", None),
+            phone=conversation.user_phone,
+            email=conversation.user_email,
+            commit=False,
+        )
 
         meta = metadata or {}
         interest = product_interest or meta.get("product_interest")
@@ -463,6 +512,7 @@ class ConversationService:
         channel: Channel,
         external_user_id: str,
         user_name: Optional[str] = None,
+        user_company: Optional[str] = None,
         user_phone: Optional[str] = None,
         user_email: Optional[str] = None,
         reason: Optional[str] = None,
@@ -479,6 +529,9 @@ class ConversationService:
             channel=channel,
             external_user_id=external_user_id,
             user_name=user_name,
+            user_company=user_company,
+            user_phone=user_phone,
+            user_email=user_email,
         )
         phone = user_phone
         if not phone and channel == Channel.whatsapp:
@@ -494,6 +547,7 @@ class ConversationService:
             conv,
             reason=reason or summary or default_reason,
             user_name=user_name,
+            user_company=user_company,
             user_phone=phone,
             user_email=user_email,
             handed_off=handed_off,

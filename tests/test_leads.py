@@ -29,6 +29,7 @@ def test_lead_create_tool_schema_with_structured_fields():
             "channel": "whatsapp",
             "external_user_id": "5215512345678",
             "user_name": "Ana",
+            "user_company": "Aceros del Norte",
             "product_interest": "Plan Premium",
             "budget": "~5000 USD",
             "timeline": "Este mes",
@@ -38,6 +39,7 @@ def test_lead_create_tool_schema_with_structured_fields():
             "handed_off": True,
         }
     )
+    assert payload.user_company == "Aceros del Norte"
     assert payload.product_interest == "Plan Premium"
     assert payload.budget == "~5000 USD"
     assert payload.timeline == "Este mes"
@@ -123,6 +125,7 @@ async def test_qualify_lead_sets_structured_lead_fields(monkeypatch):
         timeline=None,
         preferred_contact_time=None,
         user_name=None,
+        user_company=None,
         user_phone=None,
         user_email=None,
         channel=Channel.whatsapp,
@@ -132,11 +135,16 @@ async def test_qualify_lead_sets_structured_lead_fields(monkeypatch):
     db = AsyncMock()
     db.refresh = AsyncMock()
     service = ConversationService(db)
+    monkeypatch.setattr(
+        "app.services.conversation.upsert_contact_profile",
+        AsyncMock(return_value=SimpleNamespace()),
+    )
 
     result = await service.qualify_lead(
         conv,
         reason="Pidió cotización",
         user_name="Ana",
+        user_company="Aceros del Norte",
         user_phone="52155",
         handed_off=True,
         product_interest="Premium",
@@ -149,6 +157,7 @@ async def test_qualify_lead_sets_structured_lead_fields(monkeypatch):
     assert result.status == ConversationStatus.handed_off
     assert result.qualification_source == QualificationSource.chatwoot_agent
     assert result.user_name == "Ana"
+    assert result.user_company == "Aceros del Norte"
     assert result.qualification_reason == "Pidió cotización"
     assert result.product_interest == "Premium"
     assert result.lead_summary == "Quiere plan premium"
@@ -186,6 +195,7 @@ async def test_create_lead_from_payload_uses_whatsapp_id_as_phone(monkeypatch):
         timeline=None,
         preferred_contact_time=None,
         user_name=None,
+        user_company=None,
         user_phone=None,
         user_email=None,
         channel=Channel.whatsapp,
@@ -195,6 +205,10 @@ async def test_create_lead_from_payload_uses_whatsapp_id_as_phone(monkeypatch):
     db = AsyncMock()
     db.refresh = AsyncMock()
     service = ConversationService(db)
+    monkeypatch.setattr(
+        "app.services.conversation.upsert_contact_profile",
+        AsyncMock(return_value=SimpleNamespace()),
+    )
 
     with patch.object(
         ConversationService, "get_or_create", new_callable=AsyncMock, return_value=conv

@@ -66,6 +66,7 @@
             <span class="avatar" aria-hidden="true">{{ (c.user_name or c.external_user_id)[0]|upper }}</span>
             <div>
               <div class="contact-name">{{ c.user_name or c.external_user_id }}</div>
+              {% if c.user_company %}<div class="muted small">{{ c.user_company }}</div>{% endif %}
               {% if c.user_phone %}<div class="muted small">{{ c.user_phone }}</div>
               {% elif c.user_email %}<div class="muted small">{{ c.user_email }}</div>{% endif %}
             </div>
