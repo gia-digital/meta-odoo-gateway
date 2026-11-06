@@ -35,6 +35,7 @@ from app.services.contact_profile import (
 )
 from app.services.conversation import ConversationService
 from app.services.knowledge.retriever import format_hits, retrieve_knowledge
+from app.services.reply_sanitize import sanitize_customer_reply
 
 logger = get_logger(__name__)
 
@@ -693,20 +694,33 @@ async def run_gia_agent(
     parts: List[str] = []
     if retrieved:
         parts.append(retrieved)
+    output_rules = (
+        "Responde SOLO el texto final para el cliente, en español (sin prefijos). "
+        "PROHIBIDO razonamiento, notas internas, inglés o meta "
+        '("short reply", "no lead", "menudeo case", etc.). '
+        "Un mensaje si es la misma idea. Parte con una línea --- "
+        "solo si un asesor en WhatsApp mandaría otro mensaje aparte."
+    )
     if transcript:
         parts.append(
             f"Historial reciente:\n{transcript}\n\n"
             f"Nuevo mensaje del cliente:\n{user_message}\n\n"
-            "Responde solo el texto para el cliente (sin prefijos). "
-            "Un mensaje si es la misma idea. Parte con una línea --- "
-            "solo si un asesor en WhatsApp mandaría otro mensaje aparte."
+            f"{output_rules}"
         )
     else:
-        parts.append(user_message)
+        parts.append(f"{user_message}\n\n{output_rules}")
     prompt = "\n\n".join(parts)
 
     result = await Runner.run(agent, prompt, context=ctx)
-    text = (result.final_output or "").strip()
+    raw = (result.final_output or "").strip()
+    text = sanitize_customer_reply(raw)
+    if text != raw:
+        logger.warning(
+            "gia_agent_stripped_meta_output",
+            conversation_id=ctx.conversation.id,
+            raw_chars=len(raw),
+            kept_chars=len(text),
+        )
     if not text:
         handed_off = ctx.handed_off or _conversation_handed_off(ctx.conversation)
         text = _empty_reply_fallback(handed_off=handed_off)
