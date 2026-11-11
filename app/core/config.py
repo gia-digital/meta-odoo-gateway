@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # Orígenes (iframe) que pueden embeber el dashboard sin pedir ADMIN_API_TOKEN.
     # Separados por coma. Se suma CHATWOOT_BASE_URL si está definido.
     dashboard_embed_origins: str = (
-        "https://chatwoot.init.com.mx,https://chatwoot.giacero.com"
+        "https://chatwoot.init.com.mx,https://chatwoot.giacerero.com"
     )
 
     # Chatwoot Agent Bot

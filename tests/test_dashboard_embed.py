@@ -34,7 +34,7 @@ def embed_settings(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
     monkeypatch.setenv(
         "DASHBOARD_EMBED_ORIGINS",
-        "https://chatwoot.init.com.mx,https://chatwoot.giacero.com",
+        "https://chatwoot.init.com.mx,https://chatwoot.giacerero.com",
     )
     monkeypatch.setenv("CHATWOOT_BASE_URL", "https://chatwoot.init.com.mx")
     from app.core.config import get_settings
@@ -54,10 +54,10 @@ def test_is_dashboard_embed_chatwoot_iframe(embed_settings):
     assert is_dashboard_embed(req) is True
 
 
-def test_is_dashboard_embed_giacero(embed_settings):
+def test_is_dashboard_embed_giacerero(embed_settings):
     req = _request(
         headers={
-            "Referer": "https://chatwoot.giacero.com/app/accounts/1/dashboard",
+            "Referer": "https://chatwoot.giacerero.com/app/accounts/1/dashboard",
             "Sec-Fetch-Dest": "iframe",
         }
     )
@@ -120,7 +120,7 @@ async def test_login_from_chatwoot_skips_token_form(embed_settings):
         r = await client.get(
             "/dashboard",
             headers={
-                "Referer": "https://chatwoot.giacero.com/app/accounts/1",
+                "Referer": "https://chatwoot.giacerero.com/app/accounts/1",
                 "Sec-Fetch-Dest": "iframe",
             },
             follow_redirects=False,
@@ -133,4 +133,4 @@ async def test_login_from_chatwoot_skips_token_form(embed_settings):
     csp = r.headers.get("content-security-policy", "")
     assert "frame-ancestors" in csp
     assert "https://chatwoot.init.com.mx" in csp
-    assert "https://chatwoot.giacero.com" in csp
+    assert "https://chatwoot.giacerero.com" in csp
