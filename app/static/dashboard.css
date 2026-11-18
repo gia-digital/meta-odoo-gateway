@@ -251,7 +251,7 @@ body.nav-open .nav-toggle-bar:nth-child(3) {
 .btn,
 .filters button,
 .login-card button,
-.logout-form button {
+button.logout-form {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -336,7 +336,7 @@ body.nav-open .nav-toggle-bar:nth-child(3) {
   font-size: 0.78rem;
 }
 
-.logout-form button {
+button.logout-form {
   background: transparent;
   color: rgba(255, 255, 255, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -344,7 +344,7 @@ body.nav-open .nav-toggle-bar:nth-child(3) {
   box-shadow: none;
 }
 
-.logout-form button:hover {
+button.logout-form:hover {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.05);
@@ -2103,6 +2103,10 @@ dialog.modal {
   background: var(--surface);
   box-shadow: var(--shadow-md);
   color: inherit;
+}
+
+dialog.modal.confirm {
+  width: min(26rem, calc(100vw - 1.5rem));
 }
 
 dialog.modal::backdrop {
